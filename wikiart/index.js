@@ -14,7 +14,13 @@ const remove_elements = [
     '.social-container-flat',
 ];
 
-function ingest_article_profile(hatch, uri, uri_img) {
+function ingest_gallery_profile(hatch, uri){
+    return libingester.util.fetch_html(uri).then(($profile) => {
+        // código para sacar la galeria
+    })
+}
+
+function ingest_artist_profile(hatch, uri, uri_img) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
@@ -128,23 +134,50 @@ function get_artist_data(artist_page, artist_urls, max_authors){
     })
 }
 
+function get_link_artworks(base_uri, artworks_urls){
+    return new Promise(function(resolve, reject){
+        libingester.util.fetch_html(base_uri)
+        .then($page => {
+            const artworks = $page('ul.title li a');
+            artworks.map(index => {
+                //console.log(artwork);
+                artworks_urls.push( url.resolve(base_uri, artworks[index].attribs['href']) );
+            });
+            resolve(true);
+        }).catch((err) => {
+            console.log('err '+base_uri);
+            get_link_artworks(base_uri, artworks_urls)});
+    })
+}
+
 function main() {
+    //const hatch = new libingester.Hatch();
+    let artwork_urls = []; //artworks links
     let artist_urls = []; //author data
     let authors_per_page = 1; //limits the number of authors
-    const hatch = new libingester.Hatch();
-    //1. getting artist pages
+    // //1. getting artist pages
     const artist_pages = get_array_alphabet();
-
-    //2. getting data for each author
-    const artist_promises_links = artist_pages.map(uri => {
+    //
+    // //2. getting data for each author
+    let artist_promises_links = artist_pages.map(uri => {
         return get_artist_data(uri, artist_urls, authors_per_page);
     });
-    //3. then, ingest_article
-    Promise.all(artist_promises_links).then(() => { //waiting for the data of each artist
-        Promise.all(artist_urls.map(artist => {
+    artist_promises_links.push( get_link_artworks(base_uri,artwork_urls) ); //add promise (artworks)
+
+    // //3. then, ingest_article
+    Promise.all(artist_promises_links).then(() => { //waiting for the data of each artist and artworks links
+        // all artist
+        let artist_promises = artist_urls.map(artist => {
             return ingest_article_profile(hatch, artist.uri, artist.artworks);
-        })).then( () => hatch.finish() );
+        });
+        // all artworks
+        let artwork_promises = artwork_urls.map(artwork_url => {
+            return ingest_gallery_profile(hatch, artwork_url);
+        });
+        let all_promises = artist_promises.concat( artworks_promises );
+        Promise.all(all_promises).then( () => hatch.finish() );
     });
+
 }
 
 main();
