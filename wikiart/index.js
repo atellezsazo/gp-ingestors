@@ -2,36 +2,16 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
+const request = require('request');
 const rp = require('request-promise');
 const template = require('./template');
 const url = require('url');
-const cheerio = require('cheerio');
-const request = require('request');
 
-const base_uri = "https://www.wikiart.org/"; // recent articles 
+const base_uri = "https://www.wikiart.org/";
 
-//Remove elements
+//Remove elements (body)
 const remove_elements = [
-    'banner', //ads
-    'noscript', //any script injection
-    'script', //any script injection
-    '.arrow-container',
-    'h1',
-    '.advertisement',
-    '.thumbnails_container',
     '.social-container-flat',
-];
-
-//embbed content
-const video_iframes = [
-    'youtube', //YouTube
-];
-
-const remove_attr = ['src',
-                     'id',
-                     'class',
-                     'border',
-                     'style'
 ];
 
 function ingest_article_profile(hatch, uri, uri_img) {
@@ -46,8 +26,6 @@ function ingest_article_profile(hatch, uri, uri_img) {
         asset.set_canonical_uri(uri);
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
-        
-        //const section = $profile('.post-heading .meta');
         asset.set_section('Articles');
 
         // Pull out the main image
@@ -55,12 +33,17 @@ function ingest_article_profile(hatch, uri, uri_img) {
         const main_image = libingester.util.download_img(main_img, base_uri);
         hatch.save_asset(main_image);
 
-        const body = $profile('.info').first();
-
-        //remove elements
+        let body = $profile('.info').first();
+        //remove elements (body)
         for (const remove_element of remove_elements) {
             body.find(remove_element).remove();
         }
+        //Appears sometimes
+        const description = $profile('span[itemprop="description"]');
+        if( description.html() )
+            body = body.html() + '<div class="description">' + description.html() + '</div>';
+        else
+            body = body.html();
 
         const image_gallery = uri_img.map(function(obj) {
             let img_gallery = libingester.util.download_image(obj.image);
@@ -70,30 +53,16 @@ function ingest_article_profile(hatch, uri, uri_img) {
             return img_gallery;
         });
 
-        //Download images 
-        body.find("img").map(function() {
-            if (this.attribs.src != undefined) {
-                const image = libingester.util.download_img(this, base_uri);
-                hatch.save_asset(image);
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-                for(const attr in remove_attr){
-                    delete this.attribs[attr];
-                }
-            }
-        });
-
         const content = mustache.render(template.structure_template, {
             title: title,
             asset_id: main_image.asset_id,
-            body: body.html(),
+            body: body,
             image_gallery: image_gallery
         });
 
         asset.set_document(content);
         hatch.save_asset(asset);
-        console.log('OK: '+uri);
     }).catch((err) => {
-        console.log('Error (Status Code): '+err.statusCode+' en '+uri);
         return ingest_article_profile(hatch, uri, uri_img);
     });
 }
@@ -109,8 +78,6 @@ function get_json_img_links(uri) {
                     body.Paintings.map(function (obj){
                         uri_img.push(obj);
                     });
-                }else{
-                    console.log('JSON NULL en: '+uri+'/mode/all-paintings?json=2');
                 }
             }
             return uri_img;
@@ -118,34 +85,66 @@ function get_json_img_links(uri) {
     })
 }
 
-const main_link = ['https://www.wikiart.org/en/alphabet/a', 'https://www.wikiart.org/en/alphabet/b'];
+//generating url's
+function get_array_alphabet(){
+    //defghijklmnopqrstuvwxyzø
+    const alphabet = 'abcdefghijklmnopqrstuvwxyzø';
+    const wikiart_url = 'https://www.wikiart.org/en/alphabet/';
+    let wikiart_alphabet_url = [];
+    for(let i=0; i<alphabet.length; i++)
+        wikiart_alphabet_url.push( wikiart_url + alphabet.charAt(i) );
+    return wikiart_alphabet_url;
+}
 
-function main(links) {
-    let links_authors = []; //links of authors
-    let authors_per_page = 2; //limits the number of authors
-    const hatch = new libingester.Hatch();
-    //1. getting author links
-    Promise.all(main_link.map((uri) => {
-        let n = 0;
-        return libingester.util.fetch_html(uri).then(($page) => {
-            const tags_a = $page('.artists-list').find('.title a');
-            tags_a.map(function(index) {
-                if( n++ < authors_per_page )
-                    links_authors.push( url.resolve(base_uri, tags_a[index].attribs['href']) );
+//set artist data in "artist_urls"
+function get_artist_data(artist_page, artist_urls, max_authors){
+    return new Promise(function(resolve, reject){
+        libingester.util.fetch_html(artist_page) //Goes through a page of authors, multiple artists per page
+        .then($page => {
+            const url_author = $page('.artists-list').find('li.title a'); //various Artists
+            let n = 0;
+            const urls = [];
+            url_author.map(index => {
+                if( n++ < max_authors ){
+                    urls.push( url.resolve(base_uri, url_author[index].attribs['href']) );
+                }
             });
-        });
-    }))
-    //2. iterate every link
-    .then(() => {
-        console.log(links_authors);
-        Promise.all( links_authors.map( function(uri) {
-            return get_json_img_links(uri) //3. getting img links
-            .then(uri_img => ingest_article_profile(hatch, uri, uri_img)) //4. getting article
-            .catch(err => console.log("Error en "+uri+'/mode/all-paintings?json=2'));
-        }))
-        .then(() => {console.log('finish'); hatch.finish();})
-        .catch((err) => console.log('ERROR hatch'))
+            return urls; //then, list of artist links
+        })
+        .then(urls => {
+            urls.map(uri => {
+                get_json_img_links(uri) //For each artist we get their artworks
+                .then(uri_img => {
+                    artist_urls.push( {'uri':uri, 'artworks':uri_img} );
+                    resolve(true);
+                }).catch(err => {
+                    resolve(false);
+                });
+            });
+        })
+        .catch((err) => {
+            resolve(false);
+        })
+    })
+}
+
+function main() {
+    let artist_urls = []; //author data
+    let authors_per_page = 1; //limits the number of authors
+    const hatch = new libingester.Hatch();
+    //1. getting artist pages
+    const artist_pages = get_array_alphabet();
+
+    //2. getting data for each author
+    const artist_promises_links = artist_pages.map(uri => {
+        return get_artist_data(uri, artist_urls, authors_per_page);
+    });
+    //3. then, ingest_article
+    Promise.all(artist_promises_links).then(() => { //waiting for the data of each artist
+        Promise.all(artist_urls.map(artist => {
+            return ingest_article_profile(hatch, artist.uri, artist.artworks);
+        })).then( () => hatch.finish() );
     });
 }
 
-main(main_link);
+main();

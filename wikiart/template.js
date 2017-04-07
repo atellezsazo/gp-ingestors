@@ -10,7 +10,7 @@ const structure_template = (`
 <section class="body">
     {{{ body }}}
 </section>
-<section class="image_gallery">
+<section class="artist-image">
 	<h2>Artworks</h2>
 	{{#image_gallery}}
 	<div>
