@@ -4,7 +4,8 @@ const libingester = require('libingester');
 const mustache = require('mustache');
 const request = require('request');
 const rp = require('request-promise');
-const template = require('./template');
+const template_artist = require('./template_artist');
+const template_artwork = require('./template_artwork');
 const url = require('url');
 
 const base_uri = "https://www.wikiart.org/";
@@ -12,12 +13,46 @@ const base_uri = "https://www.wikiart.org/";
 //Remove elements (body)
 const remove_elements = [
     '.social-container-flat',
+    '.arrow-container',
+    '.advertisement',
+    '.pointer',
 ];
 
-function ingest_gallery_profile(hatch, uri){
+function ingest_artwork_profile(hatch, uri){
     return libingester.util.fetch_html(uri).then(($profile) => {
         // código para sacar la galeria
-    })
+        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
+        const asset = new libingester.NewsArticle();
+
+        //Set title section
+        const title = $profile('meta[property="og:title"]').attr('content');
+        asset.set_title(title);
+        asset.set_canonical_uri(uri);
+        // Pull out the updated date
+        asset.set_last_modified_date(new Date());
+        asset.set_section('Artworks');
+        // Pull out the main image
+        const main_img = $profile('img[itemprop="image"]');
+        const main_image = libingester.util.download_img(main_img, base_uri);
+        hatch.save_asset(main_image);
+
+        let body = $profile('.info').first();
+        //remove elements (body)
+        for (const remove_element of remove_elements) {
+            body.find(remove_element).remove();
+        }
+
+        const content = mustache.render(template_artwork.structure_template, {
+            title: title,
+            asset_id: main_image.asset_id,
+            body: body.html()
+        });
+
+        asset.set_document(content);
+        hatch.save_asset(asset);
+    }).catch((err) => {
+        return ingest_artwork_profile(hatch, uri);
+    });
 }
 
 function ingest_artist_profile(hatch, uri, uri_img) {
@@ -32,7 +67,7 @@ function ingest_artist_profile(hatch, uri, uri_img) {
         asset.set_canonical_uri(uri);
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
-        asset.set_section('Articles');
+        asset.set_section('Artists');
 
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
@@ -59,7 +94,7 @@ function ingest_artist_profile(hatch, uri, uri_img) {
             return img_gallery;
         });
 
-        const content = mustache.render(template.structure_template, {
+        const content = mustache.render(template_artist.structure_template, {
             title: title,
             asset_id: main_image.asset_id,
             body: body,
@@ -69,7 +104,7 @@ function ingest_artist_profile(hatch, uri, uri_img) {
         asset.set_document(content);
         hatch.save_asset(asset);
     }).catch((err) => {
-        return ingest_article_profile(hatch, uri, uri_img);
+        return ingest_artist_profile(hatch, uri, uri_img);
     });
 }
 //getting img links (by each author)
@@ -140,18 +175,19 @@ function get_link_artworks(base_uri, artworks_urls){
         .then($page => {
             const artworks = $page('ul.title li a');
             artworks.map(index => {
-                //console.log(artwork);
-                artworks_urls.push( url.resolve(base_uri, artworks[index].attribs['href']) );
+                if( artworks[index].attribs['title'] != 'About' )
+                    artworks_urls.push( url.resolve(base_uri, artworks[index].attribs['href']) );
             });
             resolve(true);
         }).catch((err) => {
-            console.log('err '+base_uri);
-            get_link_artworks(base_uri, artworks_urls)});
+            resolve(false);
+            return get_link_artworks(base_uri, artworks_urls);
+        });
     })
 }
 
 function main() {
-    //const hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch();
     let artwork_urls = []; //artworks links
     let artist_urls = []; //author data
     let authors_per_page = 1; //limits the number of authors
@@ -168,16 +204,16 @@ function main() {
     Promise.all(artist_promises_links).then(() => { //waiting for the data of each artist and artworks links
         // all artist
         let artist_promises = artist_urls.map(artist => {
-            return ingest_article_profile(hatch, artist.uri, artist.artworks);
+            return ingest_artist_profile(hatch, artist.uri, artist.artworks);
         });
         // all artworks
         let artwork_promises = artwork_urls.map(artwork_url => {
-            return ingest_gallery_profile(hatch, artwork_url);
+            return ingest_artwork_profile(hatch, artwork_url);
         });
-        let all_promises = artist_promises.concat( artworks_promises );
-        Promise.all(all_promises).then( () => hatch.finish() );
+        // all promises
+        let artist_artwork_promises = artist_promises.concat( artwork_promises );
+        Promise.all(artist_artwork_promises).then( () => hatch.finish() );
     });
-
 }
 
 main();
