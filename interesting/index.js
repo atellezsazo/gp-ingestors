@@ -12,11 +12,22 @@ const base_uri = "http://all-that-is-interesting.com/";
 
 //Remove elements (body)
 const remove_elements = [
-    'script', 'iframe',
+    '.gallery-preview',
+    '.social-callout',
+    'div.details-wrap',
+    'div.gallery-descriptions-wrap',
+    'iframe',
+    'script',
+    'ul.social-list',
 ];
-
+//clean attr img
 const remove_attr_img = [
-    'src', 'width', 'height', 'class', 'srcset', 'sizes',
+    'class',
+    'height',
+    'sizes',
+    'src',
+    'srcset',
+    'width',
 ];
 //embbed content
 const video_iframes = [
@@ -27,6 +38,12 @@ function ingest_post_body(hatch, uri, body_pages) {
     return new Promise(function(resolve, reject){
         libingester.util.fetch_html(uri).then(($profile) => {
             const post_body = $profile('article.post-content');
+            //remove elements (body)
+            post_body.find('hr').next().remove();
+            post_body.find('hr').remove();
+            for (const remove_element of remove_elements) {
+                post_body.find(remove_element).remove();
+            }
             //download images
             post_body.find("img").map(function() {
                 if (this.attribs.src) {
@@ -59,12 +76,6 @@ function ingest_post_body(hatch, uri, body_pages) {
                 }
             });
 
-            //remove elements (body)
-            post_body.find('hr').next().remove();
-            post_body.find('hr').remove();
-            for (const remove_element of remove_elements) {
-                post_body.find(remove_element).remove();
-            }
             //save body
             body_pages.push( post_body );
             //Article on two pages
@@ -79,7 +90,6 @@ function ingest_post_body(hatch, uri, body_pages) {
     });
 }
 
-
 function ingest_post(hatch, uri, time) {
     return new Promise(function (resolve, reject){
         setTimeout(function(){
@@ -88,7 +98,6 @@ function ingest_post(hatch, uri, time) {
             let body_pages = [];
             let body = "";
             return libingester.util.fetch_html(uri).then(($profile) => {
-                //console.log(time);
                 const base_uri = libingester.util.get_doc_base_uri($profile, uri);
                 //Set title section
                 const title = $profile('meta[property="og:title"]').attr('content');
@@ -119,21 +128,17 @@ function ingest_post(hatch, uri, time) {
             .catch((err) => {
                 resolve(false);
             });
-        },time*1200);
+        },time*1000);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch();
     rss2json.load('http://all-that-is-interesting.com/feed', function(err, rss){
-        const post_urls =  rss.items.map((datum) => datum.url);
+        let post_urls =  rss.items.map((datum) => datum.url); //recent posts
         let time = 0; //for delay
-        const promises = post_urls.map((url) => ingest_post(hatch, url, time++));
-        Promise.all( promises ).then(() => {
-            setTimeout(function(){
-                hatch.finish();
-            },2000);
-        });
+        post_urls = post_urls.slice(0, (post_urls.length+1)/2); //Reduce the number of links
+        Promise.all( post_urls.map((url) => ingest_post(hatch, url, time++)) ).then( () => hatch.finish() );
     });
 }
 
