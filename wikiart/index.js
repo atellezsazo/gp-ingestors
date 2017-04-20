@@ -18,6 +18,8 @@ const remove_elements = [
     '.arrow-container',
     '.pointer',
     '.social-container-flat',
+    '.thumbnails_data',
+    '#thumbnails_container',
 ];
 
 function ingest_artwork_profile(hatch, uri) {
@@ -30,24 +32,36 @@ function ingest_artwork_profile(hatch, uri) {
         const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
+
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
         asset.set_section('Artworks');
+
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
         const main_image = libingester.util.download_img(main_img, base_uri);
+        const image_description = $profile(".image-wrapper .image-title-container").text();
         hatch.save_asset(main_image);
 
-        let body = $profile('.info').first();
-        //remove elements (body)
+        let info = $profile('.info').first();
+        const description = $profile('span[itemprop="description"]').text();
+
+        //remove elements (info)
         for (const remove_element of remove_elements) {
-            body.find(remove_element).remove();
+            info.find(remove_element).remove();
         }
+
+        //Fix relative links
+        info.find("a").map(function() {
+            this.attribs.href = url.resolve(base_uri, this.attribs.href);
+        });
 
         const content = mustache.render(template_artwork.structure_template, {
             title: title,
             asset_id: main_image.asset_id,
-            body: body.html()
+            image_description: image_description,
+            info: info.html(),
+            description: description,
         });
 
         asset.set_document(content);
@@ -65,7 +79,6 @@ function ingest_artist_profile(hatch, uri) {
         //Set title section
         const title = $profile('h1#h1Title').text();
         asset.set_title(title);
-
         asset.set_canonical_uri(uri);
 
         // Pull out the updated date
@@ -74,26 +87,28 @@ function ingest_artist_profile(hatch, uri) {
 
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
+        const image_description = $profile(".image-wrapper .comment").children();
         const main_image = libingester.util.download_img(main_img, base_uri);
         hatch.save_asset(main_image);
 
+        const additional_name = $profile('span[itemprop="additionalName"]').first().text();
         let info = $profile('.info').first();
+        const description = $profile('span[itemprop="description"]').text();
+
+        //remove elements (body)
+        for (const remove_element of remove_elements) {
+            info.find(remove_element).remove();
+        }
 
         //Fix relative links
         info.find("a").map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
-        //remove elements (body)
-        for (const remove_element of remove_elements) {
-            info.find(remove_element).remove();
-        }
-        const description = $profile('span[itemprop="description"]').text();
-
         //Workarts 
         let img_array = [];
-        const get_json_img_links = (number_page = 1) => {
-            var options = {
+        const download_workarts = (number_page = 1) => {
+            const options = {
                 uri: uri + `/mode/all-paintings?json=2&page=${number_page}`,
                 json: true,
             };
@@ -109,20 +124,23 @@ function ingest_artist_profile(hatch, uri) {
                             asset: asset
                         });
                     }
-                    return get_json_img_links(number_page + 1);
+                    return download_workarts(number_page + 1);
                 }
             }).catch((err) => {
-                get_json_img_links(number_page);
+                download_workarts(number_page);
             });
             return promise;
         };
 
-        get_json_img_links().then(function() {
+        download_workarts().then(function() {
             const content = mustache.render(template_artist.structure_template, {
                 title: title,
+                additional_name: additional_name,
                 asset_id: main_image.asset_id,
+                image_description: image_description,
                 info: info,
                 description: description,
+                workarts: img_array,
             });
 
             asset.set_document(content);
@@ -134,29 +152,34 @@ function ingest_artist_profile(hatch, uri) {
     });
 }
 
-//getting img links (by each author)
-
-
-
 function main() {
     const hatch = new libingester.Hatch();
 
     const artists = new Promise((resolve, reject) => {
         libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
-            const artists_link = $artists('ul.artists-list li:nth-child(-n+5).title a:first-of-type').map(function() {
+            const artists_link = $artists('.artists-list li:nth-child(-n+1) li.title a').map(function() { //Only 10 artists 
                 const uri = $artists(this).attr('href');
                 return url.resolve(chronological_artists_uri, uri);
             }).get();
 
-            console.log(artists_link);
-
-            /*  Promise.all(artists_link.map((uri) => ingest_artist_profile(hatch, uri))).then(() => {
-                  resolve(true);
-              }); */
+            Promise.all(artists_link.map((uri) => ingest_artist_profile(hatch, uri))).then(() => {
+                resolve(true);
+            });
         });
     });
 
-    Promise.all([artists]).then(values => {
+    const paintings = new Promise((resolve, reject) => {
+        rp({ uri: paintings_json_uri, json: true }).then((response) => {
+            if (response.Paintings != null) {
+                const paintings_uris = response.Paintings.map((datum) => url.resolve(base_uri, datum.paintingUrl));
+                Promise.all(paintings_uris.map((uri) => ingest_artwork_profile(hatch, uri))).then(() => {
+                    resolve(true);
+                });
+            }
+        });
+    });
+
+    Promise.all([paintings]).then(values => {
         return hatch.finish();
     });
 

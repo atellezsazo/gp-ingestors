@@ -6,9 +6,15 @@ const structure_template = (`
 </section>
 <section class="main-image">
     <img data-libingester-asset-id="{{asset_id}}">
+    <p> {{ image_description }} </p>
 </section>
-<section class="body">
-    {{{ body }}}
-</section>`);
+<section class="info">
+    {{{ info }}}
+</section>
+{{#description}}
+<section class="description">
+    {{{ description }}}
+</section>
+{{/description}}`);
 
 exports.structure_template = structure_template;
