@@ -1,5 +1,6 @@
 'use strict';
 
+const cheerio = require('cheerio');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const request = require('request');
@@ -13,9 +14,8 @@ const base_uri = "http://all-that-is-interesting.com/";
 //Remove elements (body)
 const remove_elements = [
     '.gallery-preview',
+    '.related-posts',
     '.social-callout',
-    'div.details-wrap',
-    'div.gallery-descriptions-wrap',
     'iframe',
     'script',
     'ul.social-list',
@@ -49,7 +49,14 @@ function ingest_post_body(hatch, uri, body_pages) {
                 if (this.attribs.src) {
                     let index = this.attribs.src.lastIndexOf('http');
                     this.attribs.src = this.attribs.src.substring(index);
+                    const description = this.parent.attribs['aria-describedby'];
                     const image = libingester.util.download_img(this, base_uri);
+                    if( description ){ //save image info
+                        const id = 'div#'+description;
+                        const info_img = $profile(id).first();
+                        if( info_img[0] )
+                            this.parent.children.push(info_img[0]);
+                    }
                     hatch.save_asset(image);
                     this.attribs["data-libingester-asset-id"] = image.asset_id;
                     for(const attr of remove_attr_img){
@@ -75,9 +82,9 @@ function ingest_post_body(hatch, uri, body_pages) {
                     }
                 }
             });
-
             //save body
             body_pages.push( post_body );
+            post_body.find('.gallery-descriptions-wrap').remove();
             //Article on two pages
             const next_page = $profile('nav.pagination a.next').attr('href');
             if( next_page == "" | next_page == undefined )
@@ -137,7 +144,6 @@ function main() {
     rss2json.load('http://all-that-is-interesting.com/feed', function(err, rss){
         let post_urls =  rss.items.map((datum) => datum.url); //recent posts
         let time = 0; //for delay
-        post_urls = post_urls.slice(0, (post_urls.length+1)/2); //Reduce the number of links
         Promise.all( post_urls.map((url) => ingest_post(hatch, url, time++)) ).then( () => hatch.finish() );
     });
 }
