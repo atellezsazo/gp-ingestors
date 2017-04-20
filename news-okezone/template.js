@@ -2,7 +2,7 @@
 
 const structure_template = (`
 <section class="title">
-    <h1>{{ title }}</h1>
+    <h1>{{{ title }}}</h1>
     <div class="date">{{{ date }}}</div>
     <div class="reporter">{{{ reporter }}}</div>
 </section>
