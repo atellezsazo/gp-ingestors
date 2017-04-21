@@ -24,7 +24,6 @@ const remove_elements = [
 
 function ingest_artwork_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        // código para sacar la galeria
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
 
@@ -40,8 +39,12 @@ function ingest_artwork_profile(hatch, uri) {
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
         const main_image = libingester.util.download_img(main_img, base_uri);
-        const image_description = $profile(".image-wrapper .image-title-container").text();
+        const img_description = $profile(".image-wrapper .image-title-container");
+        const img_copyrigth = img_description.find('.popup_copyPublicDomain .copyright-box').text();
+        main_image.set_license(img_copyrigth);
         hatch.save_asset(main_image);
+
+        const image_description = img_description.find('.svg-icon-public-domain a.pointer').text();
 
         let info = $profile('.info').first();
         const description = $profile('span[itemprop="description"]').text();
@@ -105,7 +108,7 @@ function ingest_artist_profile(hatch, uri) {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
-        //Workarts 
+        //Workarts
         let img_array = [];
         const download_workarts = (number_page = 1) => {
             const options = {
@@ -157,7 +160,7 @@ function main() {
 
     const artists = new Promise((resolve, reject) => {
         libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
-            const artists_link = $artists('.artists-list li:nth-child(-n+1) li.title a').map(function() { //Only 10 artists 
+            const artists_link = $artists('.artists-list li:nth-child(-n+1) li.title a').map(function() { //Only 10 artists
                 const uri = $artists(this).attr('href');
                 return url.resolve(chronological_artists_uri, uri);
             }).get();
