@@ -39,15 +39,14 @@ function ingest_artwork_profile(hatch, uri) {
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
         const main_image = libingester.util.download_img(main_img, base_uri);
-        const img_description = $profile(".image-wrapper .image-title-container");
-        const img_copyrigth = img_description.find('.popup_copyPublicDomain .copyright-box').text();
+        //const img_description = $profile(".image-wrapper .image-title-container");
+        const img_copyrigth = $profile('.popup_copyPublicDomain .copyright-box').text();
         main_image.set_license(img_copyrigth);
         hatch.save_asset(main_image);
 
-        const image_description = img_description.find('.svg-icon-public-domain a.pointer').text();
-
         let info = $profile('.info').first();
         const description = $profile('span[itemprop="description"]').text();
+        const image_description = $profile('.svg-icon-public-domain a.pointer').text();
 
         //remove elements (info)
         for (const remove_element of remove_elements) {
