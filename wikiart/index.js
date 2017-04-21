@@ -43,6 +43,7 @@ function ingest_artwork_profile(hatch, uri) {
         main_image.set_license(img_copyrigth);
         hatch.save_asset(main_image);
 
+        // template data
         let info = $profile('.info').first();
         const description = $profile('span[itemprop="description"]').text();
         const image_description = $profile('.svg-icon-public-domain a.pointer').text();
