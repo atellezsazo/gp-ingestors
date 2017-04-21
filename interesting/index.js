@@ -12,10 +12,12 @@ const base_uri = "http://all-that-is-interesting.com/";
 
 //Remove elements (body)
 const remove_elements = [
-    '.gallery-preview',
-    '.related-posts',
-    '.social-callout',
+    'div.gallery-descriptions-wrap',
+    'div.gallery-preview',
+    'div.related-posts',
+    'hr',
     'iframe',
+    'p.social-callout',
     'script',
     'ul.social-list',
 ];
@@ -33,39 +35,14 @@ const video_iframes = [
     'youtube', //YouTube
 ];
 
-function ingest_post_body(hatch, uri, body_pages) {
+function ingest_post_body(hatch, uri, body) {
     return new Promise(function(resolve, reject){
         libingester.util.fetch_html(uri).then(($profile) => {
-            const post_body = $profile('article.post-content');
-            //remove elements (body)
-            post_body.find('hr').next().remove();
-            post_body.find('hr').remove();
-            for (const remove_element of remove_elements) {
-                post_body.find(remove_element).remove();
-            }
-            //download images
-            post_body.find("img").map(function() {
-                if (this.attribs.src) {
-                    let index = this.attribs.src.lastIndexOf('http');
-                    this.attribs.src = this.attribs.src.substring(index);
-                    const description = this.parent.attribs['aria-describedby'];
-                    const image = libingester.util.download_img(this, base_uri);
-                    if( description ){ //save image info
-                        const id = 'div#'+description;
-                        const info_img = $profile(id).first();
-                        if( info_img[0] )
-                            this.parent.children.push(info_img[0]);
-                    }
-                    hatch.save_asset(image);
-                    this.attribs["data-libingester-asset-id"] = image.asset_id;
-                    for(const attr of remove_attr_img){
-                        delete this.attribs[attr];
-                    }
-                }
-            });
-            // download videos
             const modified_date = $profile('meta[property="article:modified_time"]').attr('content');
             const title = $profile('meta[property="og:title"]').attr('content');
+            const post_body = $profile('article.post-content');
+            const info_img = $profile('.gallery-descriptions-wrap');
+            // download videos
             const videos = post_body.find("iframe").map(function() {
                 const iframe_src = this.attribs.src;
                 for (const video_iframe of video_iframes) {
@@ -81,15 +58,41 @@ function ingest_post_body(hatch, uri, body_pages) {
                     }
                 }
             });
+            //remove elements (body)
+            for (const remove_element of remove_elements) {
+                if( remove_element == 'hr' )
+                    post_body.find(remove_element).next().remove();
+                post_body.find(remove_element).remove();
+            }
+            //download images
+            post_body.find("img").map(function() {
+                if (this.attribs.src) {
+                    const index = this.attribs.src.lastIndexOf('http');
+                    this.attribs.src = this.attribs.src.substring(index);
+                    const description = this.parent.attribs['aria-describedby'];
+                    const image = libingester.util.download_img(this, base_uri);
+                    if( description ){ //save image info
+                        const id = 'div#'+description;
+                        const info_image = info_img.find(id).first();
+                        if( info_image[0] )
+                            this.parent.children.push(info_image[0]);
+                    }
+                    hatch.save_asset(image);
+                    this.attribs["data-libingester-asset-id"] = image.asset_id;
+                    for(const attr of remove_attr_img){
+                        delete this.attribs[attr];
+                    }
+                }
+            });
             //save body
-            body_pages.push( post_body );
-            post_body.find('.gallery-descriptions-wrap').remove();
+            body[0] += post_body.html();
             //Article on two pages
             const next_page = $profile('nav.pagination a.next').attr('href');
-            if( next_page == "" | next_page == undefined )
+            if( next_page == "" | next_page == undefined ){
                 resolve(true);
-            else
-                ingest_post_body(hatch, next_page, body_pages).then(() => resolve(true));
+            }else{
+                ingest_post_body(hatch, next_page, body).then(() => resolve(true));
+            }
         }).catch((err) => {
             resolve(false);
         });
@@ -101,9 +104,9 @@ function ingest_post(hatch, uri, time) {
         setTimeout(function(){
             const asset = new libingester.NewsArticle();
             let post_heading;
-            let body_pages = [];
-            let body = "";
+            let body = [""];
             return libingester.util.fetch_html(uri).then(($profile) => {
+                post_heading = $profile('.post-heading .container .row').children();
                 const base_uri = libingester.util.get_doc_base_uri($profile, uri);
                 //Set title section
                 const title = $profile('meta[property="og:title"]').attr('content');
@@ -115,23 +118,19 @@ function ingest_post(hatch, uri, time) {
                 asset.set_last_modified_date(new Date(Date.parse(modified_date)));
                 const section = $profile('meta[property="article:section"]').attr('content');
                 asset.set_section(section);
-
-                post_heading = $profile('.post-heading .container .row').children();
-            })
-            .then(() => {
-                ingest_post_body(hatch, uri, body_pages).then((next) => {
-                    for(const page of body_pages)
-                        body += page.html();
+            }).then(() => {
+                ingest_post_body(hatch, uri, body).then(() => {
+                    // render template
                     const content = mustache.render(template.structure_template, {
                         post_heading: post_heading,
-                        post_body: body
+                        post_body: body[0],
                     });
+                    // save document
                     asset.set_document(content);
                     hatch.save_asset(asset);
                     resolve(true);
                 })
-            })
-            .catch((err) => {
+            }).catch((err) => {
                 resolve(false);
             });
         },time*1200);
@@ -141,7 +140,7 @@ function ingest_post(hatch, uri, time) {
 function main() {
     const hatch = new libingester.Hatch();
     rss2json.load('http://all-that-is-interesting.com/feed', function(err, rss){
-        let post_urls =  rss.items.map((datum) => datum.url); //recent posts
+        const post_urls =  rss.items.map((datum) => datum.url); //recent posts
         let time = 0; //for delay
         Promise.all( post_urls.map((url) => ingest_post(hatch, url, time++)) ).then( () => hatch.finish() );
     });
