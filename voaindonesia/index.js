@@ -2,182 +2,114 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const request = require('request');
-const rp = require('request-promise');
-const template_artist = require('./template_artist');
-const template_artwork = require('./template_artwork');
+const rss2json = require('rss-to-json');
+const template = require('./template');
 const url = require('url');
 
 const base_uri = 'http://www.voaindonesia.com/';
 
-//Remove elements (body)
-const remove_elements = [
-];
-
-function ingest_artwork_profile(hatch, uri) {
+function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
-
         //Set title section
         const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
-
         // Pull out the updated date
-        asset.set_last_modified_date(new Date());
-        asset.set_section('Artworks');
-
+        const date = $profile('div.published').find('time').first();
+        const datetime = $profile(date).attr('datetime');
+        asset.set_last_modified_date(new Date( Date.parse(datetime) ));
+        const section_type = $profile('meta[property="og:type"]').attr('content');
+        asset.set_section(section_type);
         // Pull out the main image
-        const main_img = $profile('img[itemprop="image"]');
-        const main_image = libingester.util.download_img(main_img, base_uri);
-        const img_description = $profile(".image-wrapper .image-title-container");
-        const img_copyrigth = img_description.find('.popup_copyPublicDomain .copyright-box').text();
-        main_image.set_license(img_copyrigth);
-        hatch.save_asset(main_image);
-
-        const image_description = img_description.find('.svg-icon-public-domain a.pointer').text();
-
-        let info = $profile('.info').first();
-        const description = $profile('span[itemprop="description"]').text();
-
-        //remove elements (info)
-        for (const remove_element of remove_elements) {
-            info.find(remove_element).remove();
-        }
-
-        //Fix relative links
-        info.find("a").map(function() {
-            this.attribs.href = url.resolve(base_uri, this.attribs.href);
+        const url_main_image = $profile('meta[property="og:image"]').attr('content');
+        const main_img = libingester.util.download_image(url_main_image);
+        const main_img_caption =  $profile('div.image').find('p[itemprop="caption"]').first();
+        hatch.save_asset(main_img);
+        // template data
+        const section_temp = $profile('div.category').children();
+        const body_temp = $profile('div.body-container').find('div.wsw').first();
+        const section = section_temp[0] ? section_temp : $profile('div.authors ul li').children();
+        const body = body_temp[0] ? body_temp : $profile('div.intro').children();
+        // download images
+        body.find('img').map(function(){
+            if( this.attribs.src ){
+                const image = libingester.util.download_image( this.attribs.src );
+                this.attribs["data-libingester-asset-id"] = image.asset_id;
+                hatch.save_asset(image);
+            }
         });
-
-        const content = mustache.render(template_artwork.structure_template, {
+        // download videos
+        const videos = $profile('div.html5Player').find('video').map(function() {
+            const video_url = this.attribs.src;
+            const video_asset = new libingester.VideoAsset();
+            video_asset.set_canonical_uri(video_url);
+            video_asset.set_last_modified_date(datetime);
+            video_asset.set_title(title);
+            video_asset.set_download_uri(video_url);
+            hatch.save_asset(video_asset);
+        });
+        // download audios
+        const audios = $profile('div.html5Player').find('audio').map(function() {
+            const audio_url = this.attribs.src;
+            const audio_asset = new libingester.VideoAsset();
+            audio_asset.set_canonical_uri(audio_url);
+            audio_asset.set_last_modified_date(datetime);
+            audio_asset.set_title(title);
+            audio_asset.set_download_uri(audio_url);
+            hatch.save_asset(audio_asset);
+        });
+        // render template
+        const content = mustache.render(template.structure_template, {
             title: title,
-            asset_id: main_image.asset_id,
-            image_description: image_description,
-            info: info.html(),
-            description: description,
+            section: section.html(),
+            date: date.html(),
+            asset_id: main_img.asset_id,
+            image_description: main_img_caption.html(),
+            body: body.html(),
         });
-
+        // save document
         asset.set_document(content);
         hatch.save_asset(asset);
-    }).catch((err) => {
-        return ingest_artwork_profile(hatch, uri);
-    });
-}
-
-function ingest_article_profile(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        const asset = new libingester.NewsArticle();
-
-        //Set title section
-        const title = $profile('meta[property="og:title"]').attr('content');
-        asset.set_title(title);
-        asset.set_canonical_uri(uri);
-
-        // Pull out the updated date
-        asset.set_last_modified_date(new Date());
-        asset.set_section('Artist profile');
-
-        // Pull out the main image
-        const main_img = $profile('img[itemprop="image"]');
-        const image_description = $profile(".image-wrapper .comment").children();
-        const main_image = libingester.util.download_img(main_img, base_uri);
-        hatch.save_asset(main_image);
-
-        const additional_name = $profile('span[itemprop="additionalName"]').first().text();
-        let info = $profile('.info').first();
-        const description = $profile('span[itemprop="description"]').text();
-
-        //remove elements (body)
-        for (const remove_element of remove_elements) {
-            info.find(remove_element).remove();
-        }
-
-        //Fix relative links
-        info.find("a").map(function() {
-            this.attribs.href = url.resolve(base_uri, this.attribs.href);
-        });
-
-        //Workarts
-        let img_array = [];
-        const download_workarts = (number_page = 1) => {
-            const options = {
-                uri: uri + `/mode/all-paintings?json=2&page=${number_page}`,
-                json: true,
-            };
-
-            const promise = rp(options).then(function(body) {
-                if (body.Paintings != null) {
-                    for (const workart of body.Paintings) {
-                        const asset = libingester.util.download_image(workart.image, base_uri);
-                        hatch.save_asset(asset);
-                        img_array.push({
-                            title: workart.title,
-                            year: workart.year,
-                            asset: asset
-                        });
-                    }
-                    return download_workarts(number_page + 1);
-                }
-            }).catch((err) => {
-                download_workarts(number_page);
-            });
-            return promise;
-        };
-
-        download_workarts().then(function() {
-            const content = mustache.render(template_artist.structure_template, {
-                title: title,
-                additional_name: additional_name,
-                asset_id: main_image.asset_id,
-                image_description: image_description,
-                info: info,
-                description: description,
-                workarts: img_array,
-            });
-
-            asset.set_document(content);
-            hatch.save_asset(asset);
-        });
-
-    }).catch((err) => {
-        return ingest_artist_profile(hatch, uri);
-    });
+    })
 }
 
 function main() {
     const hatch = new libingester.Hatch();
+    const audio_urls = 'http://www.voaindonesia.com/z/585';
+    const rss_urls = [
+        'http://www.voaindonesia.com/api/zo-ovegyit',
+        'http://www.voaindonesia.com/api/zrjqpeu_om',
+    ];
 
-    // const artists = new Promise((resolve, reject) => {
-    //     libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
-    //         const artists_link = $artists('.artists-list li:nth-child(-n+1) li.title a').map(function() { //Only 10 artists
-    //             const uri = $artists(this).attr('href');
-    //             return url.resolve(chronological_artists_uri, uri);
-    //         }).get();
-    const post_urls = ['http://www.voaindonesia.com/a/facebook-gelar-konferensi-f8-/3814273.html'];
-            Promise.all(post_urls.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
-                hatch.finish();
+    const get_urls = () => {
+        return new Promise(function (resolve, reject){
+            libingester.util.fetch_html(audio_urls).then(($) => { //first... audio links
+                const tag_links = $('ul#items').find('a.img-wrap');
+                const links = tag_links.map(function () {
+                    return url.resolve(base_uri, this.attribs.href);
+                }).get();
+                return links;
+            }).then((links) => {
+                const rss_promise = rss_urls.map(function(rss_url){ //second... articles and video links
+                    return new Promise(function(res, reject){
+                        rss2json.load(rss_url, function(err, rss){
+                            rss.items.map((datum) => links.push(datum.url));
+                            res();
+                        });
+                    });
+                });
+                Promise.all( rss_promise ).then(() => resolve(links));
             });
-    //     });
-    // });
+        });
+    }
 
-    // const paintings = new Promise((resolve, reject) => {
-    //     rp({ uri: paintings_json_uri, json: true }).then((response) => {
-    //         if (response.Paintings != null) {
-    //             const paintings_uris = response.Paintings.map((datum) => url.resolve(base_uri, datum.paintingUrl));
-    //             Promise.all(paintings_uris.map((uri) => ingest_artwork_profile(hatch, uri))).then(() => {
-    //                 resolve(true);
-    //             });
-    //         }
-    //     });
-    // });
-
-    // Promise.all([paintings]).then(values => {
-    //     return hatch.finish();
-    // });
-
+    get_urls().then((post_urls) => {
+        Promise.all(post_urls.map((uri) => ingest_article(hatch, uri))).then(() => {
+            hatch.finish();
+        });
+    });
 }
 
 main();
