@@ -12,26 +12,34 @@ function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
+
         //Set title section
         const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
+
         // Pull out the updated date
         const date = $profile('div.published').find('time').first();
         const datetime = $profile(date).attr('datetime');
         asset.set_last_modified_date(new Date( Date.parse(datetime) ));
         const section_type = $profile('meta[property="og:type"]').attr('content');
         asset.set_section(section_type);
+
         // Pull out the main image
         const url_main_image = $profile('meta[property="og:image"]').attr('content');
         const main_img = libingester.util.download_image(url_main_image);
         const main_img_caption =  $profile('div.image').find('p[itemprop="caption"]').first();
         hatch.save_asset(main_img);
+
         // template data
-        const section_temp = $profile('div.category').children();
-        const body_temp = $profile('div.body-container').find('div.wsw').first();
-        const section = section_temp[0] ? section_temp : $profile('div.authors ul li').children();
-        const body = body_temp[0] ? body_temp : $profile('div.intro').children();
+        if( $profile('div.intro')[0] ){ // data for 'video post'
+            var section = $profile('div.authors ul li').children();
+            var body = $profile('div.intro').children();
+        }else{                          // data for 'article post'
+            var section = $profile('div.category').children();
+            var body = $profile('div.body-container').find('div.wsw').first();
+        }
+        
         // download images
         body.find('img').map(function(){
             if( this.attribs.src ){
@@ -40,6 +48,7 @@ function ingest_article(hatch, uri) {
                 hatch.save_asset(image);
             }
         });
+
         // download videos
         const videos = $profile('div.html5Player').find('video').map(function() {
             const video_url = this.attribs.src;
@@ -50,6 +59,7 @@ function ingest_article(hatch, uri) {
             video_asset.set_download_uri(video_url);
             hatch.save_asset(video_asset);
         });
+
         // download audios
         const audios = $profile('div.html5Player').find('audio').map(function() {
             const audio_url = this.attribs.src;
@@ -60,6 +70,7 @@ function ingest_article(hatch, uri) {
             audio_asset.set_download_uri(audio_url);
             hatch.save_asset(audio_asset);
         });
+
         // render template
         const content = mustache.render(template.structure_template, {
             title: title,
@@ -69,6 +80,7 @@ function ingest_article(hatch, uri) {
             image_description: main_img_caption.html(),
             body: body.html(),
         });
+
         // save document
         asset.set_document(content);
         hatch.save_asset(asset);
@@ -83,6 +95,7 @@ function main() {
         'http://www.voaindonesia.com/api/zrjqpeu_om',
     ];
 
+    // getting url's
     const get_urls = () => {
         return new Promise(function (resolve, reject){
             libingester.util.fetch_html(audio_urls).then(($) => { //first... audio links
@@ -105,6 +118,7 @@ function main() {
         });
     }
 
+    // saving articles
     get_urls().then((post_urls) => {
         Promise.all(post_urls.map((uri) => ingest_article(hatch, uri))).then(() => {
             hatch.finish();
