@@ -6,7 +6,7 @@ const structure_template = (`
 </section>
 <section class="main-image">
     <img data-libingester-asset-id="{{asset_id}}">
-    <p> {{ image_description }} </p>
+    <p>{{ image_description }}</p>
 </section>
 <section class="info">
     {{{ info }}}

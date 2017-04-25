@@ -9,7 +9,7 @@ const template_artwork = require('./template_artwork');
 const url = require('url');
 
 const base_uri = "https://www.wikiart.org/";
-const chronological_artists_uri = 'https://www.wikiart.org/en/recently-added-artists'; //Artists
+const chronological_artists_uri = 'https://www.wikiart.org/en/recently-added-artists'; //Artists URI
 const paintings_json_uri = "https://www.wikiart.org/?json=2&page=1"; //Paintings URI
 
 //Remove elements (body)
@@ -35,7 +35,7 @@ function ingest_artwork_profile(hatch, uri) {
 
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
-        asset.set_section('Artworks');
+        asset.set_section('Artwork');
 
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
@@ -83,7 +83,7 @@ function ingest_artist_profile(hatch, uri) {
 
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
-        asset.set_section('Artist profile');
+        asset.set_section('Artist');
 
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
@@ -154,10 +154,9 @@ function ingest_artist_profile(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const artists = new Promise((resolve, reject) => {
         libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
-            const artists_link = $artists('.artists-list li:nth-child(-n+1) li.title a').map(function() { //Only 10 artists 
+            const artists_link = $artists('.artists-list li:nth-child(-n+20) li.title a').map(function() { //First twenty
                 const uri = $artists(this).attr('href');
                 return url.resolve(chronological_artists_uri, uri);
             }).get();
@@ -182,7 +181,6 @@ function main() {
     Promise.all([paintings]).then(values => {
         return hatch.finish();
     });
-
 }
 
 main();

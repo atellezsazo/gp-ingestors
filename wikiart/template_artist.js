@@ -33,5 +33,4 @@ const structure_template = (`
 {{/workarts.0}}
 `);
 
-
 exports.structure_template = structure_template;
