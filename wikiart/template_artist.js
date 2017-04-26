@@ -1,6 +1,9 @@
 'use strict';
 
 const structure_template = (`
+<style>
+    {{ style }}
+</style>
 <section class="title">
     <h1>{{ title }}</h1>
     <h2>{{ additional_name }}</h2>

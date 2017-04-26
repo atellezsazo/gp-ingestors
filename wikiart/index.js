@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('fs');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const request = require('request');
@@ -11,6 +12,9 @@ const url = require('url');
 const base_uri = "https://www.wikiart.org/";
 const chronological_artists_uri = 'https://www.wikiart.org/en/recently-added-artists'; //Artists
 const paintings_json_uri = "https://www.wikiart.org/?json=2&page=1"; //Paintings URI
+
+//read style css
+const style = fs.readFileSync('style.css', 'utf-8');
 
 //Remove elements (body)
 const remove_elements = [
@@ -64,6 +68,7 @@ function ingest_artwork_profile(hatch, uri) {
             image_description: image_description,
             info: info.html(),
             description: description,
+            style: style,
         });
 
         asset.set_document(content);
@@ -144,6 +149,7 @@ function ingest_artist_profile(hatch, uri) {
                 info: info,
                 description: description,
                 workarts: img_array,
+                style: style,
             });
 
             asset.set_document(content);
