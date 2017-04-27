@@ -31,6 +31,11 @@ const remove_elements = [
     'script',
 ];
 
+const rm_elem_parent = [
+    'a.nectar-button',
+    'span.guide-info-box',
+];
+
 function ingest_article(hatch, uri) {
     return new Promise(function(resolve, reject) {
         libingester.util.fetch_html(uri).then(($) => {
@@ -60,6 +65,9 @@ function ingest_article(hatch, uri) {
             for (const remove_element of remove_elements) {
                 body.find(remove_element).remove();
             }
+            for (const elem of rm_elem_parent){
+                body.find(elem).first().parent().remove();
+            }
 
             // download images
             let time = 0;
@@ -68,8 +76,9 @@ function ingest_article(hatch, uri) {
                 return new Promise(function(resolve, reject){
                     setTimeout(function(){
                         const srcset = that.attribs['data-lazy-srcset'];
-                        const src = srcset.split(', ')[1].replace(' 320w',''); //image width '320px'
-                        console.log(src);
+                        let src = srcset.split(', ')[1].replace(' 320w',''); //image width '320px'
+                        const index = src.indexOf('jpg') + 3;
+                        src = src.substring(0,index); //clean url
                         if ( src ) {
                             const image = libingester.util.download_image( src );
                             that.attribs["data-libingester-asset-id"] = image.asset_id;
@@ -105,10 +114,7 @@ function main() {
 
     rss2json.load(rss_feed, function(err, rss){
         const news_uris =  rss.items.map((datum) => datum.url);
-        console.log(news_uris);
-        Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => {
-            return hatch.finish();
-        });
+        Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
     });
 }
 
