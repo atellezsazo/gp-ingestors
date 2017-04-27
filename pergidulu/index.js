@@ -36,7 +36,6 @@ function ingest_article(hatch, uri) {
         libingester.util.fetch_html(uri).then(($) => {
             const base_uri = libingester.util.get_doc_base_uri($, uri);
             const asset = new libingester.NewsArticle();
-            console.log(uri);
 
             //Set title section
             const title = $('meta[property="og:title"]').attr('content');
@@ -68,7 +67,9 @@ function ingest_article(hatch, uri) {
                 const that = this;
                 return new Promise(function(resolve, reject){
                     setTimeout(function(){
-                        const src = that.attribs['data-lazy-src'];
+                        const srcset = that.attribs['data-lazy-srcset'];
+                        const src = srcset.split(', ')[1].replace(' 320w',''); //image width '320px'
+                        console.log(src);
                         if ( src ) {
                             const image = libingester.util.download_image( src );
                             that.attribs["data-libingester-asset-id"] = image.asset_id;
@@ -104,7 +105,7 @@ function main() {
 
     rss2json.load(rss_feed, function(err, rss){
         const news_uris =  rss.items.map((datum) => datum.url);
-
+        console.log(news_uris);
         Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();
         });
