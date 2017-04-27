@@ -9,7 +9,7 @@ const template_artwork = require('./template_artwork');
 const url = require('url');
 
 const base_uri = "https://www.wikiart.org/";
-const chronological_artists_uri = 'https://www.wikiart.org/en/recently-added-artists'; //Artists
+const chronological_artists_uri = 'https://www.wikiart.org/en/recently-added-artists'; //Artists URI
 const paintings_json_uri = "https://www.wikiart.org/?json=2&page=1"; //Paintings URI
 
 //Remove elements (body)
@@ -34,19 +34,16 @@ function ingest_artwork_profile(hatch, uri) {
 
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
-        asset.set_section('Artworks');
+        asset.set_section('Artwork');
 
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
         const main_image = libingester.util.download_img(main_img, base_uri);
-        const img_copyrigth = $profile('.popup_copyPublicDomain .copyright-box').text();
-        main_image.set_license(img_copyrigth);
+        const image_description = $profile(".image-wrapper .image-title-container").text();
         hatch.save_asset(main_image);
 
-        // template data
         let info = $profile('.info').first();
         const description = $profile('span[itemprop="description"]').text();
-        const image_description = $profile('.svg-icon-public-domain a.pointer').text();
 
         //remove elements (info)
         for (const remove_element of remove_elements) {
@@ -85,7 +82,7 @@ function ingest_artist_profile(hatch, uri) {
 
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
-        asset.set_section('Artist profile');
+        asset.set_section('Artist');
 
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
@@ -93,9 +90,8 @@ function ingest_artist_profile(hatch, uri) {
         const main_image = libingester.util.download_img(main_img, base_uri);
         hatch.save_asset(main_image);
 
-        // template data
-        let info = $profile('.info').first();
         const additional_name = $profile('span[itemprop="additionalName"]').first().text();
+        let info = $profile('.info').first();
         const description = $profile('span[itemprop="description"]').text();
 
         //remove elements (body)
@@ -108,7 +104,7 @@ function ingest_artist_profile(hatch, uri) {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
-        //Workarts
+        //Workarts 
         let img_array = [];
         const download_workarts = (number_page = 1) => {
             const options = {
@@ -157,10 +153,9 @@ function ingest_artist_profile(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    // artist prfiles
     const artists = new Promise((resolve, reject) => {
         libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
-            const artists_link = $artists('.artists-list li:nth-child(-n+1) li.title a').map(function() { //Only 10 artists
+            const artists_link = $artists('.artists-list li:nth-child(-n+20) li.title a').map(function() { //First twenty
                 const uri = $artists(this).attr('href');
                 return url.resolve(chronological_artists_uri, uri);
             }).get();
@@ -170,7 +165,7 @@ function main() {
             });
         });
     });
-    // artworks
+
     const paintings = new Promise((resolve, reject) => {
         rp({ uri: paintings_json_uri, json: true }).then((response) => {
             if (response.Paintings != null) {
