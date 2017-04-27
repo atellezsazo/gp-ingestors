@@ -39,7 +39,9 @@ function ingest_artwork_profile(hatch, uri) {
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
         const main_image = libingester.util.download_img(main_img, base_uri);
-        const image_description = $profile(".image-wrapper .image-title-container").text();
+        const image_copyrigth = $profile('.popup_copyPublicDomain .copyright-box').text();
+        const image_description = $profile('.svg-icon-public-domain a.pointer').text();
+        main_image.set_license(image_copyrigth);
         hatch.save_asset(main_image);
 
         let info = $profile('.info').first();
@@ -65,8 +67,6 @@ function ingest_artwork_profile(hatch, uri) {
 
         asset.set_document(content);
         hatch.save_asset(asset);
-    }).catch((err) => {
-        return ingest_artwork_profile(hatch, uri);
     });
 }
 
@@ -112,7 +112,7 @@ function ingest_artist_profile(hatch, uri) {
                 json: true,
             };
 
-            const promise = rp(options).then(function(body) {
+            const promise = rp(options).then((body) => {
                 if (body.Paintings != null) {
                     for (const workart of body.Paintings) {
                         const asset = libingester.util.download_image(workart.image, base_uri);
@@ -131,7 +131,7 @@ function ingest_artist_profile(hatch, uri) {
             return promise;
         };
 
-        download_workarts().then(function() {
+        download_workarts().then(() => {
             const content = mustache.render(template_artist.structure_template, {
                 title: title,
                 additional_name: additional_name,
@@ -146,8 +146,6 @@ function ingest_artist_profile(hatch, uri) {
             hatch.save_asset(asset);
         });
 
-    }).catch((err) => {
-        return ingest_artist_profile(hatch, uri);
     });
 }
 
@@ -160,8 +158,9 @@ function main() {
                 return url.resolve(chronological_artists_uri, uri);
             }).get();
 
-            Promise.all(artists_link.map((uri) => ingest_artist_profile(hatch, uri))).then(() => {
-                resolve(true);
+            Promise.all(artists_link.map((uri) => ingest_artist_profile(hatch, uri))).then((err, response) => {
+                console.log(response);
+                resolve();
             });
         });
     });
@@ -171,13 +170,13 @@ function main() {
             if (response.Paintings != null) {
                 const paintings_uris = response.Paintings.map((datum) => url.resolve(base_uri, datum.paintingUrl));
                 Promise.all(paintings_uris.map((uri) => ingest_artwork_profile(hatch, uri))).then(() => {
-                    resolve(true);
+                    resolve();
                 });
             }
         });
     });
 
-    Promise.all([paintings]).then(values => {
+    Promise.all([artists]).then(values => {
         return hatch.finish();
     });
 }
