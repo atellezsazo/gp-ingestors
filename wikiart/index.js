@@ -127,8 +127,9 @@ function ingest_artist_profile(hatch, uri) {
                     return download_workarts(number_page + 1);
                 }
             }).catch((err) => {
-                if( err.statusCode == 403 )
+                if( err.statusCode == 403 ){
                     return download_workarts(number_page);
+                }
             });
             return promise;
         };
@@ -146,7 +147,6 @@ function ingest_artist_profile(hatch, uri) {
 
             asset.set_document(content);
             hatch.save_asset(asset);
-            //resolve(true);
         });
     }).catch(() => {
         return ingest_artist_profile(hatch, uri);
@@ -155,6 +155,7 @@ function ingest_artist_profile(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
+    
     const artists = new Promise((resolve, reject) => {
         libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
             const artists_link = $artists('.artists-list li:nth-child(-n+20) li.title a').map(function() { //First twenty
