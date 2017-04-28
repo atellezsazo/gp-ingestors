@@ -3,28 +3,35 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
+const rss2json = require('rss-to-json');
 const template = require('./template');
 const url = require('url');
 
-const articles = "http://www.livingloving.net/"; // recent articles
+const articles = 'http://www.livingloving.net/'; // recent articles
+const rss_feed = 'http://www.livingloving.net/feed/';
 
 //Remove elements
 const remove_elements = [
+    'banner',
+    'div.jp-relatedposts',
+    'div.post-tags',
     'div.sharedaddy',
-    'banner', //ads
-    'noscript', //any script injection
-    'script', //any script injection
-    '.jp-relatedposts',
-    '.post-tags',
+    'noscript',
+    'script',
+    'span.link_pages',
 ];
 
 //Remove attributes (images)
 const attr_image = [
     'class',
+    'data-jpibfi-post-excerpt',
+    'data-jpibfi-post-title',
+    'data-jpibfi-post-url',
     'height',
     'id',
     'sizes',
     'src',
+    'srcset',
     'width',
 ];
 
@@ -33,7 +40,7 @@ const video_iframes = [
     'youtube', //YouTube
 ];
 
-function ingest_article_profile(hatch, uri) {
+function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
@@ -60,7 +67,6 @@ function ingest_article_profile(hatch, uri) {
         // download videos
         const videos = $profile(".ytp-title .ytp-title-next a").map(function() {
             const iframe_src = this.attribs.src;
-            console.log(iframe_src);
             for (const video_iframe of video_iframes) {
                 if (iframe_src.includes(video_iframe)) {
                     const video_url = this.attribs.src;
@@ -80,14 +86,36 @@ function ingest_article_profile(hatch, uri) {
             body.find(remove_element).remove();
         }
 
+        // function download images
+        const download_image = (img) => {
+            const image = libingester.util.download_image( img.attribs.src );
+            img.attribs["data-libingester-asset-id"] = image.asset_id;
+            hatch.save_asset(image);
+            for(const attr of attr_image){
+                delete img.attribs[attr];
+            }
+        }
+
         // download images
+        const img_width = '620w'; // '1024w', '960w', '768', '670w', '620w', '150w' (not all sizes exist)
         body.find("img").map(function() {
-            if (this.attribs.src != undefined) {
-                const image = libingester.util.download_img(this, base_uri);
-                hatch.save_asset(image);
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-                for(const attr of attr_image)
-                    delete this.attribs[attr];
+            const src = this.attribs.src;
+            const srcset = this.attribs.srcset;
+            if ( srcset ) {
+                let source;
+                for(const uri of srcset.split(', ')){ // search img with 620w
+                	if( uri.indexOf(img_width) != -1 ){
+                        const lastIndex = uri.indexOf('jpg') + 3;
+                        const firstIndex = uri.indexOf('http');
+                        source = uri.substring(firstIndex, lastIndex);
+                    }
+                }
+                if( source ){ //found size (img_width)
+                    this.attribs.src = source;
+                }
+                download_image(this);
+            }else if( src ){
+                download_image(this);
             }
         });
 
@@ -107,15 +135,9 @@ function ingest_article_profile(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
 
-    libingester.util.fetch_html(articles).then(($pages) => {
-        const articles_links = $pages('.post .post-entry .more-link').map(function() {
-            const uri = $pages(this).attr('href');
-            return url.resolve(articles, uri);
-        }).get();
-
-        Promise.all(articles_links.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
-            hatch.finish().then(() => hatch.copy_to_s3());
-        });
+    rss2json.load(rss_feed, function(err, rss){
+        const articles_links =  rss.items.map((datum) => datum.url);
+        Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
     });
 }
 
