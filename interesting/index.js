@@ -21,14 +21,22 @@ const remove_elements = [
     'script',
     'ul.social-list',
 ];
-//clean attr img
-const remove_attr_img = [
+//clean attr (tag)
+const remove_attr = [
     'class',
     'height',
+    'id',
     'sizes',
     'src',
     'srcset',
     'width',
+];
+//Labels to clean
+const clean_tags = [
+    'div',
+    'h1',
+    'p',
+    'span',
 ];
 //embbed content
 const video_iframes = [
@@ -63,8 +71,9 @@ function ingest_post_body(hatch, uri, body) {
 
                 //remove elements (body)
                 for (const remove_element of remove_elements) {
-                    if( remove_element == 'hr' )
-                    post_body.find(remove_element).next().remove();
+                    if( remove_element == 'hr' ){
+                        post_body.find(remove_element).next().remove();
+                    }
                     post_body.find(remove_element).remove();
                 }
 
@@ -86,7 +95,7 @@ function ingest_post_body(hatch, uri, body) {
                                     that.parent.children.push(info_image[0]);
                                 }
                                 that.attribs["data-libingester-asset-id"] = image.asset_id;
-                                for(const attr of remove_attr_img){
+                                for(const attr of remove_attr){
                                     delete that.attribs[attr];
                                 }
                                 hatch.save_asset(image);
@@ -95,7 +104,18 @@ function ingest_post_body(hatch, uri, body) {
                         },time++*500);
                     });
                 }).get();
+
                 Promise.all( img_promises ).then(() => {
+                    //clean tags into body
+                    for(const tag of clean_tags){
+                        post_body.find(tag).map(function() {
+                            for(const attr of remove_attr){
+                                if( this.attribs[attr] ){
+                                    delete this.attribs[attr];
+                                }
+                            }
+                        });
+                    }
                     //save body
                     body[0] += post_body.html();
 
@@ -108,7 +128,6 @@ function ingest_post_body(hatch, uri, body) {
                     }
                 });
             }).catch((err) => {
-                console.log(err);
                 resolve(false);
             });
         }
@@ -123,7 +142,7 @@ function ingest_post(hatch, uri, time) {
             let post_heading;
             let body = [""];
             return libingester.util.fetch_html(uri).then(($profile) => {
-                post_heading = $profile('.post-heading .container .row').children();
+                post_heading = $profile('.post-heading .container .row');
                 const base_uri = libingester.util.get_doc_base_uri($profile, uri);
 
                 //Set title section
@@ -138,9 +157,20 @@ function ingest_post(hatch, uri, time) {
                 asset.set_section(section);
             }).then(() => {
                 ingest_post_body(hatch, uri, body).then(() => {
+                    //clean tags into header
+                    for(const tag of clean_tags){
+                        post_heading.find(tag).map(function() {
+                            for(const attr of remove_attr){
+                                if( this.attribs[attr] ){
+                                    delete this.attribs[attr];
+                                }
+                            }
+                        });
+                    }
+
                     // render template
                     const content = mustache.render(template.structure_template, {
-                        post_heading: post_heading,
+                        post_heading: post_heading.children(),
                         post_body: body[0],
                     });
 
