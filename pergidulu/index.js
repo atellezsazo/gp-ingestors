@@ -71,24 +71,32 @@ function ingest_article(hatch, uri) {
 
             // download images
             let time = 0;
+            const img_width = '750w'; // 1600w, 800w, 750w, 320w,
             const img_promises = body.find("img").map(function() {
                 const that = this;
                 return new Promise(function(resolve, reject){
                     setTimeout(function(){
-                        const srcset = that.attribs['data-lazy-srcset'];
-                        let src = srcset.split(', ')[1].replace(' 320w',''); //image width '320px'
-                        const index = src.indexOf('jpg') + 3;
-                        src = src.substring(0,index); //clean url
-                        if ( src ) {
-                            const image = libingester.util.download_image( src );
-                            that.attribs["data-libingester-asset-id"] = image.asset_id;
-                            for(const attr of attr_image){
-                                delete that.attribs[attr];
+                        const srcset = that.attribs['data-lazy-srcset'].split(', ');
+                        let src;
+                        for(const source of srcset){
+                            if( source.indexOf(img_width) != -1 ){
+                                const lastIndex = source.indexOf('jpg') + 3;
+                                const firstIndex = source.indexOf('http');
+                                src = source.substring(firstIndex, lastIndex);
                             }
-                            hatch.save_asset(image);
-                            resolve(true);
                         }
-                    },time++*500);
+                        if( src == undefined ){
+                            src = that.attribs['data-lazy-src'];
+                        }
+
+                        const image = libingester.util.download_image( src );
+                        that.attribs["data-libingester-asset-id"] = image.asset_id;
+                        for(const attr of attr_image){
+                            delete that.attribs[attr];
+                        }
+                        hatch.save_asset(image);
+                        resolve(true);
+                    },time++*0);
                 });
             }).get();
 
@@ -104,7 +112,7 @@ function ingest_article(hatch, uri) {
                 resolve(true);
             });
         }).catch((err) => {
-            resolve(false);
+            reject();
         });
     });
 }
@@ -114,7 +122,9 @@ function main() {
 
     rss2json.load(rss_feed, function(err, rss){
         const news_uris =  rss.items.map((datum) => datum.url);
-        Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
+        Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => {
+            return hatch.finish();
+        });
     });
 }
 
