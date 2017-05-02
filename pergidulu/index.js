@@ -37,84 +37,70 @@ const rm_elem_parent = [
 ];
 
 function ingest_article(hatch, uri) {
-    return new Promise(function(resolve, reject) {
-        libingester.util.fetch_html(uri).then(($) => {
-            const base_uri = libingester.util.get_doc_base_uri($, uri);
-            const asset = new libingester.NewsArticle();
+    return libingester.util.fetch_html(uri).then(($) => {
+        const base_uri = libingester.util.get_doc_base_uri($, uri);
+        const asset = new libingester.NewsArticle();
 
-            //Set title section
-            const title = $('meta[property="og:title"]').attr('content');
-            asset.set_title(title);
-            asset.set_canonical_uri(uri);
+        //Set title section
+        const title = $('meta[property="og:title"]').attr('content');
+        asset.set_title(title);
+        asset.set_canonical_uri(uri);
 
-            // Pull out the updated date and section
-            const modified_date = $('meta[property="article:published_time"]').attr('content');
-            asset.set_last_modified_date(new Date(Date.parse(modified_date)));
-            const section = $('meta[property="article:section"]').attr('content');
-            asset.set_section(section);
+        // Pull out the updated date and section
+        const modified_date = $('meta[property="article:published_time"]').attr('content');
+        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        const section = $('meta[property="article:section"]').attr('content');
+        asset.set_section(section);
 
-            // Pull out the main image
-            const main_img_url = $('meta[property="og:image"]').attr('content');
-            const main_image = libingester.util.download_image(main_img_url);
-            hatch.save_asset(main_image);
+        // Pull out the main image
+        const main_img_url = $('meta[property="og:image"]').attr('content');
+        const main_image = libingester.util.download_image(main_img_url);
+        hatch.save_asset(main_image);
 
-            const info_article = $('div#single-below-header').first();
-            const body = $('div.post-content div.content-inner').first();
+        const info_article = $('div#single-below-header').first();
+        const body = $('div.post-content div.content-inner').first();
 
-            //remove elements (body)
-            for (const remove_element of remove_elements) {
-                body.find(remove_element).remove();
+        //remove elements (body)
+        for (const remove_element of remove_elements) {
+            body.find(remove_element).remove();
+        }
+        for (const elem of rm_elem_parent){
+            body.find(elem).first().parent().remove();
+        }
+
+        // download images
+        const img_width = '750w'; // 1600w, 800w, 750w, 320w,
+        body.find("img").map(function() {
+            const srcset = this.attribs['data-lazy-srcset'].split(', ');
+            let src;
+            for(const source of srcset){
+                if( source.indexOf(img_width) != -1 ){
+                    const lastIndex = source.indexOf('jpg') + 3;
+                    const firstIndex = source.indexOf('http');
+                    src = source.substring(firstIndex, lastIndex);
+                }
             }
-            for (const elem of rm_elem_parent){
-                body.find(elem).first().parent().remove();
+            if( src == undefined ){
+                src = this.attribs['data-lazy-src'];
             }
 
-            // download images
-            let time = 0;
-            const img_width = '750w'; // 1600w, 800w, 750w, 320w,
-            const img_promises = body.find("img").map(function() {
-                const that = this;
-                return new Promise(function(resolve, reject){
-                    setTimeout(function(){
-                        const srcset = that.attribs['data-lazy-srcset'].split(', ');
-                        let src;
-                        for(const source of srcset){
-                            if( source.indexOf(img_width) != -1 ){
-                                const lastIndex = source.indexOf('jpg') + 3;
-                                const firstIndex = source.indexOf('http');
-                                src = source.substring(firstIndex, lastIndex);
-                            }
-                        }
-                        if( src == undefined ){
-                            src = that.attribs['data-lazy-src'];
-                        }
-
-                        const image = libingester.util.download_image( src );
-                        that.attribs["data-libingester-asset-id"] = image.asset_id;
-                        for(const attr of attr_image){
-                            delete that.attribs[attr];
-                        }
-                        hatch.save_asset(image);
-                        resolve(true);
-                    },time++*0);
-                });
-            }).get();
-
-            Promise.all( img_promises ).then(() => {
-                const content = mustache.render(template.structure_template, {
-                    title: title,
-                    info_article: info_article.html(),
-                    body: body.children(),
-                });
-
-                asset.set_document(content);
-                hatch.save_asset(asset);
-                resolve(true);
-            });
-        }).catch((err) => {
-            reject();
+            const image = libingester.util.download_image( src );
+            this.attribs["data-libingester-asset-id"] = image.asset_id;
+            for(const attr of attr_image){
+                delete this.attribs[attr];
+            }
+            hatch.save_asset(image);
         });
-    });
+
+        const content = mustache.render(template.structure_template, {
+            title: title,
+            info_article: info_article.html(),
+            body: body.children(),
+        });
+
+        asset.set_document(content);
+        hatch.save_asset(asset);
+    })
 }
 
 function main() {
