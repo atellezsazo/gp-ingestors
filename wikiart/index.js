@@ -126,8 +126,8 @@ function ingest_artist_profile(hatch, uri) {
                             asset: asset
                         });
                     }
+                    return download_workarts(number_page + 1);
                 }
-                return download_workarts(number_page + 1);
             }).catch((err) => {
                 if (err.statusCode == 403) {
                     return download_workarts(number_page);
