@@ -41,6 +41,7 @@ function ingest_artwork_profile(hatch, uri) {
         const main_image = libingester.util.download_img(main_img, base_uri);
         const image_copyrigth = $profile('.popup_copyPublicDomain .copyright-box').text();
         const image_description = $profile('.svg-icon-public-domain a.pointer').text();
+        main_image.set_title(title);
         main_image.set_license(image_copyrigth);
         hatch.save_asset(main_image);
 
@@ -73,7 +74,7 @@ function ingest_artwork_profile(hatch, uri) {
 }
 
 function ingest_artist_profile(hatch, uri) {
-    libingester.util.fetch_html(uri).then(($profile) => {
+    return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
 
@@ -106,17 +107,18 @@ function ingest_artist_profile(hatch, uri) {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
-        //Workarts
+        //Workarts 
         let img_array = [];
         const download_workarts = (number_page = 1) => {
             const options = {
                 uri: uri + `/mode/all-paintings?json=2&page=${number_page}`,
                 json: true,
             };
+
             const promise = rp(options).then((body) => {
                 if (body.Paintings != null) {
                     for (const workart of body.Paintings) {
-                        const asset = libingester.util.download_img(workart.image, base_uri);
+                        const asset = libingester.util.download_image(workart.image, base_uri);
                         hatch.save_asset(asset);
                         img_array.push({
                             title: workart.title,
@@ -124,10 +126,10 @@ function ingest_artist_profile(hatch, uri) {
                             asset: asset
                         });
                     }
-                    return download_workarts(number_page + 1);
                 }
+                return download_workarts(number_page + 1);
             }).catch((err) => {
-                if( err.statusCode == 403 ){
+                if (err.statusCode == 403) {
                     return download_workarts(number_page);
                 }
             });
@@ -148,14 +150,14 @@ function ingest_artist_profile(hatch, uri) {
             asset.set_document(content);
             hatch.save_asset(asset);
         });
-    }).catch(() => {
+
+    }).catch((err) => {
         return ingest_artist_profile(hatch, uri);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch();
-    
     const artists = new Promise((resolve, reject) => {
         libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
             const artists_link = $artists('.artists-list li:nth-child(-n+20) li.title a').map(function() { //First twenty
@@ -180,7 +182,9 @@ function main() {
         });
     });
 
-    Promise.all([artists, paintings]).then(() => hatch.finish());
+    Promise.all([paintings]).then(values => {
+        return hatch.finish();
+    });
 }
 
 main();
