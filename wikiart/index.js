@@ -107,7 +107,7 @@ function ingest_artist_profile(hatch, uri) {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
-        //Workarts 
+        //Workarts
         let img_array = [];
         const download_workarts = (number_page = 1) => {
             const options = {
@@ -126,8 +126,8 @@ function ingest_artist_profile(hatch, uri) {
                             asset: asset
                         });
                     }
+                    return download_workarts(number_page + 1);
                 }
-                return download_workarts(number_page + 1);
             }).catch((err) => {
                 if (err.statusCode == 403) {
                     return download_workarts(number_page);
