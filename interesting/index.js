@@ -101,7 +101,7 @@ function ingest_post_body(hatch, uri, body) {
                                 hatch.save_asset(image);
                                 resolve(true);
                             }
-                        },time++*500);
+                        },time++*0);
                     });
                 }).get();
 
@@ -127,9 +127,7 @@ function ingest_post_body(hatch, uri, body) {
                         get_body(next);
                     }
                 });
-            }).catch((err) => {
-                resolve(false);
-            });
+            })
         }
         get_body(uri);
     });
@@ -179,10 +177,8 @@ function ingest_post(hatch, uri, time) {
                     hatch.save_asset(asset);
                     resolve(true);
                 })
-            }).catch((err) => {
-                resolve(false);
-            });
-        },time*2000);
+            })
+        },time*0);
     });
 }
 
@@ -191,7 +187,9 @@ function main() {
     rss2json.load('http://all-that-is-interesting.com/feed', function(err, rss){
         const post_urls =  rss.items.map((datum) => datum.url); //recent posts
         let time = 0; //for delay
-        Promise.all( post_urls.map((url) => ingest_post(hatch, url, time++)) ).then( () => hatch.finish() );
+        Promise.all( post_urls.map((url) => ingest_post(hatch, url, time++)) ).then( () => {
+            return hatch.finish();
+        });
     });
 }
 
