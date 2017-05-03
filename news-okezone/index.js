@@ -11,7 +11,6 @@ const url = require('url');
 const gallery_section = 'http://news.okezone.com/foto'; // Galleries home section
 const rss_uri = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
 
-
 //remove attributes from images
 const remove_attrs_img = [
     'border',
@@ -33,6 +32,19 @@ const video_iframes = [
     'youtube', //YouTube
 ];
 
+function add_embedded_images(base_uri, container, hatch, tag) {
+    container.find(tag).map(function() {
+        if (this.attribs.src) {
+            const image = libingester.util.download_img(this, base_uri);
+            hatch.save_asset(image);
+            this.attribs["data-libingester-asset-id"] = image.asset_id;
+            for (const meta of remove_attrs_img) {
+                delete this.attribs[meta];
+            }
+        }
+    });
+}
+
 function ingest_article_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
@@ -50,15 +62,14 @@ function ingest_article_profile(hatch, uri) {
         //Set title section
         const title = metadata.headline;
         const date = $profile('time').first();
-        const reporter = $profile('.nmreporter, .imgnews-jurnalist').first().children();
-
+        let reporter = $profile('.nmreporter, .imgnews-jurnalist').first().children();
+        add_embedded_images(base_uri, reporter, hatch, "img");
         asset.set_title(title);
 
         // Pull out the main image
         const main_img = $profile('.detail-img img').first();
         const main_image = libingester.util.download_img(main_img, base_uri);
         const image_description = $profile('.caption-img-ab').children().text();
-
         hatch.save_asset(main_image);
 
         // Create constant for body
@@ -70,16 +81,7 @@ function ingest_article_profile(hatch, uri) {
         }
 
         //Download images 
-        body.find("img").map(function() {
-            if (this.attribs.src) {
-                const image = libingester.util.download_img(this, base_uri);
-                hatch.save_asset(image);
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-                for (const meta of remove_attrs_img) {
-                    delete this.attribs[meta];
-                }
-            }
-        });
+        add_embedded_images(base_uri, body, hatch, "img");
 
         //Download videos 
         const videos = $profile("iframe").map(function() {
