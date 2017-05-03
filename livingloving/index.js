@@ -9,6 +9,7 @@ const rss2json = require('rss-to-json');
 const template = require('./template');
 const url = require('url');
 
+const app_name = 'App Name';
 const articles = 'http://www.livingloving.net/'; // recent articles
 const rss_feed = 'http://www.livingloving.net/feed/';
 const style = fs.readFileSync('style.css');
@@ -78,6 +79,7 @@ function ingest_article(hatch, uri) {
         const category = article_data[2];
         asset.set_last_modified_date(new Date( Date.parse(modified_date) ));
         const section = $profile('.post-heading .meta').children().text();
+        const post_tags = $profile('.post-tags').first();
         asset.set_section(section);
 
         // set title section
@@ -152,6 +154,9 @@ function ingest_article(hatch, uri) {
                             for(const p of pp){
                                 p.attribs['class'] = css_class;
                             }
+                            const last = pp[pp.length-1];
+                            const style_css = last.attribs['class'];
+                            last.attribs['class'] = style_css + ' last-img';
                         }
                     }
                     count = 0;
@@ -191,7 +196,9 @@ function ingest_article(hatch, uri) {
             date_published: date_published,
             style: style,
             main_image: main_image,
-            body: body.html()
+            body: body.html(),
+            post_tags: post_tags,
+            app_name: app_name,
         });
 
         asset.set_document(content);

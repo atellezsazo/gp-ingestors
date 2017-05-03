@@ -1,11 +1,11 @@
-$title-font: 'Fira Sans';
-$body-font: 'Merriweather';
-$display-font: 'Fira Sans';
-$logo-font: 'Fira Sans';
-$context-font: 'Fira Sans';
-$support-font: 'Fira Sans';
-$title-font-composite: 'Roboto';
-$display-font-composite: 'Roboto';
+$title-font: "Fira Sans";
+$body-font: "Merriweather";
+$display-font: "Fira Sans";
+$logo-font: "Fira Sans";
+$context-font: "Fira Sans";
+$support-font: "Fira Sans";
+$title-font-composite: "Roboto";
+$display-font-composite: "Roboto";
 
 $primary-light-color: #5e7790;
 $primary-medium-color: #2d3e4e;
@@ -21,7 +21,6 @@ $font-size: 20px;
 
 html {
   overflow-x: hidden;
-  font-family: Merriweather;
   background-image: linear-gradient(#e9e5e0, #e9e5e0), linear-gradient(rgba(255, 0, 0, 0.4), rgba(255, 0, 0, 0.4)), url("background.png");
   background-size: auto, auto, cover;
   background-repeat: no-repeat;
@@ -33,7 +32,6 @@ body {
   font: $body-font;
   font-size: $font-size;
   line-height: 1.5px;
-  margin-bottom: 600px;
   margin-top: 60px;
   a{
       color: $accent-light-color;
@@ -65,7 +63,8 @@ img {
 
 main {
   color: #333333;
-  line-height: 1.5; }
+  line-height: 1.5;
+  padding-bottom: 600px;}
 
 h1, h2, h3, h4, h5, h6 {
   font-family: "Fira Sans";
@@ -101,17 +100,71 @@ a:hover {
   .extra-header .source-link {
     margin-bottom: 0; }
 
-.tags {
-  color: $accent-light-color;
-  font-size: $font-size*0.8;
-  padding: $font-size*0.3;
-  border: 1px;
+.caption {
+    color: lighten(black, 60%);
+    padding: 1px;
+    font-size: $font-size*0.8;
+    line-height: $font-size*1;
+    font: $support-font;
+}
+
+.page-link {
+  margin: 0;
+  padding: 15px 0;
+}
+
+.source {
+    color: $accent-light-color;
+}
+.source:hover {
+    color: $accent-dark-color;
+}
+.app-logo {
+  font: $logo-font;
+  font-size: $font-size*2;
+  width: 50%;
+  float: left;
+  p {
+    margin: 0;
+  }
+}
+
+.post-tags {
+  border: 1px solid $background-light-color;
+  border-left: none;
+  border-right: none;
+  margin-bottom: 15px;
+  padding: 15px 5px;
+  width: 100%;
+  a{
+      border: 1px solid $accent-light-color;
+      border-radius: 3px;
+      color: $accent-light-color;
+      display: inline-block;
+      font: $support-font;
+      font-size: $font-size*0.8;
+      margin: 5px;
+      padding: $font-size*0.3;
+      text-align: center;
+  }
+  a:hover{
+      border: 1px $accent-dark-color;
+      color: $accent-dark-color;
+  }
 }
 
 .img-inline{
+    box-sizing: border-box;
+    display: inline;
+    float: left;
     margin-left: 0;
     margin-right: 0;
+    padding-right: 5px;
 }
+.last-img{
+    padding-right: 0px;
+}
+
 .one{
     width: 100%;
 }
@@ -159,9 +212,12 @@ p, ul, ol {
   margin-left: 10%;
   margin-right: 30%; }
 
+footer {
+  margin: 20px 10% 0 10%;
+}
+
 @media (max-width: 779px) {
   main {
-    margin: 60px 10vw 0;
     font-size: 20px; }
 
   .extra-header {

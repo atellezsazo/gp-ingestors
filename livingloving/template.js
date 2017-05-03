@@ -19,6 +19,12 @@ const structure_template = (`
 </section>
 <main class="main">
     {{{ body }}}
-</main>`);
+    <footer>
+        {{{ post_tags }}}
+        <div class="app-logo"><p>{{app_name}}</p></div>
+        <div class="source"><p class="page-link">Originar Article at <a href="http://www.livingloving.net/">www.livingloving.net</a></p></div>
+    </footer>
+</main>
+`);
 
 exports.structure_template = structure_template;
