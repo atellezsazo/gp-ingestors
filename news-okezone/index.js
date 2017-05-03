@@ -99,7 +99,7 @@ function ingest_article_profile(hatch, uri) {
             }
         });
 
-        body.remove("iframe"); //Delete iframe container
+        body.find("iframe").remove(); //Delete iframe container
 
         // Construct a new document containing the content we want.
         const content = mustache.render(template.structure_template, {
