@@ -14,6 +14,7 @@ const remove_elements = [
     'iframe', //delete iframes
     'noscript', //any script injection
     'script', //any script injection
+    'video',
     '.helpful-article', //recomendation articles 
     '.single-share', //Share buttons
 ];
@@ -61,8 +62,8 @@ function ingest_article_profile(hatch, uri) {
 
         const body = $profile('.post-content').first();
 
-        //Download videos 
-        const videos = $profile("iframe").map(function() {
+        //Download iframe videos 
+        const iframe_videos = $profile("iframe").map(function() {
             const iframe_src = this.attribs.src;
             for (const video_iframe of video_iframes) {
                 if (iframe_src.includes(video_iframe)) {
@@ -76,6 +77,17 @@ function ingest_article_profile(hatch, uri) {
                     hatch.save_asset(video_asset);
                 }
             }
+        });
+
+        // download videos
+        const videos = $profile('.wp-video').find('video a').map(function() {
+            const video_url = this.attribs.href;
+            const video_asset = new libingester.VideoAsset();
+            video_asset.set_canonical_uri(video_url);
+            video_asset.set_last_modified_date(modified_date);
+            video_asset.set_title(title);
+            video_asset.set_download_uri(video_url);
+            hatch.save_asset(video_asset);
         });
 
         //remove elements
