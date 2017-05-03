@@ -1,5 +1,7 @@
 'use strict';
 
+const fs = require('fs');
+const less = require('less');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
@@ -9,6 +11,7 @@ const url = require('url');
 
 const articles = 'http://www.livingloving.net/'; // recent articles
 const rss_feed = 'http://www.livingloving.net/feed/';
+const style = fs.readFileSync('style.css');
 
 //Remove elements
 const remove_elements = [
@@ -16,6 +19,7 @@ const remove_elements = [
     'div.jp-relatedposts',
     'div.post-tags',
     'div.sharedaddy',
+    'input',
     'noscript',
     'script',
     'span.link_pages',
@@ -40,6 +44,25 @@ const video_iframes = [
     'youtube', //YouTube
 ];
 
+// Divide a list into 'n' equal parts
+function divide_in(array, n){
+	const length = array.length;
+	let res = [];
+	let first = 0;
+	let last = n;
+
+	while( last<=length & first<last ){
+		res.push( array.slice(first, last) );
+		first = last;
+		last += 3;
+		if( last > length ){
+			last = length;
+		}
+	}
+
+	return res;
+}
+
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
@@ -49,6 +72,10 @@ function ingest_article(hatch, uri) {
         // pull out the updated date and section
         const modified_date = $profile('meta[property="article:modified_time"]').attr('content');
         const article_entry = $profile('.post .post-heading .meta').first();
+        const article_data = $profile(article_entry).text().split(' • ');
+        const author = article_data[0];
+        const date_published = article_data[1];
+        const category = article_data[2];
         asset.set_last_modified_date(new Date( Date.parse(modified_date) ));
         const section = $profile('.post-heading .meta').children().text();
         asset.set_section(section);
@@ -96,6 +123,43 @@ function ingest_article(hatch, uri) {
             }
         }
 
+        const parraf = body.find('p[style="text-align: center;"]').first();
+        if( parraf.text().indexOf('_') != -1 ){
+            parraf[0].children = {type: 'tag', name: 'hr'};
+            //console.log(parraf.text());
+        }
+
+        let count = 0;
+        let parrafs = [];
+        body.find('p').map(function(){
+            if( this.children[0] ){
+                if( this.children[0].name == 'img' ){
+                    count++;
+                    parrafs.push(this);
+                }else{
+                    if( count >= 3 ){
+                        const p_of_p = divide_in(parrafs, 3);
+                        for(const pp of p_of_p){
+                            const size = pp.length;
+                            let css_class = 'img-inline ';
+                            if( size == 1 ){
+                                css_class += 'one';
+                            }else if( size == 2 ){
+                                css_class += 'two';
+                            }else if( size == 3 ){
+                                css_class += 'three';
+                            }
+                            for(const p of pp){
+                                p.attribs['class'] = css_class;
+                            }
+                        }
+                    }
+                    count = 0;
+                    parrafs = [];
+                }
+            }
+        });
+
         // download images
         const img_width = '620w'; // '1024w', '960w', '768', '670w', '620w', '150w' (not all sizes exist)
         body.find("img").map(function() {
@@ -122,7 +186,10 @@ function ingest_article(hatch, uri) {
         // render template
         const content = mustache.render(template.structure_template, {
             title: title,
-            article_entry: article_entry,
+            category: category,
+            author: author,
+            date_published: date_published,
+            style: style,
             main_image: main_image,
             body: body.html()
         });
@@ -134,11 +201,11 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
-    rss2json.load(rss_feed, function(err, rss){
-        const articles_links =  rss.items.map((datum) => datum.url);
+    // rss2json.load(rss_feed, function(err, rss){
+    //     const articles_links =  rss.items.map((datum) => datum.url);
+        const articles_links = ['http://www.livingloving.net/2017/events/giveaway/artworks-for-your-home-giveaway/'];
         Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
-    });
+    // });
 }
 
 main();
