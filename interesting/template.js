@@ -1,10 +1,11 @@
 'use strict';
 
 const structure_template = (`
-<section class="post-heading">
-    {{{ post_heading }}}
+<section class="title">
+    <h1>{{ title }}</h1>
+    {{{ by_line }}}
 </section>
-<section class="post-body">
+<section class="body">
     {{{ post_body }}}
 </section>`);
 
