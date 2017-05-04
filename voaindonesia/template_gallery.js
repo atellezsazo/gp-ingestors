@@ -5,7 +5,7 @@ const structure_template = (`
     <h1>{{ title }}</h1>
     <div>{{{ section }}} | {{{ date }}}</div>
 </section>
-<section class="body">
+<section class="body"> 
     {{{ body }}}
 </section>
 `);

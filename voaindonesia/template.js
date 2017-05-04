@@ -11,7 +11,7 @@ const structure_template = (`
 </section>
 <section class="body">
     {{{ body }}}
-</section>
+</section> 
 `);
 
 exports.structure_template = structure_template;

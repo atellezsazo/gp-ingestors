@@ -4,7 +4,7 @@ const libingester = require('libingester');
 const mustache = require('mustache');
 const rss2json = require('rss-to-json');
 const template = require('./template');
-const template_gallery = require('./template_gallery');
+const template_gallery = require('./template_gallery'); 
 const url = require('url');
 
 const base_uri = 'http://www.voaindonesia.com/';
