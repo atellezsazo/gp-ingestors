@@ -20,10 +20,10 @@ const remove_elements = [
     '.gallery-preview',
     '.hidden-md-up',
     '.related-posts',
-    '.sm-page-count',
-    '.social-callout', ,
+    '.social-callout',
     '.social-list',
-    '.youtube_com'
+    '.sm-page-count',
+    '.youtube_com',
 ];
 
 //clean attr (tag)
@@ -41,7 +41,7 @@ const remove_attr = [
 //embbed content
 const video_iframes = [
     'youtube', //YouTube
-
+    'yahoo',
 ];
 
 function ingest_post(hatch, uri) {
@@ -50,7 +50,7 @@ function ingest_post(hatch, uri) {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
 
         //Set title section
-        const title = $profile('.post-title').first().text();
+        const title = $profile('.post-title').first().text().replace(/[\n\t\r]/g, "");
         asset.set_title(title);
         asset.set_canonical_uri(uri);
 
@@ -124,25 +124,31 @@ function ingest_post(hatch, uri) {
 
             const next = $profile('nav.pagination a.next').attr('href');
             if (next) {
-                libingester.util.fetch_html(next).then(($profile_test) => {
-                    ingest_body($profile_test, finish_process);
+                libingester.util.fetch_html(next).then(($next_profile) => {
+                    ingest_body($next_profile, finish_process);
                 });
             } else {
                 finish_process();
             }
         };
 
-        ingest_body($profile, function() {
-            const content = mustache.render(template.structure_template, {
-                title: title,
-                by_line: by_line,
-                post_body: body.join(""),
-            });
+        const test = new Promise((resolve, reject) => {
+            ingest_body($profile, function() {
+                const content = mustache.render(template.structure_template, {
+                    title: title,
+                    by_line: by_line,
+                    post_body: body.join(""),
+                });
 
-            // save document
-            asset.set_document(content);
-            hatch.save_asset(asset);
+                // save document
+                asset.set_document(content);
+                hatch.save_asset(asset);
+                resolve();
+            });
         });
+
+        return Promise.all([test]);
+
     });
 }
 
