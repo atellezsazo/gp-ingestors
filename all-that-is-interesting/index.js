@@ -38,10 +38,11 @@ const remove_attr = [
     'width',
 ];
 
-//embbed content
+//embed content
 const video_iframes = [
-    'youtube', //YouTube
+    'interactive.tegna-media',
     'yahoo',
+    'youtube',
 ];
 
 function ingest_post(hatch, uri) {
