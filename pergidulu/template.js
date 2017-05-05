@@ -1,10 +1,13 @@
 'use strict';
 
 const structure_template = (`
-<section class="title">
+<header>
+    <div class="extra-header">
+        <div class="context">{{{category}}}</div>
+        <div class="extra-header-right">{{author}} &#x2022; <span class="date-published">{{date}}</span></div>
+    </div>
     <h1>{{ title }}</h1>
-    {{{ info_article }}}
-</section>
+</header>
 <section class="body">
     {{{ body }}}
 </section>

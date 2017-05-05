@@ -31,6 +31,7 @@ const remove_elements = [
     'script',
 ];
 
+//Remove parents from these elements (body)
 const rm_elem_parent = [
     'a.nectar-button',
     'span.guide-info-box',
@@ -41,26 +42,25 @@ function ingest_article(hatch, uri) {
         const base_uri = libingester.util.get_doc_base_uri($, uri);
         const asset = new libingester.NewsArticle();
 
-        //Set title section
+        // set title section
         const title = $('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
 
-        // Pull out the updated date and section
+        // pull out the updated date and section
         const modified_date = $('meta[property="article:published_time"]').attr('content');
         asset.set_last_modified_date(new Date(Date.parse(modified_date)));
         const section = $('meta[property="article:section"]').attr('content');
         asset.set_section(section);
 
-        // Pull out the main image
-        const main_img_url = $('meta[property="og:image"]').attr('content');
-        const main_image = libingester.util.download_image(main_img_url);
-        hatch.save_asset(main_image);
-
+        // data for the template
         const info_article = $('div#single-below-header').first();
+        const author = $(info_article).find('span.fn').text();
+        const date = $(info_article).find('span.date').text();
+        const category = $(info_article).find('span.meta-category').text();
         const body = $('div.post-content div.content-inner').first();
 
-        //remove elements (body)
+        // remove elements (body)
         for (const remove_element of remove_elements) {
             body.find(remove_element).remove();
         }
@@ -73,14 +73,14 @@ function ingest_article(hatch, uri) {
         body.find("img").map(function() {
             const srcset = this.attribs['data-lazy-srcset'].split(', ');
             let src;
-            for(const source of srcset){
+            for(const source of srcset){ // looking for a link containing 'img_width'
                 if( source.indexOf(img_width) != -1 ){
                     const lastIndex = source.indexOf('jpg') + 3;
                     const firstIndex = source.indexOf('http');
                     src = source.substring(firstIndex, lastIndex);
                 }
             }
-            if( src == undefined ){
+            if( src == undefined ){ //If don't find the link it, set default link
                 src = this.attribs['data-lazy-src'];
             }
 
@@ -92,9 +92,12 @@ function ingest_article(hatch, uri) {
             hatch.save_asset(image);
         });
 
+        // render template
         const content = mustache.render(template.structure_template, {
             title: title,
-            info_article: info_article.html(),
+            author: author,
+            date: date,
+            category: category,
             body: body.children(),
         });
 
