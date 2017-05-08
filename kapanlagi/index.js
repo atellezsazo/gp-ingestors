@@ -1,25 +1,27 @@
 'use strict';
 
 const libingester = require('libingester');
-const xml2js = require('xml2js');
 const mustache = require('mustache');
+const Promise = require("bluebird");
 const request = require('request');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
 const template = require('./template');
 const url = require('url');
+const xml2js = require('xml2js');
 
 const base_uri = "https://www.kapanlagi.com/";
 const rss_uri = "https://www.kapanlagi.com/feed/";
+const concurreny_factor = 1;
 
 //Remove elements (body)
 const remove_elements = [
     'iframe',
     'noscript',
     'script',
+    '.box-share-img-detail',
     '.link-pagging-warper',
     '.paging-related',
-    '.box-share-img-detail',
     '.video-wrapper',
 ];
 
@@ -37,24 +39,20 @@ const remove_attr = [
 
 //embed content
 const video_iframes = [
-    'youtube',
     'a.kapanlagi',
     'skrin.id',
+    'youtube',
 ];
 
 function ingest_article(hatch, uri) {
-
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
 
-        console.log(uri);
-
         //Set title section
-        const title = $profile('meta[property="og:title"]').attr('content');
+        const title = $profile("#newsdetail-right-new h1").first().text();
         asset.set_title(title);
         asset.set_canonical_uri(uri);
-        const title_new = $profile("#newsdetail-right-new h1").first().text();
 
         // Pull out the updated date
         const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
@@ -86,7 +84,7 @@ function ingest_article(hatch, uri) {
                 const video_asset = new libingester.VideoAsset();
                 video_asset.set_canonical_uri(video_url);
                 video_asset.set_last_modified_date(modified_date);
-                video_asset.set_title(title_new);
+                video_asset.set_title(title);
                 video_asset.set_download_uri(video_url);
                 hatch.save_asset(video_asset);
             });
@@ -157,13 +155,12 @@ function ingest_article(hatch, uri) {
             } else {
                 finish_process();
             }
-
         };
 
         const promise = new Promise((resolve, reject) => {
             ingest_body($profile, function() {
                 const content = mustache.render(template.structure_template, {
-                    title: title_new,
+                    title: title,
                     pages: pages,
                 });
 
@@ -173,7 +170,6 @@ function ingest_article(hatch, uri) {
                 resolve();
             });
         });
-
         return Promise.all([promise]);
     });
 
@@ -186,28 +182,18 @@ function main() {
         parser.parseString(res, function(err, result) {
             const rss = rss2json.parser(result);
             let promises = [];
-            let num = 0;
             rss.items.map((datum) => {
-
-                if (!datum.link.includes("musik.kapanlagi.com") && num < 35) { //disard musik subdomai
-                    num++;
-
-                    const promise = new Promise((resolve, reject) => {
-                        ingest_article(hatch, datum.link).then(() => {
-                            resolve();
-                        }).catch((error) => {
-                            console.log("GP", error);
-                            // reject(error);
-                        });
-                    })
-
-                    promises.push(promise);
+                if (!datum.link.includes("musik.kapanlagi.com")) { //disard musik subdomain
+                    promises.push(datum.link);
                 }
             });
-
-            Promise.all(promises).then(() => {
+            Promise.map(promises, function(link) {
+                return ingest_article(hatch, link).catch((error) => {
+                    console.log("Ingestor ", error);
+                });
+            }, { concurrency: concurreny_factor }).then(function() {
                 return hatch.finish();
-            });
+            })
         });
     });
 }
