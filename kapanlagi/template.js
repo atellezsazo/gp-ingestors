@@ -8,14 +8,16 @@ const structure_template = (`
 
 <section class="body">
 {{#pages}}
-    <div class="main-image">
-        <img data-libingester-asset-id="{{ img.asset_id }}">
-        {{#img_credit}}
-        <div class="image-credit">{{{ img_credit }}}</div>
-        {{/img_credit}}
-    </div>
+    {{#img}}
+        <div class="main-image">
+            <img data-libingester-asset-id="{{ img.asset_id }}">
+            {{#img_credit}}
+                 <div class="image-credit">{{{ img_credit }}}</div>
+             {{/img_credit}}
+         </div>
+     {{/img}}
     {{#subtitle}}
-        <h2 class="sub-title">{{{ subtitle }}}</div>
+        <h2 class="sub-title">{{{ subtitle }}}</h2>
     {{/subtitle}}
     {{{ body }}}
 {{/pages}}

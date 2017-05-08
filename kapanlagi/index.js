@@ -17,6 +17,8 @@ const remove_elements = [
     'iframe',
     'noscript',
     'script',
+    '.link-pagging-warper',
+    '.paging-related',
     '.box-share-img-detail',
     '.video-wrapper',
 ];
@@ -37,6 +39,7 @@ const remove_attr = [
 const video_iframes = [
     'youtube',
     'a.kapanlagi',
+    'skrin.id',
 ];
 
 function ingest_article(hatch, uri) {
@@ -44,12 +47,14 @@ function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
+
+        console.log(uri);
+
         //Set title section
         const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
-        const title_new = $profile(".newsdetail-right-new h1").first().text();
-
+        const title_new = $profile("#newsdetail-right-new h1").first().text();
 
         // Pull out the updated date
         const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
@@ -67,11 +72,24 @@ function ingest_article(hatch, uri) {
         let pages = [];
         const ingest_body = ($profile, finish_process) => {
             // Pull out the main image
-            let main_img = $profile('.entertainment-newsdetail-headlineimg img, .pg-img-warper img').first();
-            const main_image = libingester.util.download_img(main_img, base_uri);
-            main_image.set_title(main_image.title);
+            let main_image;
+            const main_img = $profile('.entertainment-newsdetail-headlineimg img, .pg-img-warper img').first();
+            if (main_img.length > 0) {
+                main_image = libingester.util.download_img(main_img, base_uri);
+                main_image.set_title(main_image.title);
+                hatch.save_asset(main_image);
+            }
+
             const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span');
-            hatch.save_asset(main_image);
+            const main_video = $profile(".videoWrapper").map(function() {
+                const video_url = this.attribs["data-url"];
+                const video_asset = new libingester.VideoAsset();
+                video_asset.set_canonical_uri(video_url);
+                video_asset.set_last_modified_date(modified_date);
+                video_asset.set_title(title_new);
+                video_asset.set_download_uri(video_url);
+                hatch.save_asset(video_asset);
+            });
 
             const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
             let post_body = $profile('.entertainment-detail-news');
@@ -105,17 +123,25 @@ function ingest_article(hatch, uri) {
                 }
             });
 
-            //remove elements (body)
-            for (const remove_element of remove_elements) {
-                post_body.find(remove_element).remove();
-            }
-
             //clean elements
             post_body.find("a, div, h1, h2, h3, h4, h5, h6, span").map(function() {
                 if (this.attribs.style) {
                     delete this.attribs.style;
                 }
             });
+
+            //resolve links 
+            post_body.find("a").map(function() {
+                this.attribs.href = url.resolve(base_uri, this.attribs.href);
+            });
+
+            const next = $profile('.link-pagging-warper a').attr('href');
+            const last_pagination = $profile('ul.pg-pagging li:last-child a').first();
+
+            //remove elements (body)
+            for (const remove_element of remove_elements) {
+                post_body.find(remove_element).remove();
+            }
 
             pages.push({
                 subtitle: subtitle,
@@ -124,11 +150,7 @@ function ingest_article(hatch, uri) {
                 body: post_body.html(),
             });
 
-            const next = $profile('.link-pagging-warper a').attr('href');
-            const last_pagination = $profile('ul.pg-pagging li:last-child a').first();
-
             if (next && last_pagination.length != 0) {
-                console.log(next);
                 libingester.util.fetch_html(url.resolve(base_uri, next)).then(($next_profile) => {
                     ingest_body($next_profile, finish_process);
                 });
@@ -154,32 +176,40 @@ function ingest_article(hatch, uri) {
 
         return Promise.all([promise]);
     });
+
 }
 
 function main() {
     const hatch = new libingester.Hatch();
-
-    ingest_article(hatch, "https://www.kapanlagi.com/showbiz/selebriti/weekly-hot-dari-lupain-mantan-hingga-lagu-sindir-ayu-ting-ting-820217.html").then(() => {
-        console.log("fin");
-        return hatch.finish();
-    });
-
-    /*
     rp({ uri: rss_uri, gzip: true, }).then((res) => {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, function(err, result) {
             const rss = rss2json.parser(result);
-            let posts_url = [];
+            let promises = [];
+            let num = 0;
             rss.items.map((datum) => {
-                if (!datum.link.includes("musik.kapanlagi.com")) { //disard musik subdomain
-                    posts_url.push(datum.link);
+
+                if (!datum.link.includes("musik.kapanlagi.com") && num < 35) { //disard musik subdomai
+                    num++;
+
+                    const promise = new Promise((resolve, reject) => {
+                        ingest_article(hatch, datum.link).then(() => {
+                            resolve();
+                        }).catch((error) => {
+                            console.log("GP", error);
+                            // reject(error);
+                        });
+                    })
+
+                    promises.push(promise);
                 }
             });
-            Promise.all(posts_url.map((url) => ingest_article(hatch, url))).then(() => {
+
+            Promise.all(promises).then(() => {
                 return hatch.finish();
             });
         });
-    }); */
+    });
 }
 
 main();
