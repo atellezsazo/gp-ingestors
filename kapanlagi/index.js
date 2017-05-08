@@ -57,8 +57,9 @@ function ingest_article(hatch, uri) {
         // Pull out the updated date
         const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
         let modified_date = new Date(Date.parse(info_date));
-        if (modified_date)
+        if (!info_date) {
             modified_date = new Date();
+        }
 
         asset.set_last_modified_date(modified_date);
         const category = $profile('.newsdetail-categorylink').first().text();
