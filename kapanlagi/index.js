@@ -12,7 +12,7 @@ const xml2js = require('xml2js');
 
 const base_uri = "https://www.kapanlagi.com/";
 const rss_uri = "https://www.kapanlagi.com/feed/";
-const concurreny_factor = 1;
+const concurrency = 1;
 
 //Remove elements (body)
 const remove_elements = [
@@ -189,9 +189,9 @@ function main() {
             });
             Promise.map(promises, function(link) {
                 return ingest_article(hatch, link).catch((error) => {
-                    console.log("Ingestor ", error);
+                    console.log("Ingestor err: ", error);
                 });
-            }, { concurrency: concurreny_factor }).then(function() {
+            }, { concurrency: concurrency }).then(function() {
                 return hatch.finish();
             })
         });
