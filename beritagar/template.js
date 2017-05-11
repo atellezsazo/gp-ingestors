@@ -3,14 +3,12 @@
 const structure_template = (`
 <header>
     <h1>{{ title }}</h1>
-    {{{ article_header }}}
     {{{ article_tags }}}
     {{{ author }}}
     {{{ published }}}
 </header>
 <section class="body">
     {{{ article_subtitle }}}
-    {{{ media_subtitle }}}
     {{#bg_img}}
     <figure class="bg-img">
     <img data-libingester-asset-id="{{ bg_img.asset_id }}">
