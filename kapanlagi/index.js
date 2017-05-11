@@ -19,7 +19,9 @@ const remove_elements = [
     'iframe',
     'noscript',
     'script',
+    'style',
     '.box-share-img-detail',
+    '.lifestyle-in-content',
     '.link-pagging-warper',
     '.paging-related',
     '.video-wrapper',
@@ -37,6 +39,13 @@ const remove_attr = [
     'width',
 ];
 
+// embed video
+const video_iframes = [
+    'a.kapanlagi',
+    'skrin.id',
+    'youtube',
+];
+
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
@@ -46,6 +55,7 @@ function ingest_article(hatch, uri) {
         const title = $profile("#newsdetail-right-new h1").first().text();
         asset.set_title(title);
         asset.set_canonical_uri(uri);
+        console.log(uri);
 
         // Pull out the updated date
         const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
@@ -61,60 +71,58 @@ function ingest_article(hatch, uri) {
         asset.set_section(category + "," + keywords);
         const by_line = $profile('.vcard').children();
 
-        let promises = [];
         let pages = [];
 
         const save_video_asset = (canonical_uri, download_uri) => {
-            if( canonical_uri.includes('http') && download_uri.includes('http') ){
-                const video_asset = new libingester.VideoAsset();
-                video_asset.set_canonical_uri(canonical_uri);
-                video_asset.set_last_modified_date(modified_date);
-                video_asset.set_title(title);
-                video_asset.set_download_uri(download_uri);
-                hatch.save_asset(video_asset);
-            }
-        }
-
-        const download_video_skrin = (uri, promises, video_width = ['480p.mp4','360p.mp4']) => {
-            if( uri ){
-                let video_url;
-                const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
-                if(uri.includes('skrin.id')){
-                    const promise_video = libingester.util.fetch_html(uri).then(($) => {
-                        const ss = $('script')[3].children[0].data; //script data
-                        const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[','');
-                        const video_uris = json_sources.split('},').map((uri) => {
-                            const relative_video_uri = uri.substring(uri.indexOf('url')+7, uri.indexOf('resolution')-3);
-                            return url.resolve(base_video_uri, relative_video_uri);
-                        });
-                        for(const video_uri of video_uris){
-                            for(const width of video_width){
-                                if(video_uri.includes(width)){
-                                    video_url = video_uri;
-                                    break;
-                                }
-                            }
-                        }
-                        if( video_url ){
-                            save_video_asset(uri, video_url);
-                        }
-                    });
-                    promises.push( promise_video );
+            if( canonical_uri && download_uri ){
+                if( canonical_uri.includes('http') && download_uri.includes('http') ){
+                    const video_asset = new libingester.VideoAsset();
+                    video_asset.set_canonical_uri(canonical_uri);
+                    video_asset.set_last_modified_date(modified_date);
+                    video_asset.set_title(title);
+                    video_asset.set_download_uri(download_uri);
+                    hatch.save_asset(video_asset);
                 }
             }
         }
 
-        const download_video_kapanlagi = (uri, promises) => {
-            if( uri ){
-                let video_url;
-                if(uri.includes('a.kapanlagi')){
-                    const promise_video = libingester.util.fetch_html(uri).then(($) => {
-                        video_url = $('title').text();
-                        if( video_url ){
-                            save_video_asset(uri, video_url);
+        const download_video = (src) => {
+            if(src){
+                for(const domain of video_iframes){
+                    if(src.includes(domain)){
+                        switch (domain) {
+                            case 'a.kapanlagi': {
+                                return libingester.util.fetch_html(src).then(($) => {
+                                    const video_url = $('title').text();
+                                    save_video_asset(uri, video_url);
+                                });
+                                break; // exit 'a.kapanlagi'
+                            }
+                            case 'skrin.id': {
+                                const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
+                                const video_width = '480p.mp4';
+                                let video_url;
+                                libingester.util.fetch_html(src).then(($) => {
+                                    const ss = $('script')[3].children[0].data; //script data
+                                    const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[','');
+                                    const video_uris = json_sources.split('},').map((uri) => {
+                                        const relative_video_uri = uri.substring(uri.indexOf('url')+7, uri.indexOf('resolution')-3);
+                                        return url.resolve(base_video_uri, relative_video_uri);
+                                    });
+                                    for(const video_uri of video_uris){
+                                        if(video_uri.includes(video_width)){
+                                            video_url = video_uri;
+                                            break;
+                                        }
+                                    }
+                                    save_video_asset(uri, video_url || video_uris[video_uris.length-1]);
+                                });
+                                break; // exit 'skrin.id'
+                            }
+                            default: save_video_asset(uri, src);
                         }
-                    });
-                    promises.push( promise_video );
+                        break; // exit for
+                    }
                 }
             }
         }
@@ -131,8 +139,9 @@ function ingest_article(hatch, uri) {
 
             const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span');
             const main_video = $profile(".videoWrapper").map(function() {
-                const iframe_video_url = this.attribs["data-url"];
-                download_video_skrin(iframe_video_url, promises);
+                const video_width = '480p.mp4';
+                const uri = this.attribs["data-url"];
+                download_video(uri);
             });
 
             const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
@@ -151,15 +160,9 @@ function ingest_article(hatch, uri) {
             });
 
             // download videos
-            const videos = post_body.find("iframe").map(function() {
+            post_body.find("iframe").map(function() {
                 const iframe_src = this.attribs.src;
-                if(iframe_src){
-                    if(iframe_src.includes('a.kapanlagi')){
-                        download_video_kapanlagi(iframe_src, promises);
-                    }else if(iframe_src.includes('youtube')){
-                        save_video_asset(iframe_src, iframe_src);
-                    }
-                }
+                download_video(iframe_src);
             });
 
             //clean elements
@@ -194,9 +197,7 @@ function ingest_article(hatch, uri) {
                     ingest_body($next_profile, finish_process);
                 });
             } else {
-                Promise.all( promises ).then(() => {
-                    finish_process();
-                });
+                finish_process();
             }
         };
 
@@ -212,9 +213,9 @@ function ingest_article(hatch, uri) {
                 hatch.save_asset(asset);
                 resolve();
             });
-        }).catch((err) => {console.log(err, uri)});
+        })
         return Promise.all([promise]);
-    });
+    })
 
 }
 
@@ -224,13 +225,13 @@ function main() {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, function(err, result) {
             const rss = rss2json.parser(result);
-            let promises = [];
+            let links = [];
             rss.items.map((datum) => {
                 if (!datum.link.includes("musik.kapanlagi.com")) { //disard musik subdomain
-                    promises.push(datum.link);
+                    links.push(datum.link);
                 }
             });
-            Promise.map(promises, function(link) {
+            Promise.map(links, function(link) {
                 return ingest_article(hatch, link).catch((error) => {
                     console.log("Ingestor err: ", error);
                 });
