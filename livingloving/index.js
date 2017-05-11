@@ -137,42 +137,42 @@ function ingest_article(hatch, uri) {
         // identify 3 or more images in a row
         let count = 0;
         let parrafs = [];
-        body.find('p').map(function() {
-            if (this.children[0]) {
-                if (this.children[0].name == 'img') {
-                    count++;
-                    parrafs.push(this);
-                } else {
-                    if (count >= 3) {
-                        const p_of_p = divide_in(parrafs, 3);
-                        for (const pp of p_of_p) {
-                            const size = pp.length;
-                            let css_class = 'img-inline ';
-                            if (size == 1) {
-                                css_class += 'one';
-                            } else if (size == 2) {
-                                css_class += 'two';
-                            } else if (size == 3) {
-                                css_class += 'three';
+        /*    body.find('p').map(function() {
+                if (this.children[0]) {
+                    if (this.children[0].name == 'img') {
+                        count++;
+                        parrafs.push(this);
+                    } else {
+                        if (count >= 3) {
+                            const p_of_p = divide_in(parrafs, 3);
+                            for (const pp of p_of_p) {
+                                const size = pp.length;
+                                let css_class = 'img-inline ';
+                                if (size == 1) {
+                                    css_class += 'one';
+                                } else if (size == 2) {
+                                    css_class += 'two';
+                                } else if (size == 3) {
+                                    css_class += 'three';
+                                }
+                                for (const p of pp) {
+                                    p.attribs['class'] = css_class;
+                                }
+                                // add class (first image)
+                                const first = pp[0];
+                                const f_style_css = first.attribs['class'];
+                                first.attribs['class'] = f_style_css + ' first-img';
+                                // add class (last image)
+                                const last = pp[size - 1];
+                                const l_style_css = last.attribs['class'];
+                                last.attribs['class'] = l_style_css + ' last-img';
                             }
-                            for (const p of pp) {
-                                p.attribs['class'] = css_class;
-                            }
-                            // add class (first image)
-                            const first = pp[0];
-                            const f_style_css = first.attribs['class'];
-                            first.attribs['class'] = f_style_css + ' first-img';
-                            // add class (last image)
-                            const last = pp[size - 1];
-                            const l_style_css = last.attribs['class'];
-                            last.attribs['class'] = l_style_css + ' last-img';
                         }
+                        count = 0;
+                        parrafs = [];
                     }
-                    count = 0;
-                    parrafs = [];
                 }
-            }
-        });
+            }); */
 
         // download images
         const img_width = '620w'; // '1024w', '960w', '768', '670w', '620w', '150w' (not all sizes exist)
