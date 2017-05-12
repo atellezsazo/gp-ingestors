@@ -17,6 +17,7 @@ const remove_elements = [
     'video',
     '.helpful-article', //recomendation articles 
     '.single-share', //Share buttons
+    '.wp-video',
 ];
 
 //Remove img metadata
@@ -28,11 +29,6 @@ const remove_metadata = [
     'sizes',
     'src',
     'width',
-];
-
-//embedded content
-const video_iframes = [
-    'youtube', //YouTube
 ];
 
 function ingest_article_profile(hatch, uri) {
@@ -50,55 +46,34 @@ function ingest_article_profile(hatch, uri) {
         asset.set_section(section);
 
         //Set title section
-        const title = $profile('meta[property="og:title"]').attr('content');
-        const article_entry = $profile('.article-entry').first().children();
+        const title = $profile('meta[name="title"]').attr('content');
+        const description = $profile('meta[name="description"]').attr('content');
+        const author = $profile('meta[name="author"]').attr('content');
         asset.set_title(title);
+        asset.set_synopsis(description);
 
         // Pull out the main image
         let main_img = $profile('.post-image img').first();
         const main_image = libingester.util.download_img(main_img, base_uri);
         const image_credit = $profile('.image-credit').children();
+        main_image.set_title(title);
         hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
 
         const body = $profile('.post-content').first();
-
-        //Download iframe videos 
-        const iframe_videos = $profile("iframe").map(function() {
-            const iframe_src = this.attribs.src;
-            for (const video_iframe of video_iframes) {
-                if (iframe_src.includes(video_iframe)) {
-                    const video_url = new url.URL(this.attribs.src);
-                    const full_uri = url.format(video_url, { search: false })
-                    const video_asset = new libingester.VideoAsset();
-                    video_asset.set_canonical_uri(full_uri);
-                    video_asset.set_last_modified_date(modified_date);
-                    video_asset.set_title(title);
-                    video_asset.set_download_uri(full_uri);
-                    hatch.save_asset(video_asset);
-                }
-            }
-        });
-
-        // download videos
-        const videos = $profile('.wp-video').find('video a').map(function() {
-            const video_url = this.attribs.href;
-            const video_asset = new libingester.VideoAsset();
-            video_asset.set_canonical_uri(video_url);
-            video_asset.set_last_modified_date(modified_date);
-            video_asset.set_title(title);
-            video_asset.set_download_uri(video_url);
-            hatch.save_asset(video_asset);
-        });
 
         //remove elements
         for (const remove_element of remove_elements) {
             body.find(remove_element).remove();
         }
 
+        const post_tags = $profile('.article-tag').children();
+
         //Download images 
         body.find("img").map(function() {
             if (this.attribs.src || this.attribs["data-src"]) {
                 const image = libingester.util.download_img(this, base_uri);
+                image.set_title(title);
                 hatch.save_asset(image);
                 this.attribs["data-libingester-asset-id"] = image.asset_id;
                 for (const meta of remove_metadata) {
@@ -109,10 +84,12 @@ function ingest_article_profile(hatch, uri) {
 
         const content = mustache.render(template.structure_template, {
             title: title,
-            article_entry: article_entry,
+            author: author,
+            category: section,
             main_image: main_image,
             image_credit: image_credit,
-            body: body.html()
+            body: body.html(),
+            post_tags: post_tags,
         });
 
         asset.set_document(content);
