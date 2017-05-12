@@ -2,6 +2,7 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
+const Promise = require('bluebird');
 const request = require('request');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
@@ -11,7 +12,7 @@ const url = require('url');
 const base_uri = 'https://beritagar.id/';
 const page_gallery = 'https://beritagar.id/spesial/foto/';
 const page_video = 'https://beritagar.id/spesial/video/';
-const rss_uri = 'https://beritagar.id/rss'; //Artists
+const rss_uri = 'https://beritagar.id/rss/';
 
 // clean images
 const remove_attr_img = [
@@ -81,14 +82,12 @@ const download_video = (hatch, that, date, title) => {
 
 // post data
 const get_post_data = (hatch, asset, $, uri) => {
+    asset.set_canonical_uri(uri);
     const section = $('meta[property="article:section"]').attr('content');
     asset.set_section(section);
-    //Set title section
     const title = $('meta[property="og:title"]').attr('content');
     asset.set_title(title);
-    asset.set_canonical_uri(uri);
 
-    // Pull out the updated date and section
     const modified_time = $('meta[property="article:modified_time"]').attr('content');
     let date = new Date(Date.parse(modified_time));
     if( !date ){
@@ -96,10 +95,9 @@ const get_post_data = (hatch, asset, $, uri) => {
     }
     asset.set_last_modified_date(date);
 
-    // author and date tags
     const $article_info = $('.article-info');
 
-    // clean attrib tags
+    // clean tag attributes
     const clean = ($tag) => {
         if($tag.length != 0){
             if( $tag[0].attribs ){
@@ -197,7 +195,7 @@ function ingest_article(hatch, uri) {
             const instagram_promises = body.find('blockquote.instagram-media').map(function() {
                 const href = $(this).find('a').first()[0].attribs.href;
                 if( href ){
-                    return libingester.util.fetch_html(href).then(($inst) => {
+                    return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
                         const image_uri = $inst('meta[property="og:image"]').attr('content');
                         const image_description = $inst('meta[property="og:description"]').attr('content');
                         const image = libingester.util.download_image( image_uri );
@@ -294,40 +292,31 @@ function ingest_video(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    const post_urls = ['http://beritagar.id/artikel/otogen/kawasaki-ninja-250sl-kurang-diminati'];
 
-    const article = new Promise((resolve, reject) => {
-        rss2json.load(rss_uri, function(err, rss){
-            Promise.all(
-                rss.items.map((datum) => ingest_article(hatch, datum.url))
-            ).then( () => resolve());
-        });
-    });
+    const ingest = (page_uri, resolved, concurrency = Infinity) => {
+        if( page_uri.includes('rss') ) {
+            rss2json.load(rss_uri, function(err, rss){
+                Promise.map(rss.items, function(item) {
+                    return ingest_article(hatch, item.url); // posrt article
+                }, {concurrency: concurrency}).then(() => resolved());
+            });
+        } else {
+            libingester.util.fetch_html(page_uri).then(($) => {
+                const tags = $('#main .swifts .content a.title').get(); // more recent media links
+                Promise.map(tags, function(tag) {
+                    if( page_uri.includes('foto') ) { // media gallery
+                        return ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href));
+                    }else if( page_uri.includes('video') ) { // media video
+                        return ingest_video(hatch, url.resolve(base_uri, tag.attribs.href));
+                    }
+                }, {concurrency: concurrency}).then(() => resolved());
+            });
+        }
+    }
 
-
-    const gallery = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(page_gallery).then(($) => {
-            const uris1 = $('#main .swifts .content a.title').map(function() {
-                return url.resolve(base_uri, this.attribs.href);
-            }).get();
-            const uris2 = $('#main .section-media .media-type-video a.video-title').map(function() {
-                return url.resolve(base_uri, this.attribs.href);
-            }).get();
-            Promise.all(uris1.concat(uris2).map((uri) => ingest_gallery(hatch, uri))).then(() => resolve());
-        });
-    });
-
-    const video = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(page_video).then(($) => {
-            const uris1 = $('#main .swifts .content a.title').map(function() {
-                return url.resolve(base_uri, this.attribs.href);
-            }).get();
-            const uris2 = $('#main .section-media .media-type-video a.video-title').map(function() {
-                return url.resolve(base_uri, this.attribs.href);
-            }).get();
-            Promise.all(uris1.concat(uris2).map((uri) => ingest_video(hatch, uri))).then(() => resolve());
-        });
-    });
+    const article = new Promise((resolve, reject) => ingest(rss_uri, resolve));
+    const gallery = new Promise((resolve, reject) => ingest(page_gallery, resolve));
+    const video = new Promise((resolve, reject) => ingest(page_video, resolve));
 
     Promise.all([article, gallery, video]).then(() => {
         return hatch.finish();

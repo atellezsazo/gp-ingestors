@@ -3,6 +3,7 @@
     "version": "0.0.1",
     "license": "UNLICENSED",
     "dependencies": {
+        "bluebird": "^3.5.0",
         "libingester": "ssh://git@github.com:endlessm/libingester.git",
         "mustache": "^2.3.0",
         "request": "^2.80.0",
