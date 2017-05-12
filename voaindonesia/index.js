@@ -29,18 +29,6 @@ const remove_body_elements = [
 ];
 
 // Util functions
-const render_template = (hatch, asset, template, post_data) => {
-    const content = mustache.render(template, post_data);
-    asset.set_document(content);
-    hatch.save_asset(asset);
-}
-
-const fix_relative_paths = ($object) => {
-    $object.find('a').map(function() { // fixing relative paths
-        this.attribs['href'] = url.resolve(base_uri, this.attribs.href);
-    });
-}
-
 const remove_elements = ($object, elements) => {
     for(const element of elements){
         $object.find(element).remove();
@@ -65,17 +53,10 @@ const download_img = (hatch, img) => {
     let src = img.attribs.src;
     if( src ){
         src = src.replace('_q10',''); //for better quality images
-        const image = libingester.util.download_image( src );
+        const image = download_image(hatch, src);
         img.attribs["data-libingester-asset-id"] = image.asset_id;
         remove_attributes(img, remove_tag_attributes);
-        hatch.save_asset(image);
     }
-}
-
-const download_images = (hatch, $object) => {
-    $object.find('img').map(function() {
-        download_img(hatch, this);
-    });
 }
 
 const download_video = (hatch, uri, date, title) => {
@@ -88,12 +69,6 @@ const download_video = (hatch, uri, date, title) => {
         hatch.save_asset(video);
         return video;
     }
-}
-
-const download_videos = (hatch, $object, date, title) => {
-    $object.find('iframe').map(function() {
-        download_video(hatch, this.attribs.src, date, title);
-    });
 }
 
 const get_post_data = ($, asset) => {
@@ -120,9 +95,10 @@ const get_post_data = ($, asset) => {
     }
     asset.set_last_modified_date(date);
 
-    fix_relative_paths(authors);
-    fix_relative_paths(category);
-    fix_relative_paths(published);
+    // fixing relative paths
+    authors.find('a').get().map((a) => a.attribs['href'] = url.resolve(base_uri, a.attribs.href || '#'));
+    category.find('a').get().map((a) => a.attribs['href'] = url.resolve(base_uri, a.attribs.href || '#'));
+    published.find('a').get().map((a) => a.attribs['href'] = url.resolve(base_uri, a.attribs.href || '#'));
 
     return {
         authors: authors,
@@ -133,22 +109,31 @@ const get_post_data = ($, asset) => {
     };
 }
 
+// render
+const render_template = (hatch, asset, template, post_data) => {
+    const content = mustache.render(template, post_data);
+    asset.set_document(content);
+    hatch.save_asset(asset);
+}
+
 // ---------- Ingestor Functions
-function $ingest_gallery(hatch, asset, $, uri) {                        // ingest post gallery
+function $ingest_gallery(hatch, asset, $, uri, resolved) {            // ingest post gallery
     // post data
     let post_data = get_post_data($, asset);
     const body_content = $('#content #article-content .wsw').first();
+    //body_content.find(remove_body_elements).remove(); //+
     remove_elements(body_content, remove_body_elements);
-    fix_relative_paths(body_content);
-    download_images(hatch, body_content);
+    body_content.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
+    body_content.find('img').get().map((img) => download_img(hatch, img));
 
     let gallery = [];
     const post_gallery = ($page, finish_process) => {
         const body_gallery = $page('#content #galleryItems').first();
         const relative_show_more = $page('#content .link-showMore').attr('href');
+        //body_gallery.find(remove_body_elements).remove(); //+
         remove_elements(body_gallery, remove_body_elements);
-        fix_relative_paths(body_gallery);
-        download_images(hatch, body_gallery);
+        body_gallery.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
+        body_gallery.find('img').get().map((img) => download_img(hatch, img));
         gallery.push( body_gallery.html() );
 
         if( relative_show_more ){
@@ -161,143 +146,115 @@ function $ingest_gallery(hatch, asset, $, uri) {                        // inges
         }
     }
 
-    return new Promise((resolve, reject) => {
-        post_gallery($, () => {
-            post_data['body_content'] = body_content;
-            post_data['body_gallery'] = gallery.join('');
-            render_template(hatch, asset, template.template_gallery, post_data);
-            resolve();
-        });
+    post_gallery($, () => {
+        post_data['body_content'] = body_content;
+        post_data['body_gallery'] = gallery.join('');
+        render_template(hatch, asset, template.template_gallery, post_data);
+        resolved();
     });
 }
 
-function $ingest_article(hatch, asset, $, uri) {                        // ingest post article
-    return new Promise((resolve, reject) => {
-        // download main image
-        const url_main_image = $('meta[property="og:image"]').attr('content');
-        const main_image = download_image(hatch, url_main_image);
-        const main_image_caption = $('#content .media-pholder .caption').first();
+function $ingest_article(hatch, asset, $, uri, resolved) {            // ingest post article
+    // download main image
+    const url_main_image = $('meta[property="og:image"]').attr('content');
+    const main_image = download_image(hatch, url_main_image);
+    const main_image_caption = $('#content .media-pholder .caption').first();
 
-        // post data
-        let post_data = get_post_data($, asset);
-        const body_content = $('#content .body-container .wsw').first();
-        remove_elements(body_content, remove_body_elements);
-        fix_relative_paths(body_content);
-        download_images(hatch, body_content);
-        download_videos(hatch, body_content, post_data.date, post_data.title);
+    // post data
+    let post_data = get_post_data($, asset);
+    const body_content = $('#content .body-container .wsw').first();
+    //body_content.find(remove_body_elements).remove(); //+
+    remove_elements(body_content, remove_body_elements);
+    body_content.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
+    body_content.find('img').get().map((img) => download_img(hatch, img));
+    body_content.find('iframe').get().map((iframe) => download_video(hatch, iframe.attribs.src, date, title));
 
-        // render template
-        post_data['main_image_id'] = main_image.asset_id;
-        post_data['main_image_caption'] = main_image_caption.text();
-        post_data['body'] = body_content.html();
-        render_template(hatch, asset, template.template_article, post_data);
-        resolve();
-    });
+    // render template
+    post_data['main_image_id'] = main_image.asset_id;
+    post_data['main_image_caption'] = main_image_caption.text();
+    post_data['body'] = body_content.html();
+    render_template(hatch, asset, template.template_article, post_data);
+    resolved();
 }
 
-function $ingest_video_post(hatch, asset, $, uri) {                     // ingest post video
-    return new Promise((resolve, reject) => {
-        // download main image
-        const url_main_image = $('meta[property="og:image"]').attr('content');
-        const main_image = download_image(hatch, url_main_image);
+function $ingest_video_post(hatch, asset, $, uri, resolved) {         // ingest post video
+    // download main image
+    const url_main_image = $('meta[property="og:image"]').attr('content');
+    const main_image = download_image(hatch, url_main_image);
 
-        // post data
-        let post_data = get_post_data($, asset);
-        const body_content = $('#content .intro').first();
-        remove_elements(body_content, remove_body_elements);
+    // post data
+    let post_data = get_post_data($, asset);
+    const body_content = $('#content .intro').first();
+    //body_content.find(remove_body_elements).remove(); //+
+    remove_elements(body_content, remove_body_elements);
 
-        // download video
-        const video_url = $('#content video').first()[0].attribs.src;
-        download_video(hatch, video_url, post_data.date, post_data.title);
+    // download video
+    const video_url = $('#content video').first()[0].attribs.src;
+    download_video(hatch, video_url, post_data.date, post_data.title);
 
-        // render template
-        post_data['main_image_id'] = main_image.asset_id;
-        post_data['body'] = body_content.html();
-        render_template(hatch, asset, template.template_video_post, post_data);
-        resolve();
-    });
+    // render template
+    post_data['main_image_id'] = main_image.asset_id;
+    post_data['body'] = body_content.html();
+    render_template(hatch, asset, template.template_video_post, post_data);
+    resolved();
 }
 
-function $ingest_audio_post(hatch, asset, $, uri) {                     // ingest post audio
-    return new Promise((resolve, reject) => {
-        // download main image
-        const url_main_image = $('meta[property="og:image"]').attr('content');
-        const main_image = download_image(hatch, url_main_image);
+function $ingest_audio_post(hatch, asset, $, uri, resolved) {         // ingest post audio
+    // download main image
+    const url_main_image = $('meta[property="og:image"]').attr('content');
+    const main_image = download_image(hatch, url_main_image);
 
-        // post data
-        let post_data = get_post_data($, asset);
-        const body_content = $('#content .intro').first();
-        remove_elements(body_content, remove_body_elements);
+    // post data
+    let post_data = get_post_data($, asset);
+    const body_content = $('#content .intro').first();
+    //body_content.find(remove_body_elements).remove(); //+
+    remove_elements(body_content, remove_body_elements);
 
-        // download audio as video
-        const video_url = $('#content audio').first()[0].attribs.src;
-        download_video(hatch, video_url, post_data.date, post_data.title);
+    // download audio as video
+    const video_url = $('#content audio').first()[0].attribs.src;
+    download_video(hatch, video_url, post_data.date, post_data.title);
 
-        // render template
-        post_data['main_image_id'] = main_image.asset_id;
-        post_data['body'] = body_content.html();
-        render_template(hatch, asset, template.template_video_post, post_data);
-        resolve();
-    });
-}
-
-function ingest(hatch, uri, $ingest_function) {                         // main ingest
-    return libingester.util.fetch_html(uri).then(($) => {
-        const asset = new libingester.NewsArticle();
-        asset.set_canonical_uri(uri);
-        return $ingest_function(hatch, asset, $, uri);
-    });
+    // render template
+    post_data['main_image_id'] = main_image.asset_id;
+    post_data['body'] = body_content.html();
+    render_template(hatch, asset, template.template_video_post, post_data);
+    resolved();
 }
 
 function main() {
     const hatch = new libingester.Hatch();
 
-    const audio_promise = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(url_audio).then(($) => {
-            const page_uris = $('ul#items').find('a.img-wrap').map(function() {
-                return url.resolve(base_uri, this.attribs.href);
-            }).get();
-            Promise.all(page_uris.map((uri) => ingest(hatch, uri, $ingest_audio_post))).then(() => {
-                resolve();
-            });
-        })
-    });
-
-    const berita_promise = new Promise((resolve, reject) => {
-        rss2json.load(url_berita, function(err, rss) {
-            const rss_uris = rss.items.map((datum) => datum.url);
-            Promise.all(rss_uris.map((uri) => ingest(hatch, uri, $ingest_article))).then(() => {
-                resolve();
+    const ingest_promise = (hatch, uri, $ingest_function) => { // ingest one post
+        return new Promise((resolve, reject) => {
+            libingester.util.fetch_html(uri).then(($) => {
+                const asset = new libingester.NewsArticle();
+                asset.set_canonical_uri(uri);
+                $ingest_function(hatch, asset, $, uri, resolve); // ingest specific post
             });
         });
-    });
+    }
 
-    const gallery_promise = new Promise((resolve, reject) => {
-        rss2json.load(url_gallery, function(err, rss) {
-            const rss_uris = rss.items.map((datum) => datum.url);
-            Promise.all(rss_uris.map((uri) => ingest(hatch, uri, $ingest_gallery))).then(() => {
-                resolve();
+    const ingest = (uri, $ingest_function, resolved) => { // resolve url's and ingest a post
+        if( uri.includes('api') ) { //rss
+            rss2json.load(uri, function(err, rss) {
+                Promise.all(rss.items.map((item) => ingest_promise(hatch, item.url, $ingest_function))).then(() => resolved());
             });
-        });
-    });
+        } else {
+            libingester.util.fetch_html(url_audio).then(($) => {
+                const page_uris = $('ul#items').find('a.img-wrap').map(function() {
+                    return url.resolve(base_uri, this.attribs.href || '');
+                }).get();
+                Promise.all(page_uris.map((uri) => ingest_promise(hatch, uri, $ingest_function))).then(() => resolved());
+            })
+        }
+    }
 
-    const video_promise = new Promise((resolve, reject) => {
-        rss2json.load(url_video, function(err, rss) {
-            const rss_uris = rss.items.map((datum) => datum.url);
-            Promise.all(rss_uris.map((uri) => ingest(hatch, uri, $ingest_video_post))).then(() => {
-                resolve();
-            });
-        });
-    });
+    // const audio = new Promise((resolve, reject) => ingest(url_audio, $ingest_audio_post, resolve));
+    const berita = new Promise((resolve, reject) => ingest('http://www.voaindonesia.com/api/', $ingest_article, resolve));
+    // const gallery = new Promise((resolve, reject) => ingest(url_gallery, $ingest_gallery, resolve));
+    // const video = new Promise((resolve, reject) => ingest(url_video, $ingest_video_post, resolve));
 
-    const promises = [
-        audio_promise,
-        berita_promise,
-        gallery_promise,
-        video_promise,
-    ];
-
-    Promise.all(promises).then(() => { console.log('finish');
+    Promise.all([berita]).then(() => {
         return hatch.finish();
     });
 }
