@@ -1,7 +1,6 @@
 'use strict';
 
 const fs = require('fs');
-const less = require('less');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
@@ -12,7 +11,7 @@ const url = require('url');
 const app_name = 'App Name';
 const articles = 'http://www.livingloving.net/'; // recent articles
 const rss_feed = 'http://www.livingloving.net/feed/';
-const style    = fs.readFileSync('style.css','utf8');
+const style = fs.readFileSync('assets/css/style.css', 'utf8');
 
 //Remove elements
 const remove_elements = [
@@ -46,21 +45,21 @@ const video_iframes = [
 ];
 
 // Divide a list into 'n' equal parts
-function divide_in(array, n){
-	const length = array.length;
-	let res = [];
-	let first = 0;
-	let last = n;
+function divide_in(array, n) {
+    const length = array.length;
+    let res = [];
+    let first = 0;
+    let last = n;
 
-	while( last<=length & first<last ){
-		res.push( array.slice(first, last) );
-		first = last;
-		last += 3;
-		if( last > length ){
-			last = length;
-		}
-	}
-	return res;
+    while (last <= length & first < last) {
+        res.push(array.slice(first, last));
+        first = last;
+        last += 3;
+        if (last > length) {
+            last = length;
+        }
+    }
+    return res;
 }
 
 function ingest_article(hatch, uri) {
@@ -76,13 +75,13 @@ function ingest_article(hatch, uri) {
         const author = article_data[0];
         const date_published = article_data[1];
         const category = article_data[2];
-        asset.set_last_modified_date(new Date( Date.parse(modified_date) ));
+        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
         const section = $profile('.post-heading .meta').children().text();
         asset.set_section(section);
 
         // post tags, sometimes there are no tags
         let post_tags = $profile('.post-tags').first().children();
-        if( post_tags.length == 0 ){
+        if (post_tags.length == 0) {
             post_tags = false;
         }
 
@@ -121,86 +120,86 @@ function ingest_article(hatch, uri) {
 
         // function download images
         const download_image = (img) => {
-            const image = libingester.util.download_image( img.attribs.src );
+            const image = libingester.util.download_image(img.attribs.src);
             img.attribs["data-libingester-asset-id"] = image.asset_id;
             hatch.save_asset(image);
-            for(const attr of attr_image){
+            for (const attr of attr_image) {
                 delete img.attribs[attr];
             }
         }
 
         // replace '---' by tag (hr)
         const parraf = body.find('p[style="text-align: center;"]').first();
-        if( parraf.text().indexOf('_') != -1 ){
-            parraf[0].children = {type: 'tag', name: 'hr'};
+        if (parraf.text().indexOf('_') != -1) {
+            parraf[0].children = { type: 'tag', name: 'hr' };
         }
 
         // identify 3 or more images in a row
         let count = 0;
         let parrafs = [];
-        body.find('p').map(function(){
-            if( this.children[0] ){
-                if( this.children[0].name == 'img' ){
-                    count++;
-                    parrafs.push(this);
-                }else{
-                    if( count >= 3 ){
-                        const p_of_p = divide_in(parrafs, 3);
-                        for(const pp of p_of_p){
-                            const size = pp.length;
-                            let css_class = 'img-inline ';
-                            if( size == 1 ){
-                                css_class += 'one';
-                            }else if( size == 2 ){
-                                css_class += 'two';
-                            }else if( size == 3 ){
-                                css_class += 'three';
+        /*    body.find('p').map(function() {
+                if (this.children[0]) {
+                    if (this.children[0].name == 'img') {
+                        count++;
+                        parrafs.push(this);
+                    } else {
+                        if (count >= 3) {
+                            const p_of_p = divide_in(parrafs, 3);
+                            for (const pp of p_of_p) {
+                                const size = pp.length;
+                                let css_class = 'img-inline ';
+                                if (size == 1) {
+                                    css_class += 'one';
+                                } else if (size == 2) {
+                                    css_class += 'two';
+                                } else if (size == 3) {
+                                    css_class += 'three';
+                                }
+                                for (const p of pp) {
+                                    p.attribs['class'] = css_class;
+                                }
+                                // add class (first image)
+                                const first = pp[0];
+                                const f_style_css = first.attribs['class'];
+                                first.attribs['class'] = f_style_css + ' first-img';
+                                // add class (last image)
+                                const last = pp[size - 1];
+                                const l_style_css = last.attribs['class'];
+                                last.attribs['class'] = l_style_css + ' last-img';
                             }
-                            for(const p of pp){
-                                p.attribs['class'] = css_class;
-                            }
-                            // add class (first image)
-                            const first = pp[0];
-                            const f_style_css = first.attribs['class'];
-                            first.attribs['class'] = f_style_css + ' first-img';
-                            // add class (last image)
-                            const last = pp[size-1];
-                            const l_style_css = last.attribs['class'];
-                            last.attribs['class'] = l_style_css + ' last-img';
                         }
+                        count = 0;
+                        parrafs = [];
                     }
-                    count = 0;
-                    parrafs = [];
                 }
-            }
-        });
+            }); */
 
         // download images
         const img_width = '620w'; // '1024w', '960w', '768', '670w', '620w', '150w' (not all sizes exist)
         body.find("img").map(function() {
             const src = this.attribs.src;
             const srcset = this.attribs.srcset;
-            if ( srcset ) {
+            if (srcset) {
                 let source;
-                for(const uri of srcset.split(', ')){ // search img with 620w
-                	if( uri.indexOf(img_width) != -1 ){
+                for (const uri of srcset.split(', ')) { // search img with 620w
+                    if (uri.indexOf(img_width) != -1) {
                         const lastIndex = uri.indexOf('jpg') + 3;
                         const firstIndex = uri.indexOf('http');
                         source = uri.substring(firstIndex, lastIndex);
                     }
                 }
-                if( source ){ //found size (img_width)
+                if (source) { //found size (img_width)
                     this.attribs.src = source;
                 }
                 download_image(this);
-            }else if( src ){
+            } else if (src) {
                 download_image(this);
             }
         });
 
         // render template
         const content = mustache.render(template.structure_template, {
-            title: title,
+            title: title.toLowerCase(),
             category: category,
             author: author,
             date_published: date_published,
@@ -219,8 +218,8 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
 
-    rss2json.load(rss_feed, function(err, rss){
-        const articles_links =  rss.items.map((datum) => datum.url);
+    rss2json.load(rss_feed, function(err, rss) {
+        const articles_links = rss.items.map((datum) => datum.url);
         Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
     });
 }
