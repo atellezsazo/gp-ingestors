@@ -7,10 +7,16 @@ const template = require('./template');
 const url = require('url');
 
 const base_uri = 'http://www.voaindonesia.com/';
-const url_audio = 'http://www.voaindonesia.com/z/585'; //page
-const url_berita = 'http://www.voaindonesia.com/api/zmgqoe$moi'; //rss
-const url_gallery = 'http://www.voaindonesia.com/api/zp-oqe-yiq'; //rss
-const url_video = 'http://www.voaindonesia.com/api/zo-ovegyit'; //rss
+const post_uris = [
+    'http://www.voaindonesia.com/z/585', //audios
+    'http://www.voaindonesia.com/api/', //berita
+    'http://www.voaindonesia.com/api/zp-oqe-yiq',
+    'http://www.voaindonesia.com/api/zo-ovegyit',
+];
+
+Array.prototype.unique=function(a){ // delete duplicated elements in array
+  return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+});
 
 // remove attrib tags
 const remove_tag_attributes = [
@@ -53,19 +59,23 @@ const download_img = (hatch, img) => {
     let src = img.attribs.src;
     if( src ){
         src = src.replace('_q10',''); //for better quality images
+        src = src.replace('w250','w650');
         const image = download_image(hatch, src);
         img.attribs["data-libingester-asset-id"] = image.asset_id;
         remove_attributes(img, remove_tag_attributes);
     }
 }
 
-const download_video = (hatch, uri, date, title) => {
-    if( uri ){
+const download_video = (hatch, data) => {
+    if( data.download_uri ){
         const video = new libingester.VideoAsset();
-        video.set_canonical_uri(uri);
-        video.set_last_modified_date(date);
-        video.set_title(title);
-        video.set_download_uri(uri);
+        video.set_canonical_uri(data.canonical_uri);
+        video.set_download_uri(data.download_uri);
+        video.set_last_modified_date(data.modified_date);
+        video.set_license(data.license);
+        video.set_thumbnail(data.thumbnail);
+        video.set_title(data.title);
+        video.set_synopsis(data.synopsis);
         hatch.save_asset(video);
         return video;
     }
@@ -167,7 +177,12 @@ function $ingest_article(hatch, asset, $, uri, resolved) {            // ingest 
     remove_elements(body_content, remove_body_elements);
     body_content.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
     body_content.find('img').get().map((img) => download_img(hatch, img));
-    body_content.find('iframe').get().map((iframe) => download_video(hatch, iframe.attribs.src, date, title));
+    body_content.find('iframe').get().map((iframe) => download_video(hatch, {
+        canonical_uri: uri,
+        download_uri: iframe.src,
+        modified_date: post_data.date,
+        title: post_data.title
+    }));
 
     // render template
     post_data['main_image_id'] = main_image.asset_id;
@@ -177,85 +192,80 @@ function $ingest_article(hatch, asset, $, uri, resolved) {            // ingest 
     resolved();
 }
 
-function $ingest_video_post(hatch, asset, $, uri, resolved) {         // ingest post video
+function $ingest_media(hatch, asset, $, uri, resolved) {         // ingest post video or post audio
     // download main image
     const url_main_image = $('meta[property="og:image"]').attr('content');
     const main_image = download_image(hatch, url_main_image);
 
-    // post data
-    let post_data = get_post_data($, asset);
-    const body_content = $('#content .intro').first();
-    //body_content.find(remove_body_elements).remove(); //+
-    remove_elements(body_content, remove_body_elements);
+    // modified date
+    const published = $('.publishing-details time').first().attr('datetime');
+    let date = new Date( Date.parse(published) );
+    if( !date ){
+        date = new Date();
+    }
 
-    // download video
-    const video_url = $('#content video').first()[0].attribs.src;
-    download_video(hatch, video_url, post_data.date, post_data.title);
+    // video data
+    const description = $('#content .intro').first().text();
+    const post_data = get_post_data($, asset);
+    const video = $('#content video').first()[0] || $('#content audio').first()[0];
+    const download_uri = video.attribs.src;
+    const title = $('meta[property="og:title"]').attr('content');
 
-    // render template
-    post_data['main_image_id'] = main_image.asset_id;
-    post_data['body'] = body_content.html();
-    render_template(hatch, asset, template.template_video_post, post_data);
-    resolved();
-}
-
-function $ingest_audio_post(hatch, asset, $, uri, resolved) {         // ingest post audio
-    // download main image
-    const url_main_image = $('meta[property="og:image"]').attr('content');
-    const main_image = download_image(hatch, url_main_image);
-
-    // post data
-    let post_data = get_post_data($, asset);
-    const body_content = $('#content .intro').first();
-    //body_content.find(remove_body_elements).remove(); //+
-    remove_elements(body_content, remove_body_elements);
-
-    // download audio as video
-    const video_url = $('#content audio').first()[0].attribs.src;
-    download_video(hatch, video_url, post_data.date, post_data.title);
-
-    // render template
-    post_data['main_image_id'] = main_image.asset_id;
-    post_data['body'] = body_content.html();
-    render_template(hatch, asset, template.template_video_post, post_data);
+    download_video(hatch, {
+        canonical_uri: uri,
+        download_uri: download_uri,
+        modified_date: date,
+        thumbnail: main_image,
+        title: title,
+        synopsis: description
+    });
     resolved();
 }
 
 function main() {
     const hatch = new libingester.Hatch();
+    let links = [];
 
-    const ingest_promise = (hatch, uri, $ingest_function) => { // ingest one post
-        return new Promise((resolve, reject) => {
-            libingester.util.fetch_html(uri).then(($) => {
-                const asset = new libingester.NewsArticle();
-                asset.set_canonical_uri(uri);
-                $ingest_function(hatch, asset, $, uri, resolve); // ingest specific post
+    const ingest_promise = () => { // ingest one post
+        return Promise.all(links.unique().map((uri) => {
+            return new Promise((resolve, reject) => {
+                libingester.util.fetch_html(uri).then(($) => {
+                    const asset = new libingester.NewsArticle();
+                    asset.set_canonical_uri(uri);
+                    const type = $('meta[name="twitter:card"]').attr('content') || $('meta[property="twitter:card"]').attr('content');
+                    switch (type) {
+                        case 'gallery': $ingest_gallery(hatch, asset, $, uri, resolve); break;
+                        case 'player': $ingest_media(hatch, asset, $, uri, resolve); break;
+                        case 'summary': /*$ingest_media(hatch, asset, $, uri, resolve); */ break;
+                        case 'summary_large_image': $ingest_article(hatch, asset, $, uri, resolve); break;
+                    }
+                });
             });
+        }));
+    }
+
+    const set_links = (link) => { // resolve url's and ingest a post
+        return new Promise((resolve, reject) => {
+            if( link.includes('api') ) { //rss
+                rss2json.load(link, function(err, rss) {
+                    rss.items.map((item) =>  links.push(item.url));
+                    resolve();
+                });
+            } else {
+                libingester.util.fetch_html(link).then(($) => {
+                    const page_uris = $('ul#items').find('a.img-wrap').map(function() {
+                        links.push(url.resolve(base_uri, this.attribs.href));
+                        resolve();
+                    }).get();
+                })
+            }
         });
     }
 
-    const ingest = (uri, $ingest_function, resolved) => { // resolve url's and ingest a post
-        if( uri.includes('api') ) { //rss
-            rss2json.load(uri, function(err, rss) {
-                Promise.all(rss.items.map((item) => ingest_promise(hatch, item.url, $ingest_function))).then(() => resolved());
-            });
-        } else {
-            libingester.util.fetch_html(url_audio).then(($) => {
-                const page_uris = $('ul#items').find('a.img-wrap').map(function() {
-                    return url.resolve(base_uri, this.attribs.href || '');
-                }).get();
-                Promise.all(page_uris.map((uri) => ingest_promise(hatch, uri, $ingest_function))).then(() => resolved());
-            })
-        }
-    }
-
-    // const audio = new Promise((resolve, reject) => ingest(url_audio, $ingest_audio_post, resolve));
-    const berita = new Promise((resolve, reject) => ingest('http://www.voaindonesia.com/api/', $ingest_article, resolve));
-    // const gallery = new Promise((resolve, reject) => ingest(url_gallery, $ingest_gallery, resolve));
-    // const video = new Promise((resolve, reject) => ingest(url_video, $ingest_video_post, resolve));
-
-    Promise.all([berita]).then(() => {
-        return hatch.finish();
+    Promise.all(post_uris.map((link) => set_links(link))).then(() => {
+        ingest_promise().then(() => {
+            return hatch.finish();
+        });
     });
 }
 
