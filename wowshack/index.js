@@ -44,7 +44,7 @@ const remove_metadata = [
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        const videos = $profile(".sqs-block-video");
+        const videos = $profile(".sqs-block-video, .sqs-block-embed");
         if (videos.length > 0) {
             return false;
         }
