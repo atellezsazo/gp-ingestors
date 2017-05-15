@@ -66,17 +66,20 @@ const download_image = (hatch, that) => {
 }
 
 // download videos
-const download_video = (hatch, that, date, title) => {
-    let video_url = that.attribs.src;
-    for (const video_iframe of video_iframes) {
-        if (video_url.includes(video_iframe)) {
-            const video = new libingester.VideoAsset();
-            video.set_canonical_uri(video_url);
-            video.set_last_modified_date(date);
-            video.set_title(title);
-            video.set_download_uri(video_url);
-            hatch.save_asset(video);
+const download_video = (hatch, data) => {
+    if( data.download_uri ){
+        const video = new libingester.VideoAsset();
+        video.set_canonical_uri(data.canonical_uri);
+        video.set_download_uri(data.download_uri);
+        video.set_last_modified_date(data.modified_date);
+        video.set_license(data.license);
+        video.set_title(data.title);
+        video.set_synopsis(data.synopsis);
+        hatch.save_asset(video);
+        if( data.thumbnail ){
+            video.set_thumbnail(data.thumbnail);
         }
+        return video;
     }
 }
 
@@ -133,6 +136,7 @@ const get_post_data = (hatch, asset, $, uri) => {
         date: date,
         published: published,
         title: title,
+        uri: uri,
     };
 }
 
@@ -140,9 +144,19 @@ const get_post_data = (hatch, asset, $, uri) => {
 const get_body = (hatch, $, post_data) => {
     const body = $('section.article-content').first();
 
-    // download videos
     body.find('iframe').map(function() {
-        download_video(hatch, this, post_data.date, post_data.title);
+        if( this.attribs.src ){
+            for (const video_iframe of video_iframes) {
+                if (this.attribs.src.includes(video_iframe)) {
+                    download_video(hatch, {
+                        canonical_uri: post_data.uri,
+                        download_uri: this.attribs.src,
+                        last_modified_date: post_data.date,
+                        title: post_data.title,
+                    });
+                }
+            }
+        }
     });
 
     // remove body tags and comments
@@ -261,30 +275,35 @@ function ingest_gallery(hatch, uri) {
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        let post_data = get_post_data(hatch, asset, $, uri);
 
-        const media_subtitle = $('.media-sub-title').first();
         const article_tags = $('#main .media-channel').first();
+        const copyright = $('meta[name="copyright"]').attr('content');
+        const description = $('meta[property="og:description"]').attr('content');
+        const modified_time = $('meta[property="article:modified_time"]').attr('content');
+        const title = $('meta[name="title"]').attr('content');
 
-        // download background video (video post)
+        // download background video (thumbnail)
         let bg_img_video;
         const bg_img_video_uri = $('meta[property="og:image"]').attr('content');
         bg_img_video = libingester.util.download_image( bg_img_video_uri );
         hatch.save_asset(bg_img_video);
-        $('#main').find('iframe').map(function() {
-            download_video(hatch, this, post_data.date, post_data.title);
-        });
 
-        // fixing relative paths
-        article_tags.find('a').map(function () {
-            this.attribs.href = url.resolve(base_uri, this.attribs.href);
-        });
-
-        post_data['article_tags'] = article_tags;
-        post_data['article_subtitle'] = media_subtitle;
-        post_data['bg_img_video'] = bg_img_video;
-
-        render_template(hatch, asset, template.structure_template, post_data);
+        const video = $('#main').find('iframe').first()[0];
+        if( video.attribs.src ){
+            for (const video_iframe of video_iframes) {
+                if (video.attribs.src.includes(video_iframe)) {
+                    download_video(hatch, {
+                        canonical_uri: uri,
+                        download_uri: video.attribs.src,
+                        last_modified_date: modified_time,
+                        license: copyright,
+                        synopsis: description,
+                        thumbnail: bg_img_video,
+                        title: title,
+                    });
+                }
+            }
+        }
     }).catch((err) => {
         return ingest_video(hatch, uri);
     });
