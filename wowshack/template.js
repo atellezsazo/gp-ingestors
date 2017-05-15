@@ -1,9 +1,13 @@
 'use strict';
 
 const structure_template = (`
-<section class="title">
+<section class="header">
+    <div class="extra-header">
+        <div class="extra-header-right">
+            <span class="date-published">{{date}}</span>
+        </div>
+    </div>
     <h1>{{ title }}</h1>
-    <div class="date">{{ date }}</div>
 </section>
 <section class="content">
     {{{ html }}}
