@@ -25,7 +25,7 @@ const remove_attrs_img = [
 
 //Remove elements
 const remove_elements = [
-    'br + br',
+    'br + br + br',
     'a[name="more"]',
     'center',
     'iframe',
@@ -43,17 +43,14 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
         // Pull out the updated date
         const modified_date = $profile('.date-header span').text();
         asset.set_last_modified_date(new Date(Date.parse(modified_date)));
-
         const date_post = $profile('.date-header').first().text();
-
-        //by information
-        const article_synopsis = $profile('meta[property="og:description"]').attr('content');
-        asset.set_synopsis(article_synopsis);
-        asset.set_section('Post');
 
         //Set title section
         const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
+        const article_synopsis = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(article_synopsis);
+        asset.set_section('Post');
 
         const body = $profile('.post-body').first();
 
@@ -68,6 +65,7 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
 
             if (img_src != undefined && matches.length == 0) {
                 const image = libingester.util.download_img(this, base_uri);
+                image.set_title(title);
                 hatch.save_asset(image);
                 this.attribs["data-libingester-asset-id"] = image.asset_id;
                 for (const attr in remove_attrs_img) {
