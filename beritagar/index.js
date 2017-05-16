@@ -48,11 +48,6 @@ const remove_elements_header = [
     'script'
 ];
 
-// embedded content
-const video_iframes = [
-    'youtube' // YouTube
-];
-
 // download images
 const download_image = (hatch, that, title) => {
     if (that.attribs.src) {
@@ -104,7 +99,7 @@ const get_post_data = (hatch, asset, $, uri) => {
         article_header.removeAttr('class');
     } else {
         article_header = $('#main .media-channel').first();
-        article_header.find('a').map(function () {
+        article_header.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
         article_header = article_header.html();
@@ -170,7 +165,7 @@ function ingest_article(hatch, uri) {
             const article_bg = $('.article-background-image').first();
             if (article_bg.length != 0) {
                 const bg = article_bg[0].attribs.style; //get url
-                const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg')+3);
+                const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
                 bg_img = libingester.util.download_image(bg_img_uri);
                 bg_img.set_title(post_data.title);
                 hatch.save_asset(bg_img);
@@ -248,8 +243,8 @@ function main() {
         if (page_uri.includes('rss')) {
             rss2json.load(rss_uri, function(err, rss) {
                 Promise.map(rss.items, function(item) {
-                    return ingest_article(hatch, item.url); // posrt article
-                }, {concurrency: concurrency}).then(() => resolved());
+                    return ingest_article(hatch, item.url); // post article
+                }, { concurrency: concurrency }).then(() => resolved());
             });
         } else {
             libingester.util.fetch_html(page_uri).then(($) => {
@@ -260,7 +255,7 @@ function main() {
                     } else if (page_uri.includes('video')) { // media video
                         return ingest_video(hatch, url.resolve(base_uri, tag.attribs.href));
                     }
-                }, {concurrency: concurrency}).then(() => resolved());
+                }, { concurrency: concurrency }).then(() => resolved());
             });
         }
     }
