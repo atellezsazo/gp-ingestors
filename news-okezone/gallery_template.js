@@ -1,10 +1,14 @@
 'use strict';
 
 const gallery_structure_template = (`
-<section class="title">
+<section class="header">
+    <div class="extra-header">
+        <div class="extra-header-right">
+            <span class="author">{{author}}</span> 
+            <span class="date-published">{{date_published}}</span>
+        </div>
+    </div>
     <h1>{{ title }}</h1>
-    <div class="date">{{{ date }}}</div>
-    <div class="references">{{{ references }}}</div>
 </section>
 {{#images.0}}
 <section class="images">
@@ -14,7 +18,8 @@ const gallery_structure_template = (`
 </section>
 {{/images.0}}
 <section class="body">
-    {{{ body_html }}}
-</section>`);
+    {{{ body }}}
+</section>
+`);
 
 exports.gallery_structure_template = gallery_structure_template;
