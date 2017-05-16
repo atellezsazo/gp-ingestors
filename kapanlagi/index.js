@@ -42,7 +42,6 @@ function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        console.log(uri);
 
         //Set title section
         const category = $profile(".newsdetail-categorylink").first().text();
@@ -59,7 +58,6 @@ function ingest_article(hatch, uri) {
         // Pull out the main image
 
         const main_img = $profile('meta[property="og:image"]').attr('content');
-          console.log(main_img + " - IMAGEN PRINCIPAL");
         const main_image = libingester.util.download_image(main_img, uri);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
@@ -118,7 +116,6 @@ function ingest_article(hatch, uri) {
             pages.push(post_body.html());
 
             if (next && last_pagination.length != 0) {
-                console.log(next);
                 libingester.util.fetch_html(url.resolve(base_uri, next)).then(($next_profile) => {
                     ingest_body($next_profile, finish_process);
                 });
