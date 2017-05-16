@@ -54,14 +54,16 @@ const video_iframes = [
 ];
 
 // download images
-const download_image = (hatch, that) => {
+const download_image = (hatch, that, title) => {
     if( that.attribs.src ){
         const image = libingester.util.download_image( that.attribs.src );
+        image.set_title(title);
         that.attribs["data-libingester-asset-id"] = image.asset_id;
         for(const attr of remove_attr_img){
             delete that.attribs[attr];
         }
         hatch.save_asset(image);
+        return image;
     }
 }
 
@@ -75,10 +77,10 @@ const download_video = (hatch, data) => {
         video.set_license(data.license);
         video.set_title(data.title);
         video.set_synopsis(data.synopsis);
-        hatch.save_asset(video);
         if( data.thumbnail ){
             video.set_thumbnail(data.thumbnail);
         }
+        hatch.save_asset(video);
         return video;
     }
 }
@@ -99,65 +101,51 @@ const get_post_data = (hatch, asset, $, uri) => {
     asset.set_last_modified_date(date);
 
     const $article_info = $('.article-info');
-
-    // clean tag attributes
-    const clean = ($tag) => {
-        if($tag.length != 0){
-            if( $tag[0].attribs ){
-                for(const attr of remove_attr_img){
-                    delete $tag[0].attribs[attr];
-                }
-            }
-            $tag.contents().map(function() {
-                if( this.attribs ){
-                    for(const attr of remove_attr_img){
-                        delete this.attribs[attr];
-                    }
-                }
-            });
-        }
-    }
+    $article_info.find('a').removeAttr('style');
 
     const author = $article_info.find('address').first(); // author post
     const published = $article_info.find('time').first(); // published data
     for(const element of remove_elements_header){
         author.find(element).remove();
     }
-    clean(author);
-    clean(published);
 
     // download image (author avatar)
     author.find('img').map(function() {
-        download_image(hatch, this);
+        download_image(hatch, this, title);
     });
 
+    // article tags
+    let article_header = $('.article-header .breadcrumb').first();
+    if( article_header.length > 0 ) {
+        article_header.removeAttr('class');
+    } else {
+        article_header = $('#main .media-channel').first();
+        article_header.find('a').map(function () {
+            this.attribs.href = url.resolve(base_uri, this.attribs.href);
+        });
+        article_header = article_header.html();
+    }
+
     return {
-        author: author,
+        author: author.html(),
+        category: article_header,
         date: date,
-        published: published,
+        published: published.html(),
         title: title,
         uri: uri,
     };
 }
 
 // body post
-const get_body = (hatch, $, post_data) => {
+const get_body = (hatch, asset, $, post_data) => {
     const body = $('section.article-content').first();
 
-    body.find('iframe').map(function() {
-        if( this.attribs.src ){
-            for (const video_iframe of video_iframes) {
-                if (this.attribs.src.includes(video_iframe)) {
-                    download_video(hatch, {
-                        canonical_uri: post_data.uri,
-                        download_uri: this.attribs.src,
-                        last_modified_date: post_data.date,
-                        title: post_data.title,
-                    });
-                }
-            }
-        }
-    });
+    // article thumbnail
+    const thumb_url = $('meta[property="og:image"]').attr('content');
+    const thumb = libingester.util.download_image(thumb_url);
+    thumb.set_title(post_data.title);
+    hatch.save_asset(thumb);
+    asset.set_thumbnail(thumb);
 
     // remove body tags and comments
     for(const element of remove_elements){
@@ -167,7 +155,7 @@ const get_body = (hatch, $, post_data) => {
 
     // download images
     body.find('img').map(function() {
-        download_image(hatch, this);
+        download_image(hatch, this, post_data.title);
     });
 
     return body;
@@ -182,18 +170,16 @@ const render_template = (hatch, asset, template, post_data) => {
 
 function ingest_article(hatch, uri) {
     return new Promise((resolve, reject) => {
+        if(uri.includes('/media/')) { // avoid repeated links
+            resolve();
+            return;
+        }
         libingester.util.fetch_html(uri).then(($) => {
             const asset = new libingester.NewsArticle();
             let post_data = get_post_data(hatch, asset, $, uri);
 
-            const article_header = $('.article-header .breadcrumb').first();
             const article_subtitle = $('.article-sub-title').first();
-            const body = get_body(hatch, $, post_data);
-
-            // fixing relative paths
-            article_header.find('a').map(function () {
-                this.attribs.href = url.resolve(base_uri, this.attribs.href);
-            });
+            const body = get_body(hatch, asset, $, post_data);
 
             // download background image
             let bg_img;
@@ -202,6 +188,7 @@ function ingest_article(hatch, uri) {
                 const bg = article_bg[0].attribs.style; //get url
                 const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg')+3);
                 bg_img = libingester.util.download_image( bg_img_uri );
+                bg_img.set_title(post_data.title);
                 hatch.save_asset(bg_img);
             }
 
@@ -212,39 +199,29 @@ function ingest_article(hatch, uri) {
                     return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
                         const image_uri = $inst('meta[property="og:image"]').attr('content');
                         const image_description = $inst('meta[property="og:description"]').attr('content');
+                        const image_title = $inst('meta[property="og:title"]').attr('content') || post_data.title;
                         const image = libingester.util.download_image( image_uri );
+                        image.set_title(image_title);
                         hatch.save_asset(image);
 
                         // replace tag 'blockquote' by tag 'figure'
-                        this['name'] = 'figure';
-                        this['attribs'] = null;
-                        this['children'] = [{
-                                type: 'tag',
-                                name: 'img',
-                                attribs: {'data-libingester-asset-id': image.asset_id}
-                            }, {
-                                type: 'tag',
-                                name: 'figcaption',
-                                children: {
-                                    type: 'text',
-                                    data: image_description,
-                                },
-                        }];
+                        const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
+                        const figure = $inst(`<figure></figure>`);
+                        const img = $inst(`<img data-libingester-asset-id=${image.asset_id} >`);
+                        $(figure).append(img, figcaption);
+                        $(this).replaceWith(figure);
                     });
                 }
             }).get();
 
             Promise.all(instagram_promises).then(() => {
-                post_data['article_tags'] = article_header;
                 post_data['article_subtitle'] = article_subtitle;
                 post_data['bg_img'] = bg_img;
                 post_data['body'] = body.html();
                 render_template(hatch, asset, template.structure_template, post_data);
                 resolve();
             });
-        }).catch((err) => {
-            return ingest_article(hatch, uri);
-        });
+        })
     });
 }
 
@@ -254,28 +231,17 @@ function ingest_gallery(hatch, uri) {
         let post_data = get_post_data(hatch, asset, $, uri);
 
         const media_subtitle = $('.media-sub-title').first();
-        const article_tags = $('#main .media-channel').first();
-        const body = get_body(hatch, $, post_data);
+        const body = get_body(hatch, asset, $, post_data);
 
-        // fixing relative paths
-        article_tags.find('a').map(function () {
-            this.attribs.href = url.resolve(base_uri, this.attribs.href);
-        });
-
-        post_data['article_tags'] = article_tags;
         post_data['article_subtitle'] = media_subtitle;
         post_data['body'] = body.html();
 
         render_template(hatch, asset, template.structure_template, post_data);
-    }).catch((err) => {
-        return ingest_gallery(hatch, uri);
-    });
+    })
 }
 
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
-        const asset = new libingester.NewsArticle();
-
         const article_tags = $('#main .media-channel').first();
         const copyright = $('meta[name="copyright"]').attr('content');
         const description = $('meta[property="og:description"]').attr('content');
@@ -286,6 +252,7 @@ function ingest_video(hatch, uri) {
         let bg_img_video;
         const bg_img_video_uri = $('meta[property="og:image"]').attr('content');
         bg_img_video = libingester.util.download_image( bg_img_video_uri );
+        bg_img_video.set_title(title);
         hatch.save_asset(bg_img_video);
 
         const video = $('#main').find('iframe').first()[0];
@@ -304,9 +271,7 @@ function ingest_video(hatch, uri) {
                 }
             }
         }
-    }).catch((err) => {
-        return ingest_video(hatch, uri);
-    });
+    })
 }
 
 function main() {
@@ -322,7 +287,7 @@ function main() {
         } else {
             libingester.util.fetch_html(page_uri).then(($) => {
                 const tags = $('#main .swifts .content a.title').get(); // more recent media links
-                Promise.map(tags, function(tag) {
+                Promise.map(tags, (tag) => {
                     if( page_uri.includes('foto') ) { // media gallery
                         return ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href));
                     }else if( page_uri.includes('video') ) { // media video

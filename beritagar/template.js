@@ -2,23 +2,23 @@
 
 const structure_template = (`
 <header>
+    <div class="extra-header">
+        <div class="context">{{{category}}}</div>
+        <div class="extra-header-right">
+            <span class="author">{{{author}}}</span>
+            <span class="dot"> • </span>
+            <span class="date-published">{{{published}}}</span>
+        </div>
+    </div>
     <h1>{{ title }}</h1>
-    {{{ article_tags }}}
-    {{{ author }}}
-    {{{ published }}}
 </header>
 <section class="body">
     {{{ article_subtitle }}}
     {{#bg_img}}
-    <figure class="bg-img">
-    <img data-libingester-asset-id="{{ bg_img.asset_id }}">
-    </figure>
+        <figure class="bg-img">
+        <img data-libingester-asset-id="{{ bg_img.asset_id }}">
+        </figure>
     {{/bg_img}}
-    {{#bg_img_video}}
-    <figure class="bg-img-video">
-    <img class="bg-img-video" data-libingester-asset-id="{{ bg_img_video.asset_id }}">
-    </figure>
-    {{/bg_img_video}}
     {{{ body }}}
 </section>
 `);
