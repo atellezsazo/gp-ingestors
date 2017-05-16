@@ -34,11 +34,6 @@ const remove_elements = [
     '.instagram-media'
 ];
 
-//embbed content
-const video_iframes = [
-    'youtube',
-];
-
 function ingest_article_profile(hatch, uri, pubDate, category) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         var index = 0;
@@ -53,15 +48,9 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
         const date_post = $profile('.date-header').first().text();
 
         //by information
-        const article_synopsis = $profile('meta[property="og:description"]');
-        const article_entry = $profile('.post .post-heading .meta').first();
-        const article_data = $profile(article_entry).text().split(' • ');
-        const author = article_data[0];
-        const date_published = article_data[1];
-        const category = article_data[2];
-        asset.set_section('Blog Post');
-        asset.set_synopsis(article_synopsis[0].attribs.content);
-
+        const article_synopsis = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(article_synopsis);
+        asset.set_section('Post');
 
         //Set title section
         const title = $profile('meta[property="og:title"]').attr('content');
