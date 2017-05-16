@@ -11,7 +11,7 @@ const post_uris = [
     'http://www.voaindonesia.com/z/585', //audios
     'http://www.voaindonesia.com/api/', //berita
     'http://www.voaindonesia.com/api/zp-oqe-yiq',
-    'http://www.voaindonesia.com/api/zo-ovegyit',
+    'http://www.voaindonesia.com/api/zo-ovegyit'
 ];
 
 Array.prototype.unique=function(a){ // delete duplicated elements in array
@@ -21,7 +21,7 @@ Array.prototype.unique=function(a){ // delete duplicated elements in array
 // remove attrib tags
 const remove_tag_attributes = [
     'class',
-    'src',
+    'src'
 ];
 
 // remove element (body)
@@ -31,24 +31,24 @@ const remove_body_elements = [
     '.embed-player-only',
     '.infgraphicsAttach',
     '.load-more',
-    '.player-and-links',
+    '.player-and-links'
 ];
 
 // Util functions
 const remove_elements = ($object, elements) => {
-    for(const element of elements){
+    for (const element of elements) {
         $object.find(element).remove();
     }
 }
 
 const remove_attributes = ($object, attributes) => {
-    for(const attr of attributes){
+    for (const attr of attributes) {
         delete $object.attribs[attr];
     }
 }
 
 const download_image = (hatch, uri) => {
-    if( uri ){
+    if (uri) {
         const main_img = libingester.util.download_image(uri);
         hatch.save_asset(main_img);
         return main_img;
@@ -57,9 +57,9 @@ const download_image = (hatch, uri) => {
 
 const download_img = (hatch, img) => {
     let src = img.attribs.src;
-    if( src ){
-        src = src.replace('_q10',''); //for better quality images
-        src = src.replace('w250','w650');
+    if (src) {
+        src = src.replace('_q10', ''); // for better quality images
+        src = src.replace('w250', 'w650');
         const image = download_image(hatch, src);
         img.attribs["data-libingester-asset-id"] = image.asset_id;
         remove_attributes(img, remove_tag_attributes);
@@ -67,7 +67,7 @@ const download_img = (hatch, img) => {
 }
 
 const download_video = (hatch, data) => {
-    if( data.download_uri ){
+    if (data.download_uri) {
         const video = new libingester.VideoAsset();
         video.set_canonical_uri(data.canonical_uri);
         video.set_download_uri(data.download_uri);
@@ -100,7 +100,7 @@ const get_post_data = ($, asset) => {
     // modified date
     const modified_date = published.find('time').attr('datetime');
     let date = new Date( Date.parse(modified_date) );
-    if( !date ){
+    if (!date){
         date = new Date();
     }
     asset.set_last_modified_date(date);
@@ -127,7 +127,7 @@ const render_template = (hatch, asset, template, post_data) => {
 }
 
 // ---------- Ingestor Functions
-function $ingest_gallery(hatch, asset, $, uri, resolved) {            // ingest post gallery
+function $ingest_gallery(hatch, asset, $, uri, resolved) { // ingest post gallery
     // post data
     let post_data = get_post_data($, asset);
     const body_content = $('#content #article-content .wsw').first();
@@ -140,13 +140,12 @@ function $ingest_gallery(hatch, asset, $, uri, resolved) {            // ingest 
     const post_gallery = ($page, finish_process) => {
         const body_gallery = $page('#content #galleryItems').first();
         const relative_show_more = $page('#content .link-showMore').attr('href');
-        //body_gallery.find(remove_body_elements).remove(); //+
         remove_elements(body_gallery, remove_body_elements);
         body_gallery.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
         body_gallery.find('img').get().map((img) => download_img(hatch, img));
-        gallery.push( body_gallery.html() );
+        gallery.push(body_gallery.html());
 
-        if( relative_show_more ){
+        if (relative_show_more) {
             const show_more = url.resolve(base_uri, relative_show_more);
             libingester.util.fetch_html(show_more).then(($next_page) => {
                 post_gallery($next_page, finish_process);
@@ -164,7 +163,7 @@ function $ingest_gallery(hatch, asset, $, uri, resolved) {            // ingest 
     });
 }
 
-function $ingest_article(hatch, asset, $, uri, resolved) {            // ingest post article
+function $ingest_article(hatch, asset, $, uri, resolved) { // ingest post article
     // download main image
     const url_main_image = $('meta[property="og:image"]').attr('content');
     const main_image = download_image(hatch, url_main_image);
@@ -173,7 +172,6 @@ function $ingest_article(hatch, asset, $, uri, resolved) {            // ingest 
     // post data
     let post_data = get_post_data($, asset);
     const body_content = $('#content .body-container .wsw').first();
-    //body_content.find(remove_body_elements).remove(); //+
     remove_elements(body_content, remove_body_elements);
     body_content.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
     body_content.find('img').get().map((img) => download_img(hatch, img));
@@ -192,7 +190,7 @@ function $ingest_article(hatch, asset, $, uri, resolved) {            // ingest 
     resolved();
 }
 
-function $ingest_media(hatch, asset, $, uri, resolved) {         // ingest post video or post audio
+function $ingest_media(hatch, asset, $, uri, resolved) { // ingest post video or post audio
     // download main image
     const url_main_image = $('meta[property="og:image"]').attr('content');
     const main_image = download_image(hatch, url_main_image);
@@ -200,7 +198,7 @@ function $ingest_media(hatch, asset, $, uri, resolved) {         // ingest post 
     // modified date
     const published = $('.publishing-details time').first().attr('datetime');
     let date = new Date( Date.parse(published) );
-    if( !date ){
+    if (!date) {
         date = new Date();
     }
 
