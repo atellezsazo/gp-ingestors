@@ -36,7 +36,6 @@ const remove_elements = [
 
 function ingest_article_profile(hatch, uri, pubDate, category) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        var index = 0;
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
         asset.set_canonical_uri(uri);
@@ -59,6 +58,7 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
         const body = $profile('.post-body').first();
 
         //Download images
+        let index = 0;
         body.find('img').map(function() {
             const img_src = this.attribs.src;
             const parent = $profile(this).parent().first();
@@ -77,7 +77,11 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
                 if (parent.name = "a") {
                     parent.before($profile(this)); //Moves image outside the wrap
                 }
-                asset.set_thumbnail(image);
+
+                if (index == 0) {
+                    asset.set_thumbnail(image);
+                }
+                index++;
             } else {
                 $profile(this).remove();
             }
@@ -85,7 +89,6 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
             if (parent.name = "a") {
                 parent.remove(); //Delete image wrap
             }
-            index++;
         });
 
         //remove elements
