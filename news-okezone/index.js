@@ -9,7 +9,6 @@ const template = require('./template');
 const url = require('url');
 
 const gallery_section = 'http://news.okezone.com/foto'; // Galleries home section
-const video_section = 'http://news.okezone.com/video/'; // Galleries home section
 const rss_uri = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
 
 //remove attributes from images
@@ -55,8 +54,8 @@ function add_embedded_images(base_uri, container, hatch, tag, title) {
 function ingest_article_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const title = $profile('h1').first().text();
-        if( !title ) {
-            throw {code: -1};
+        if (!title) { //problem with incomplete $profile 
+            throw { code: -1 };
             return;
         }
         const asset = new libingester.NewsArticle();
@@ -69,15 +68,13 @@ function ingest_article_profile(hatch, uri) {
         const published = $profile('.meta-post time').first().text();
 
         asset.set_last_modified_date(modified_date);
-        asset.set_section(metadata.keywords.join(' '));
-
-        //Set title section
+        asset.set_section(metadata.keywords.join(', '));
+        asset.set_synopsis(metadata.description);
         asset.set_title(title);
 
         const date = new Date(Date.parse(metadata.datePublished));
         const reporter = metadata.author.name;
         const category = metadata.keywords.join(", ");
-        const post_tags = metadata.keywords.join(", ");
 
         // Pull out the main image
         const main_img = $profile('.detail-img img').first();
@@ -110,13 +107,12 @@ function ingest_article_profile(hatch, uri) {
             main_image: main_image,
             image_credit: image_description,
             body: body.html(),
-            post_tags: post_tags,
         });
 
         asset.set_document(content);
         hatch.save_asset(asset);
     }).catch((err) => {
-        if( err.code == -1 || err.statusCode == 403 ) {
+        if (err.code == -1 || err.statusCode == 403) {
             return ingest_gallery_article_profile(hatch, uri);
         }
     });
@@ -125,8 +121,8 @@ function ingest_article_profile(hatch, uri) {
 function ingest_gallery_article_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const title = $profile('h1').first().text();
-        if( !title ) {
-            throw {code: -1};
+        if (!title) { //problem with incomplete profile 
+            throw { code: -1 };
             return;
         }
         const asset = new libingester.NewsArticle();
@@ -139,6 +135,8 @@ function ingest_gallery_article_profile(hatch, uri) {
 
         //Set title section
         asset.set_title(title);
+        const description = $profile('meta[name="description"]').attr('content');
+        asset.set_synopsis(description);
 
         const date = $profile('.news-fl').text();
         const references = $profile('.news-fr').text();
@@ -147,7 +145,6 @@ function ingest_gallery_article_profile(hatch, uri) {
         main_img = main_img.replace('small', 'large');
 
         const main_image = libingester.util.download_image(main_img);
-        main_img.set_title(title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
 
@@ -157,7 +154,6 @@ function ingest_gallery_article_profile(hatch, uri) {
         const image_gallery = $profile('.aphotos img').map(function() {
             this.attribs.src = this.attribs.src.replace('small.', 'large.');
             const img_gallery = libingester.util.download_img(this, base_uri);
-            img_gallery.set_title(title);
             hatch.save_asset(img_gallery);
             return img_gallery;
         }).get();
@@ -180,7 +176,7 @@ function ingest_gallery_article_profile(hatch, uri) {
         asset.set_document(content);
         hatch.save_asset(asset);
     }).catch((err) => {
-        if( err.code == -1 || err.statusCode == 403 ) {
+        if (err.code == -1 || err.statusCode == 403) {
             return ingest_gallery_article_profile(hatch, uri);
         }
     });
@@ -188,12 +184,11 @@ function ingest_gallery_article_profile(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const news = new Promise((resolve, reject) => {
         rss2json.load(rss_uri, function(err, rss) {
             const news_uris = rss.items.map((datum) => datum.link);
             Promise.all(news_uris.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
-                resolve(true);
+                resolve();
             });
         });
     });
