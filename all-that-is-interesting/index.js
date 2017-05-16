@@ -41,13 +41,6 @@ const remove_attr = [
     'width',
 ];
 
-//embed content
-const video_iframes = [
-    'interactive.tegna-media',
-    'yahoo',
-    'youtube',
-];
-
 function ingest_post(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
@@ -66,8 +59,19 @@ function ingest_post(hatch, uri) {
         asset.set_section(section.join(", "));
 
         const by_line = $profile('.post-heading .container .row .byline').first();
-        const author = by_line.find('.author').first();
-        const published = by_line.find('.date').first();
+        const author = by_line.find('.author').first().text();
+        const published = by_line.find('.date').first().text();
+
+        //main-image
+        const main_image = $profile('meta[property="og:image"]').attr('content');
+        const main_img = libingester.util.download_image(main_image, base_uri);
+        main_img.set_title(title);
+        hatch.save_asset(main_img);
+        asset.set_thumbnail(main_img);
+
+        //Synopsis
+        const description = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(description);
 
         let body = [];
 
@@ -121,12 +125,12 @@ function ingest_post(hatch, uri) {
             }
         };
 
-        const test = new Promise((resolve, reject) => {
+        const body_promise = new Promise((resolve, reject) => {
             ingest_body($profile, function() {
                 const content = mustache.render(template.structure_template, {
                     title: title,
-                    date_published: published.text(),
-                    author: author.text(),
+                    date_published: published,
+                    author: author,
                     category: section.join(", "),
                     post_body: body.join(""),
                 });
@@ -138,7 +142,7 @@ function ingest_post(hatch, uri) {
             });
         });
 
-        return Promise.all([test]);
+        return Promise.all([body_promise]);
     });
 }
 
@@ -148,7 +152,7 @@ function main() {
         let post_urls = rss.items.map((datum) => datum.url);
         Promise.map(post_urls, function(url) {
             return ingest_post(hatch, url);
-        }, {concurrency: 1}).then(() => {
+        }, { concurrency: 1 }).then(() => {
             return hatch.finish();
         });
     });
