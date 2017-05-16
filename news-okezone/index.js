@@ -243,23 +243,23 @@ function main() {
         });
     });
 
-    // const video = new Promise((resolve, reject) => {
-    //     libingester.util.fetch_html(video_section).then(($videos) => {
-    //         const video_links = $videos('.news-content li').map(function() {
-    //             const uri = $videos(this).find("h3 a").attr("href");
-    //             const video_thumb = $videos(this).find(".thumb-news").attr("src");
-    //             return {
-    //                 link: url.resolve(video_section, uri),
-    //                 thumb: video_thumb,
-    //             }
-    //         }).get();
-    //         Promise.all(video_links.map((obj) => ingest_video_article_profile(hatch, obj.link, obj.thumb))).then(() => {
-    //             resolve(true);
-    //         });
-    //     });
-    // });
+    const video = new Promise((resolve, reject) => {
+        libingester.util.fetch_html(video_section).then(($videos) => {
+            const video_links = $videos('.news-content li').map(function() {
+                const uri = $videos(this).find("h3 a").attr("href");
+                const video_thumb = $videos(this).find(".thumb-news").attr("src");
+                return {
+                    link: url.resolve(video_section, uri),
+                    thumb: video_thumb,
+                }
+            }).get();
+            Promise.all(video_links.map((obj) => ingest_video_article_profile(hatch, obj.link, obj.thumb))).then(() => {
+                resolve(true);
+            });
+        });
+    });
 
-    Promise.all([news, gallery]).then(values => {
+    Promise.all([news, gallery, video]).then(values => {
         return hatch.finish();
     }); 
 }
