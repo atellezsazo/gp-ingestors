@@ -67,24 +67,6 @@ const download_image = (hatch, that, title) => {
     }
 }
 
-// download videos
-const download_video = (hatch, data) => {
-    if (data.download_uri) {
-        const video = new libingester.VideoAsset();
-        video.set_canonical_uri(data.canonical_uri);
-        video.set_download_uri(data.download_uri);
-        video.set_last_modified_date(data.modified_date);
-        video.set_license(data.license);
-        video.set_title(data.title);
-        video.set_synopsis(data.synopsis);
-        if (data.thumbnail) {
-            video.set_thumbnail(data.thumbnail);
-        }
-        hatch.save_asset(video);
-        return video;
-    }
-}
-
 // post data
 const get_post_data = (hatch, asset, $, uri) => {
     asset.set_canonical_uri(uri);
@@ -92,6 +74,8 @@ const get_post_data = (hatch, asset, $, uri) => {
     asset.set_section(section);
     const title = $('meta[property="og:title"]').attr('content');
     asset.set_title(title);
+    const synopsis = $('meta[property="og:description"]').attr('content');
+    asset.set_synopsis(synopsis);
 
     const modified_time = $('meta[property="article:modified_time"]').attr('content');
     let date = new Date(Date.parse(modified_time));
@@ -254,23 +238,6 @@ function ingest_video(hatch, uri) {
         bg_img_video = libingester.util.download_image(bg_img_video_uri);
         bg_img_video.set_title(title);
         hatch.save_asset(bg_img_video);
-
-        const video = $('#main').find('iframe').first()[0];
-        if (video.attribs.src) {
-            for (const video_iframe of video_iframes) {
-                if (video.attribs.src.includes(video_iframe)) {
-                    download_video(hatch, {
-                        canonical_uri: uri,
-                        download_uri: video.attribs.src,
-                        last_modified_date: modified_time,
-                        license: copyright,
-                        synopsis: description,
-                        thumbnail: bg_img_video,
-                        title: title
-                    });
-                }
-            }
-        }
     })
 }
 
