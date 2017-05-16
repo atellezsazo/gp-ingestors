@@ -37,22 +37,36 @@ const remove_attr = [
     'width',
 ];
 
-//embed content
-const video_iframes = [
-    'a.kapanlagi',
-    'skrin.id',
-    'youtube',
-];
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
+        console.log(uri);
 
         //Set title section
+        const category = $profile(".newsdetail-categorylink").first().text();
+        const keywords = $profile('meta[name="keywords"]').attr('content');
+        const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
         const title = $profile("#newsdetail-right-new h1").first().text();
+
         asset.set_title(title);
         asset.set_canonical_uri(uri);
+
+        const reporter = $profile('.vcard .newsdetail-schedule-new a').text();
+        const date = $profile('.vcard .newsdetail-schedule-new.updated').text();
+
+        // Pull out the main image
+
+        const main_img = $profile('meta[property="og:image"]').attr('content');
+          console.log(main_img + " - IMAGEN PRINCIPAL");
+        const main_image = libingester.util.download_image(main_img, uri);
+        hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
+
+        const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
+
+        const post_tags = $profile('meta[name="title"]').attr('content');
 
         // Pull out the updated date
         const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
@@ -62,35 +76,11 @@ function ingest_article(hatch, uri) {
         }
 
         asset.set_last_modified_date(modified_date);
-        const category = $profile('.newsdetail-categorylink').first().text();
-        const keywords = $profile('meta[name="keywords"]').attr('content');
 
         asset.set_section(category + "," + keywords);
-        const by_line = $profile('.vcard').children();
 
         let pages = [];
         const ingest_body = ($profile, finish_process) => {
-            // Pull out the main image
-            let main_image;
-            const main_img = $profile('.entertainment-newsdetail-headlineimg img, .pg-img-warper img').first();
-            if (main_img.length > 0) {
-                main_image = libingester.util.download_img(main_img, base_uri);
-                main_image.set_title(main_image.title);
-                hatch.save_asset(main_image);
-            }
-
-            const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span');
-            const main_video = $profile(".videoWrapper").map(function() {
-                const video_url = this.attribs["data-url"];
-                const video_asset = new libingester.VideoAsset();
-                video_asset.set_canonical_uri(video_url);
-                video_asset.set_last_modified_date(modified_date);
-                video_asset.set_title(title);
-                video_asset.set_download_uri(video_url);
-                hatch.save_asset(video_asset);
-            });
-
-            const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
             let post_body = $profile('.entertainment-detail-news');
 
             //Download images 
@@ -101,23 +91,6 @@ function ingest_article(hatch, uri) {
                     this.attribs["data-libingester-asset-id"] = image.asset_id;
                     for (const attr of remove_attr) {
                         delete this.attribs[attr];
-                    }
-                }
-            });
-
-            // download videos
-            const videos = post_body.find("iframe").map(function() {
-                const iframe_src = this.attribs.src;
-                for (const video_iframe of video_iframes) {
-                    if (iframe_src.includes(video_iframe)) {
-                        const video_url = this.attribs.src;
-                        const full_uri = url.format(video_url, { search: false })
-                        const video_asset = new libingester.VideoAsset();
-                        video_asset.set_canonical_uri(full_uri);
-                        video_asset.set_last_modified_date(modified_date);
-                        video_asset.set_title(title);
-                        video_asset.set_download_uri(full_uri);
-                        hatch.save_asset(video_asset);
                     }
                 }
             });
@@ -142,14 +115,10 @@ function ingest_article(hatch, uri) {
                 post_body.find(remove_element).remove();
             }
 
-            pages.push({
-                subtitle: subtitle,
-                img: main_image,
-                img_credit: image_credit,
-                body: post_body.html(),
-            });
+            pages.push(post_body.html());
 
             if (next && last_pagination.length != 0) {
+                console.log(next);
                 libingester.util.fetch_html(url.resolve(base_uri, next)).then(($next_profile) => {
                     ingest_body($next_profile, finish_process);
                 });
@@ -162,7 +131,14 @@ function ingest_article(hatch, uri) {
             ingest_body($profile, function() {
                 const content = mustache.render(template.structure_template, {
                     title: title,
-                    pages: pages,
+                    subtitle: subtitle,
+                    author: reporter,
+                    category: category,
+                    date_published: date,
+                    main_image: main_image,
+                    image_credit: image_credit,
+                    body: pages.join(' '),
+                    post_tags: post_tags,
                 });
 
                 // save document
@@ -172,12 +148,15 @@ function ingest_article(hatch, uri) {
             });
         });
         return Promise.all([promise]);
+    }).catch((error) => {
+        console.log("Ingest error: ", error); 
     });
 
 }
 
 function main() {
     const hatch = new libingester.Hatch();
+
     rp({ uri: rss_uri, gzip: true, }).then((res) => {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, function(err, result) {
@@ -188,6 +167,7 @@ function main() {
                     promises.push(datum.link);
                 }
             });
+
             Promise.map(promises, function(link) {
                 return ingest_article(hatch, link).catch((error) => {
                     console.log("Ingestor err: ", error);
