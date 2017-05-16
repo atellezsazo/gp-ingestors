@@ -3,10 +3,10 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
+const rss2json = require('rss-to-json');
 const template = require('./template');
 const url = require('url');
 const URLParse = require('url-parse');
-const rss2json = require('rss-to-json');
 
 const rss_uri = "http://www.alodita.com/rss.xml";
 
