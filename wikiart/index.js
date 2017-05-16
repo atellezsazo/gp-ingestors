@@ -36,6 +36,10 @@ function ingest_artwork_profile(hatch, uri) {
         asset.set_last_modified_date(new Date());
         asset.set_section('Artwork');
 
+        // Set article description
+        const article_description = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(article_description);
+
         // Pull out the main image
         const main_img = $profile('img[itemprop="image"]');
         const main_image = libingester.util.download_img(main_img, base_uri);
@@ -44,6 +48,7 @@ function ingest_artwork_profile(hatch, uri) {
         main_image.set_title(title);
         main_image.set_license(image_copyrigth);
         hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
 
         let info = $profile('.info').first();
         const description = $profile('span[itemprop="description"]').text();
@@ -54,7 +59,7 @@ function ingest_artwork_profile(hatch, uri) {
         }
 
         //Fix relative links
-        info.find("a").map(function() {
+        info.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
@@ -83,6 +88,10 @@ function ingest_artist_profile(hatch, uri) {
         asset.set_title(title);
         asset.set_canonical_uri(uri);
 
+        // Set article description
+        const article_description = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(article_description);
+
         // Pull out the updated date
         asset.set_last_modified_date(new Date());
         asset.set_section('Artist');
@@ -92,6 +101,7 @@ function ingest_artist_profile(hatch, uri) {
         const image_description = $profile(".image-wrapper .comment").children();
         const main_image = libingester.util.download_img(main_img, base_uri);
         hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
 
         const additional_name = $profile('span[itemprop="additionalName"]').first().text();
         let info = $profile('.info').first();
@@ -103,15 +113,15 @@ function ingest_artist_profile(hatch, uri) {
         }
 
         //Fix relative links
-        info.find("a").map(function() {
+        info.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
         });
 
-        //Workarts
+        // Workarts
         let img_array = [];
         const download_workarts = (number_page = 1) => {
             const options = {
-                uri: uri + `/mode/all-paintings?json=2&page=${number_page}`,
+                uri: `${uri}/mode/all-paintings?json=2&page=${number_page}`,
                 json: true,
             };
 
