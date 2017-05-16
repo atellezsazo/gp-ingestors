@@ -1,12 +1,24 @@
 'use strict';
 
 const structure_template = (`
-<section class="title">
+<section class="header">
+    <div class="extra-header">
+        <div class="context">{{{category}}}</div>
+        <div class="extra-header-right">
+            <span class="author">{{author}}</span> 
+            <span class="date-published">{{date_published}}</span>
+        </div>
+    </div>
     <h1>{{ title }}</h1>
-    <div class="date-post">{{ date_post }}</div>
 </section>
 <section class="body">
     {{{ body }}}
-</section>`);
+</section>
+<section class="footer">
+    {{#post_tags}}
+    <div class="post-tags">{{{ post_tags }}}</div>
+    {{/post_tags}}
+</section>
+`);
 
 exports.structure_template = structure_template;
