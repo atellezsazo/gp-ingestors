@@ -2,6 +2,7 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
+const Promise = require('bluebird');
 const request = require('request');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
@@ -9,10 +10,12 @@ const template = require('./template');
 const url = require('url');
 
 const base_uri = "http://all-that-is-interesting.com/";
-const rss_uri = "http://all-that-is-interesting.com/feed";
+const rss_uri = "http://all-that-is-interesting.com/feed/";
 
 //Remove elements (body)
 const remove_elements = [
+    'br + br',
+    'hr + p',
     'iframe',
     'noscript',
     'script',
@@ -38,20 +41,12 @@ const remove_attr = [
     'width',
 ];
 
-//embed content
-const video_iframes = [
-    'interactive.tegna-media',
-    'yahoo',
-    'youtube',
-];
-
 function ingest_post(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-
         //Set title section
-        const title = $profile('.post-title').first().text().replace(/[\n\t\r]/g, "");
+        const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
 
@@ -63,31 +58,28 @@ function ingest_post(hatch, uri) {
         }).get();
         asset.set_section(section.join(", "));
 
-        const by_line = $profile('.post-heading .container .row .byline').children();
+        const by_line = $profile('.post-heading .container .row .byline').first();
+        const author = by_line.find('.author').first().text();
+        const published = by_line.find('.date').first().text();
+
+        //main-image
+        const main_image = $profile('meta[property="og:image"]').attr('content');
+        const main_img = libingester.util.download_image(main_image, base_uri);
+        main_img.set_title(title);
+        hatch.save_asset(main_img);
+        asset.set_thumbnail(main_img);
+
+        //Synopsis
+        const description = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(description);
 
         let body = [];
+
         const ingest_body = ($profile, finish_process) => {
             const post_body = $profile('article.post-content');
 
-            // download videos
-            const videos = post_body.find("iframe").map(function() {
-                const iframe_src = this.attribs.src;
-                for (const video_iframe of video_iframes) {
-                    if (iframe_src.includes(video_iframe)) {
-                        const video_url = this.attribs.src;
-                        const full_uri = url.format(video_url, { search: false })
-                        const video_asset = new libingester.VideoAsset();
-                        video_asset.set_canonical_uri(full_uri);
-                        video_asset.set_last_modified_date(modified_date);
-                        video_asset.set_title(title);
-                        video_asset.set_download_uri(full_uri);
-                        hatch.save_asset(video_asset);
-                    }
-                }
-            });
-
             const info_img = $profile('.gallery-descriptions-wrap');
-            const img_promises = post_body.find("img").map(function() {
+            const img_promise = post_body.find("img").map(function() {
                 const parent = $profile(this);
                 if (this.attribs.src) {
                     const description = this.parent.attribs['aria-describedby'];
@@ -100,7 +92,7 @@ function ingest_post(hatch, uri) {
                     for (const attr of remove_attr) {
                         delete this.attribs[attr];
                     }
-                    image.set_title(this.attribs.title);
+                    image.set_title(this.attribs.title || title);
                     hatch.save_asset(image);
                 }
             });
@@ -133,11 +125,13 @@ function ingest_post(hatch, uri) {
             }
         };
 
-        const test = new Promise((resolve, reject) => {
+        const body_promise = new Promise((resolve, reject) => {
             ingest_body($profile, function() {
                 const content = mustache.render(template.structure_template, {
                     title: title,
-                    by_line: by_line,
+                    date_published: published,
+                    author: author,
+                    category: section.join(", "),
                     post_body: body.join(""),
                 });
 
@@ -148,16 +142,17 @@ function ingest_post(hatch, uri) {
             });
         });
 
-        return Promise.all([test]);
-
+        return Promise.all([body_promise]);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch();
     rss2json.load(rss_uri, function(err, rss) {
-        const post_urls = rss.items.map((datum) => datum.url);
-        Promise.all(post_urls.map((url) => ingest_post(hatch, url))).then(() => {
+        let post_urls = rss.items.map((datum) => datum.url);
+        Promise.map(post_urls, function(url) {
+            return ingest_post(hatch, url);
+        }, { concurrency: 1 }).then(() => {
             return hatch.finish();
         });
     });

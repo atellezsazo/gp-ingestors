@@ -3,9 +3,10 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
+const rss2json = require('rss-to-json');
 const template = require('./template');
 const url = require('url');
-const rss2json = require('rss-to-json');
+const URLParse = require('url-parse');
 
 const rss_uri = "http://www.alodita.com/rss.xml";
 
@@ -24,16 +25,13 @@ const remove_attrs_img = [
 
 //Remove elements
 const remove_elements = [
+    'br + br + br',
     'a[name="more"]',
     'center',
     'iframe',
     'noscript', //any script injection
     'script', //any script injection
-];
-
-//embbed content
-const video_iframes = [
-    'youtube',
+    '.instagram-media'
 ];
 
 function ingest_article_profile(hatch, uri, pubDate, category) {
@@ -43,43 +41,31 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
         asset.set_canonical_uri(uri);
 
         // Pull out the updated date
-        const modified_date = $profile('.date-header').text();
-        const date_post = $profile('.date-header').first().text();
+        const modified_date = $profile('.date-header span').text();
         asset.set_last_modified_date(new Date(Date.parse(modified_date)));
-
-        asset.set_section('Blog Post');
+        const date_post = $profile('.date-header').first().text();
 
         //Set title section
         const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
+        const article_synopsis = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(article_synopsis);
+        asset.set_section('Post');
 
         const body = $profile('.post-body').first();
 
-        //Download videos 
-        const videos = body.find("iframe").map(function() {
-            const iframe_src = this.attribs.src;
-            for (const video_iframe of video_iframes) {
-                if (iframe_src.includes(video_iframe)) {
-                    const video_url = this.attribs.src;
-                    const full_uri = url.format(video_url, { search: false })
-                    const video_asset = new libingester.VideoAsset();
-                    video_asset.set_canonical_uri(full_uri);
-                    video_asset.set_last_modified_date(modified_date);
-                    video_asset.set_title(title);
-                    video_asset.set_download_uri(full_uri);
-                    hatch.save_asset(video_asset);
-                }
-            }
-        });
-
-        //Download images 
-        body.find("img").map(function() {
+        //Download images
+        let index = 0;
+        body.find('img').map(function() {
             const img_src = this.attribs.src;
             const parent = $profile(this).parent().first();
-            const img_url = new url.URL(img_src);
+            const img_url = URLParse(img_src);
             const matches = hosts_drop_images.filter(host => host.includes(img_url.host));
+            const article_thumbnail = $profile(this);
+
             if (img_src != undefined && matches.length == 0) {
                 const image = libingester.util.download_img(this, base_uri);
+                image.set_title(title);
                 hatch.save_asset(image);
                 this.attribs["data-libingester-asset-id"] = image.asset_id;
                 for (const attr in remove_attrs_img) {
@@ -89,6 +75,11 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
                 if (parent.name = "a") {
                     parent.before($profile(this)); //Moves image outside the wrap
                 }
+
+                if (index == 0) {
+                    asset.set_thumbnail(image);
+                }
+                index++;
             } else {
                 $profile(this).remove();
             }
@@ -100,7 +91,7 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
 
         //remove elements
         for (const remove_element of remove_elements) {
-            $profile(remove_element).remove();
+            body.find(remove_element).remove();
         }
 
         const content = mustache.render(template.structure_template, {

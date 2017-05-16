@@ -9,6 +9,7 @@ const template = require('./template');
 const url = require('url');
 
 const gallery_section = 'http://news.okezone.com/foto'; // Galleries home section
+const video_section = 'http://news.okezone.com/video/'; // Galleries home section
 const rss_uri = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
 
 //remove attributes from images
@@ -30,6 +31,7 @@ const remove_elements = [
 //embedded content
 const video_iframes = [
     'youtube', //YouTube
+    'dailymotion', //Dailymotion
 ];
 
 function add_embedded_images(base_uri, container, hatch, tag) {
@@ -47,8 +49,8 @@ function add_embedded_images(base_uri, container, hatch, tag) {
 
 function ingest_article_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
+        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
 
         asset.set_canonical_uri(uri);
 
@@ -60,17 +62,20 @@ function ingest_article_profile(hatch, uri) {
         asset.set_section(metadata.keywords.join(' '));
 
         //Set title section
-        const title = metadata.headline;
-        const date = $profile('time').first();
-        let reporter = $profile('.nmreporter, .imgnews-jurnalist').first().children();
-        add_embedded_images(base_uri, reporter, hatch, "img");
+        const title = $profile('h1').text();
         asset.set_title(title);
+
+        const date = new Date(Date.parse(metadata.datePublished));
+        const reporter = metadata.author.name;
+        const category = metadata.keywords.join(", ");
+        const post_tags = metadata.keywords.join(", ");
 
         // Pull out the main image
         const main_img = $profile('.detail-img img').first();
         const main_image = libingester.util.download_img(main_img, base_uri);
         const image_description = $profile('.caption-img-ab').children().text();
         hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
 
         // Create constant for body
         let body = $profile('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
@@ -104,16 +109,17 @@ function ingest_article_profile(hatch, uri) {
         // Construct a new document containing the content we want.
         const content = mustache.render(template.structure_template, {
             title: title,
-            reporter: reporter,
-            date: date,
+            author: reporter,
+            date_published: date,
+            category: category,
             main_image: main_image,
-            image_description: image_description,
-            body_html: body.html(),
+            image_credit: image_description,
+            body: body.html(),
+            post_tags: post_tags,
         });
 
         asset.set_document(content);
         hatch.save_asset(asset);
-
     });
 }
 
@@ -128,8 +134,8 @@ const remove_gallery_elements = ['noscript', //any script injection
 
 function ingest_gallery_article_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
+        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
 
         asset.set_canonical_uri(uri);
 
@@ -138,11 +144,18 @@ function ingest_gallery_article_profile(hatch, uri) {
         asset.set_section("Gallery");
 
         //Set title section
-        const title = $profile('meta[name="title"]').attr('content');
+        const title = $profile('h1').text();
+        asset.set_title(title);
+
         const date = $profile('.news-fl').text();
         const references = $profile('.news-fr').text();
 
-        asset.set_title(title);
+        let main_img = $profile('link[rel=image_src]').attr('href');
+        main_img = main_img.replace('small', 'large');
+
+        const main_image = libingester.util.download_image(main_img);
+        hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
 
         // Create constant for body
         const body = $profile('.detail-isi').first();
@@ -162,10 +175,10 @@ function ingest_gallery_article_profile(hatch, uri) {
         // Construct a new document containing the content we want.
         const content = mustache.render(gallery_template.gallery_structure_template, {
             title: title,
-            date: date,
-            references: references,
+            author: references,
+            date_published: date,
             images: image_gallery,
-            body_html: body.html(),
+            body: body.html(),
         });
 
         asset.set_document(content);
@@ -175,6 +188,7 @@ function ingest_gallery_article_profile(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
+
     const news = new Promise((resolve, reject) => {
         rss2json.load(rss_uri, function(err, rss) {
             const news_uris = rss.items.map((datum) => datum.link);
@@ -183,6 +197,7 @@ function main() {
             });
         });
     });
+
 
     const gallery = new Promise((resolve, reject) => {
         libingester.util.fetch_html(gallery_section).then(($galleries) => {
@@ -194,7 +209,6 @@ function main() {
                 resolve(true);
             });
         });
-
     });
 
     Promise.all([news, gallery]).then(values => {

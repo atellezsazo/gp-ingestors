@@ -12,6 +12,7 @@ const home_page = 'https://www.wowshack.com/'; // Home section
 const remove_elements = [
     'form', //Newsletter
     'ins', //Ads
+    'hr',
     'noscript', //any script injection
     'script', //any script injection
     '.addthis_responsive_sharing', //sharing buttons
@@ -24,23 +25,35 @@ const remove_elements = [
     '.newsletter-form-header-title', //Newsletter
     '.newsletter-form-wrapper', //Newsletter
     '.sqs-block-code', // Ads
+    '.sqs-block-video',
     '#taboola-below-article-thumbnails', //Related articles
 ];
 
 const remove_metadata = [
+    'class',
     'data-image',
+    'data-image-dimensions',
+    'data-image-focal-point',
     'data-image-id',
+    'data-load',
     'data-src',
+    'data-type',
     'href',
     'src',
 ];
 
-function ingest_article_profile(hatch, uri) {
+function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
+        const videos = $profile(".sqs-block-video, .sqs-block-embed");
+        if (videos.length > 0) {
+            return false;
+        }
+
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
 
         asset.set_canonical_uri(uri);
+
         // Pull out the updated date
         const modified_date = new Date(Date.parse($profile('.date time').attr('datetime')));
         asset.set_last_modified_date(modified_date);
@@ -60,6 +73,10 @@ function ingest_article_profile(hatch, uri) {
             });
         });
 
+        //Synopsis
+        const synopsis = $profile('.entry-content .sqs-block-content').first().text();
+        asset.set_synopsis(synopsis);
+
         //remove elements
         const layout = $profile('#canvas').first();
         for (const remove_element of remove_elements) {
@@ -73,29 +90,19 @@ function ingest_article_profile(hatch, uri) {
         });
 
         //Download images 
+        let img = 0;
         article_content.find("img").map(function() {
-            if (this.attribs.src == undefined) {
-                this.attribs.src = this.attribs['data-src'];
-            }
             const image = libingester.util.download_img(this, base_uri);
+            image.set_title(title);
             hatch.save_asset(image);
             this.attribs["data-libingester-asset-id"] = image.asset_id;
             for (const meta of remove_metadata) {
                 delete this.attribs[meta];
             }
-        });
-
-        //Download videos 
-        const videos = $profile(".sqs-block-video").map(function() {
-            const json_video_info = JSON.parse(this.attribs["data-block-json"]);
-            if (json_video_info.url != undefined) {
-                const video_asset = new libingester.VideoAsset();
-                video_asset.set_canonical_uri(uri);
-                video_asset.set_last_modified_date(modified_date);
-                video_asset.set_title(title);
-                video_asset.set_download_uri(json_video_info.url);
-                hatch.save_asset(video_asset);
+            if (img == 0) {
+                asset.set_thumbnail(image);
             }
+            img++;
         });
 
         const body = article_content.map(function() {
@@ -121,7 +128,7 @@ function main() {
             return url.resolve(home_page, uri);
         }).get();
 
-        Promise.all(articles_links.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
+        Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();
         });
     });

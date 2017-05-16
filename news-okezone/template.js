@@ -1,19 +1,30 @@
 'use strict';
 
 const structure_template = (`
-<section class="title">
-    <h1>{{{ title }}}</h1>
-    <div class="date">{{{ date }}}</div>
-    <div class="reporter">{{{ reporter }}}</div>
+<section class="header">
+    <div class="extra-header">
+        <div class="context">{{{category}}}</div>
+        <div class="extra-header-right">
+            <span class="author">{{author}}</span> 
+            <span class="date-published">{{date_published}}</span>
+        </div>
+    </div>
+    <h1>{{ title }}</h1>
 </section>
 <section class="main-image">
     <img data-libingester-asset-id="{{ main_image.asset_id }}">
-    {{#image_description}}
-    <p class="image-description">{{ image_description }}</p>
-    {{/image_description}}
+    {{#image_credit}}
+    <div class="image-credit">{{ image_credit }}</div>
+    {{/image_credit}}
 </section>
 <section class="body">
-    {{{ body_html }}}
-</section>`);
+    {{{ body }}}
+</section>
+<section class="footer">
+    {{#post_tags}}
+    <div class="post-tags">{{{ post_tags }}}</div>
+    {{/post_tags}}
+</section>
+`);
 
 exports.structure_template = structure_template;
