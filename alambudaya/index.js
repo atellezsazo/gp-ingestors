@@ -3,7 +3,6 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const Promise = require('bluebird');
-const rp = require('request-promise');
 const template = require('./template');
 const url = require('url');
 const rss2json = require('rss-to-json');
