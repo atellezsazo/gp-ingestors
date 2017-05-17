@@ -112,7 +112,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_feed, function(err, rss) {
+    rss2json.load(rss_feed, (err, rss) => {
         const news_uris = rss.items.map((datum) => datum.url);
         Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();

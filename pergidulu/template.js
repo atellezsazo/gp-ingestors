@@ -16,5 +16,4 @@ const structure_template = (`
 </section>
 `);
 
-
 exports.structure_template = structure_template;
