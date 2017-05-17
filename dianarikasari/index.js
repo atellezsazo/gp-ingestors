@@ -3,11 +3,12 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
-const Promise = require("bluebird");
+const Promise = require('bluebird');
 const request = require('request');
 const template = require('./template');
 const rss2json = require('rss-to-json');
 const url = require('url');
+const concurrency = 1;
 
 const base_uri = "http://dianarikasari.blogspot.com";
 
@@ -45,12 +46,11 @@ function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const post = $profile('.date-outer').map(function() { 
             const date_published = new Date(Date.parse($profile(this).find('.date-header span').text()));
-            const title = $profile(this).find(".post-title a").text();
+            const title = $profile(this).find('.post-title').text();
 
             // download videos
-            const videos = $profile(this).find(".post-body iframe").first()[0] || $profile(this).find(".post-body script").first()[0];
+            const videos = $profile(this).find('.post-body iframe').first()[0] || $profile(this).find('.post-body script').first()[0];
             if (videos) {
-
                 for (const video_iframe of video_iframes) {
                     const video_url = videos.attribs.src;
                     if (video_url.includes(video_iframe)) {
@@ -61,7 +61,7 @@ function ingest_article(hatch, uri) {
                         video_asset.set_title(title);
                         video_asset.set_download_uri(full_uri);
                         hatch.save_asset(video_asset);
-                        return;
+                        return; 
                     }
                 }
             } else {
@@ -79,17 +79,12 @@ function ingest_article(hatch, uri) {
                 asset.set_title(title);
                 asset.set_canonical_uri(uri);
                 asset.set_last_modified_date(date_published);
-
-                let dots = '';
-                if (body.text().length > 140) {
-                    dots = '...';
-                }
-                asset.set_synopsis(body.text().substring(0, 140) + dots);
+                asset.set_synopsis(body.text().substring(0, 140));
                 asset.set_section(section);
 
                 // Download images
                 let isFirst = true;
-                $profile(this).find(".post-body img").map(function() {
+                $profile(this).find('.post-body img').map(function() {
                     if (this.attribs.src) {
                         const image = libingester.util.download_img(this, base_uri);
                         image.set_title(title);
@@ -100,7 +95,7 @@ function ingest_article(hatch, uri) {
                             isFirst = false;
                         }
 
-                        this.attribs["data-libingester-asset-id"] = image.asset_id;
+                        this.attribs['data-libingester-asset-id'] = image.asset_id;
                         for (const attr of remove_attr) {
                             delete this.attribs[attr];
                         }
@@ -117,8 +112,6 @@ function ingest_article(hatch, uri) {
                     author: author,
                     date_published: date_published,
                     title: title,
-                    // main_image: main_image,
-                    // image_credit: image_credit,
                     body: body.html(),
                 });
 
@@ -136,7 +129,19 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
 
-    ingest_article(hatch, base_uri).then(() => {
+    const posts = new Promise((resolve, reject) => {
+        libingester.util.fetch_html(base_uri).then(($posts) => {
+            const posts_links = $posts('.post-title a').map(function() {
+                const uri = $posts(this).attr('href');
+                return url.resolve(base_uri, uri);
+            }).get();
+            Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
+                resolve(true);
+            });
+        });
+    });
+
+    Promise.all([posts]).then(values => {
         return hatch.finish();
     });
 }
