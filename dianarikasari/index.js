@@ -9,7 +9,7 @@ const template = require('./template');
 const rss2json = require('rss-to-json');
 const url = require('url');
 
-const base_uri = "http://dianarikasari.blogspot.com.br";
+const base_uri = "http://dianarikasari.blogspot.com";
 
 // Remove elements (body)
 const remove_elements = [
@@ -44,18 +44,20 @@ const video_iframes = [
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const post = $profile('.date-outer').map(function() { 
+            const date_published = new Date(Date.parse($profile(this).find('.date-header span').text()));
+            const title = $profile(this).find(".post-title a").text();
+
             // download videos
             const videos = $profile(this).find(".post-body iframe").first()[0] || $profile(this).find(".post-body script").first()[0];
             if (videos) {
-console.log('entro');
+
                 for (const video_iframe of video_iframes) {
-                    const iframe_src = videos.attribs.src;
-                    if (iframe_src.includes(video_iframe)) {
-                        const video_url = this.attribs.src;
+                    const video_url = videos.attribs.src;
+                    if (video_url.includes(video_iframe)) {
                         const full_uri = url.format(video_url, { search: false })
                         const video_asset = new libingester.VideoAsset();
                         video_asset.set_canonical_uri(full_uri);
-                        video_asset.set_last_modified_date(modified_date);
+                        video_asset.set_last_modified_date(date_published);
                         video_asset.set_title(title);
                         video_asset.set_download_uri(full_uri);
                         hatch.save_asset(video_asset);
@@ -69,10 +71,7 @@ console.log('entro');
                 
                 const category = $profile(this).find('.post-labels a').map(function() {
                     return $profile(this).text();
-                }).get();
-
-                const date_published = new Date(Date.parse($profile(this).find('.date-header span').text()));
-                const title = $profile(this).find(".post-title a").text();
+                }).get();                
 
                 // Set title section
                 asset.set_title(title);
