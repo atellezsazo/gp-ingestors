@@ -5,3 +5,5 @@ hatch_*/
 *.zip
 
 *.html
+
+*.gz

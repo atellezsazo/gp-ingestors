@@ -29,6 +29,7 @@ const remove_elements = [
     'div',
     'noscript',
     'script',
+    '.post-featured-img',
 ];
 
 //Remove parents from these elements (body)
@@ -38,58 +39,60 @@ const rm_elem_parent = [
 ];
 
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
-        const base_uri = libingester.util.get_doc_base_uri($, uri);
+    return libingester.util.fetch_html(uri).then(($profile) => {
+        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
 
         // set title section
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $profile('meta[property="og:title"]').attr('content');
         asset.set_title(title);
         asset.set_canonical_uri(uri);
+        const description = $profile('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(description);
 
         // pull out the updated date and section
-        const modified_date = $('meta[property="article:published_time"]').attr('content');
+        const modified_date = $profile('meta[property="article:published_time"]').attr('content');
         asset.set_last_modified_date(new Date(Date.parse(modified_date)));
-        const section = $('meta[property="article:section"]').attr('content');
+        const section = $profile('meta[property="article:section"]').attr('content');
         asset.set_section(section);
 
         // data for the template
-        const info_article = $('div#single-below-header').first();
-        const author = $(info_article).find('span.fn').text();
-        const date = $(info_article).find('span.date').text();
-        const category = $(info_article).find('span.meta-category').text();
-        const body = $('div.post-content div.content-inner').first();
+        const info_article = $profile('div#single-below-header').first();
+        const author = $profile(info_article).find('span.fn').text();
+        const date = $profile(info_article).find('span.date').text();
+        const category = $profile(info_article).find('span.meta-category').text();
+        const body = $profile('div.post-content div.content-inner').first();
+
+        // Pull out the main image
+        let main_img = $profile('.post-featured-img img').first();
+        if (typeof main_img.attr('data-lazy-src') != undefined) {
+            main_img.attr('src', main_img.attr('data-lazy-src'));
+        }
+        const main_image = libingester.util.download_img(main_img, base_uri);
+        main_image.set_title(title);
+        hatch.save_asset(main_image);
+        asset.set_thumbnail(main_image);
 
         // remove elements (body)
         for (const remove_element of remove_elements) {
             body.find(remove_element).remove();
         }
-        for (const elem of rm_elem_parent){
+        for (const elem of rm_elem_parent) {
             body.find(elem).first().parent().remove();
         }
 
         // download images
-        const img_width = '750w'; // 1600w, 800w, 750w, 320w,
         body.find("img").map(function() {
-            const srcset = this.attribs['data-lazy-srcset'].split(', ');
-            let src;
-            for(const source of srcset){ // looking for a link containing 'img_width'
-                if( source.indexOf(img_width) != -1 ){
-                    const lastIndex = source.indexOf('jpg') + 3;
-                    const firstIndex = source.indexOf('http');
-                    src = source.substring(firstIndex, lastIndex);
-                }
+            if (typeof this.attribs['data-lazy-src'] != undefined) {
+                this.attribs.src = this.attribs['data-lazy-src'];
             }
-            if( src == undefined ){ //If don't find the link it, set default link
-                src = this.attribs['data-lazy-src'];
-            }
-
-            const image = libingester.util.download_image( src );
+            const image = libingester.util.download_img(this, base_uri);
+            image.set_title(title);
+            hatch.save_asset(image);
             this.attribs["data-libingester-asset-id"] = image.asset_id;
-            for(const attr of attr_image){
+            for (const attr of attr_image) {
                 delete this.attribs[attr];
             }
-            hatch.save_asset(image);
         });
 
         // render template
@@ -98,6 +101,7 @@ function ingest_article(hatch, uri) {
             author: author,
             date: date,
             category: category,
+            main_image: main_image,
             body: body.children(),
         });
 
@@ -108,9 +112,8 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
-    rss2json.load(rss_feed, function(err, rss){
-        const news_uris =  rss.items.map((datum) => datum.url);
+    rss2json.load(rss_feed, function(err, rss) {
+        const news_uris = rss.items.map((datum) => datum.url);
         Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();
         });
