@@ -225,6 +225,7 @@ function ingest_video(hatch, uri) {
         const copyright = $('meta[name="copyright"]').attr('content');
         const description = $('meta[property="og:description"]').attr('content');
         const modified_time = $('meta[property="article:modified_time"]').attr('content');
+        const date = new Date(Date.parse(modified_time));
         const title = $('meta[name="title"]').attr('content');
 
         // download background video (thumbnail)
@@ -233,12 +234,25 @@ function ingest_video(hatch, uri) {
         bg_img_video = libingester.util.download_image(bg_img_video_uri);
         bg_img_video.set_title(title);
         hatch.save_asset(bg_img_video);
+
+        // save video asset
+        const video_uri = $('.video-player iframe').first().attr('src');
+        if (video_uri) {
+            const video = new libingester.VideoAsset();
+            video.set_canonical_uri(uri);
+            video.set_download_uri(video_uri);
+            video.set_last_modified_date(date);
+            video.set_license(copyright);
+            video.set_thumbnail(bg_img_video);
+            video.set_title(title);
+            video.set_synopsis(description);
+            hatch.save_asset(video);
+        }
     })
 }
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const ingest = (page_uri, resolved, concurrency = Infinity) => {
         if (page_uri.includes('rss')) {
             rss2json.load(rss_uri, function(err, rss) {

@@ -8,10 +8,12 @@ const structure_template = (`
     </div>
     <h1>{{ title }}</h1>
 </header>
+<section class="main-image">
+    <img data-libingester-asset-id="{{ main_image.asset_id }}">
+</section>
 <section class="body">
     {{{ body }}}
 </section>
 `);
-
 
 exports.structure_template = structure_template;
