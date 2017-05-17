@@ -163,7 +163,11 @@ function main() {
 
             Promise.map(links, (link) => {
                 return ingest_article(hatch, link);
-            }, { concurrency: concurrency }).then(() => hatch.finish());
+            }, { concurrency: concurrency }).then(() => {
+                return hatch.finish();
+            }).catch((err) => {
+                console.log('ERR; ', err);
+            });
         });
     });
 }
