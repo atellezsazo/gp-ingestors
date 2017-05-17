@@ -166,7 +166,7 @@ function main() {
             }, { concurrency: concurrency }).then(() => {
                 return hatch.finish();
             }).catch((err) => {
-                console.log('ingestor error; ', err);
+                console.log('ingestor error: ', err);
             });
         });
     });
