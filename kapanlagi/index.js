@@ -44,29 +44,28 @@ function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
+        asset.set_canonical_uri(uri);
 
         //Set title section
-        const category = $profile(".newsdetail-categorylink").first().text();
-        const keywords = $profile('meta[name="keywords"]').attr('content');
-        const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
         const title = $profile("#newsdetail-right-new h1").first().text();
-
+        const category = $profile(".newsdetail-categorylink").first().text();
+        const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
         asset.set_title(title);
-        asset.set_canonical_uri(uri);
 
         const reporter = $profile('.vcard .newsdetail-schedule-new a').text();
         const date = $profile('.vcard .newsdetail-schedule-new.updated').text();
 
         // Pull out the main image
-
         const main_img = $profile('meta[property="og:image"]').attr('content');
         const main_image = libingester.util.download_image(main_img, uri);
+        main_image.set_title(title);
+        const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
 
-        const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
-
-        const post_tags = $profile('meta[name="title"]').attr('content');
+        const synopsis = $profile('meta[name="description"]').attr('content');
+        asset.set_synopsis(synopsis);
+        const post_tags = $profile('.box-content a');
 
         // Pull out the updated date
         const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
@@ -76,71 +75,16 @@ function ingest_article(hatch, uri) {
         }
 
         asset.set_last_modified_date(modified_date);
-
-        asset.set_section(category + "," + keywords);
+        asset.set_section(category);
 
         let pages = [];
-        const save_video_asset = (canonical_uri, download_uri) => {
-            if (canonical_uri && download_uri) {
-                if (canonical_uri.includes('http') && download_uri.includes('http')) {
-                    const video_asset = new libingester.VideoAsset();
-                    video_asset.set_canonical_uri(canonical_uri);
-                    video_asset.set_last_modified_date(modified_date);
-                    video_asset.set_title(title);
-                    video_asset.set_download_uri(download_uri);
-                    hatch.save_asset(video_asset);
-                }
-            }
-        }
-
-        const download_video = (src) => {
-            if (src) {
-                for (const domain of video_iframes) {
-                    if (src.includes(domain)) {
-                        switch (domain) {
-                            case 'a.kapanlagi': {
-                                return libingester.util.fetch_html(src).then(($) => {
-                                    const video_url = $('title').text();
-                                    save_video_asset(uri, video_url);
-                                });
-                                break; // exit 'a.kapanlagi'
-                            }
-                            case 'skrin.id': {
-                                const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
-                                const video_width = '480p.mp4';
-                                let video_url;
-                                libingester.util.fetch_html(src).then(($) => {
-                                    const ss = $('script')[3].children[0].data; //script data
-                                    const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[','');
-                                    const video_uris = json_sources.split('},').map((uri) => {
-                                        const relative_video_uri = uri.substring(uri.indexOf('url')+7, uri.indexOf('resolution')-3);
-                                        return url.resolve(base_video_uri, relative_video_uri);
-                                    });
-                                    for (const video_uri of video_uris) {
-                                        if (video_uri.includes(video_width)) {
-                                            video_url = video_uri;
-                                            break;
-                                        }
-                                    }
-                                    save_video_asset(uri, video_url || video_uris[video_uris.length-1]);
-                                });
-                                break; // exit 'skrin.id'
-                            }
-                            default: save_video_asset(uri, src);
-                        }
-                        break; // exit for
-                    }
-                }
-            }
-        }
-
         const ingest_body = ($profile, finish_process) => {
             let post_body = $profile('.entertainment-detail-news');
-
             // Download images
             post_body.find("img").map(function() {
                 if (this.attribs.src) {
                     const image = libingester.util.download_img(this, base_uri);
+                    image.set_title(title);
                     hatch.save_asset(image);
                     this.attribs["data-libingester-asset-id"] = image.asset_id;
                     for (const attr of remove_attr) {
@@ -148,7 +92,7 @@ function ingest_article(hatch, uri) {
                     }
                 }
             });
-          
+
             post_body.find("a, div, h1, h2, h3, h4, h5, h6, span").map(function() {
                 if (this.attribs.style) {
                     delete this.attribs.style;
@@ -189,7 +133,7 @@ function ingest_article(hatch, uri) {
                     date_published: date,
                     main_image: main_image,
                     image_credit: image_credit,
-                    body: pages.join(' '),
+                    body: pages.join(''),
                     post_tags: post_tags,
                 });
 
@@ -201,29 +145,26 @@ function ingest_article(hatch, uri) {
         })
         return Promise.all([promise]);
     }).catch((error) => {
-        console.log("Ingest error: ", error); 
+        console.log("Ingest error: ", error);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch();
 
-  rp({ uri: rss_uri, gzip: true }).then((res) => {
-
+    rp({ uri: rss_uri, gzip: true }).then((res) => {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, function(err, result) {
             const rss = rss2json.parser(result);
             let links = [];
             rss.items.map((datum) => {
-                if (!datum.link.includes("musik.kapanlagi.com")) { //disard musik subdomain
+                if (!datum.link.includes("musik.kapanlagi.com")) { //drop musik subdomain
                     links.push(datum.link);
                 }
             });
 
             Promise.map(links, function(link) {
-                return ingest_article(hatch, link).catch((error) => {
-                    console.log("Ingestor err: ", error);
-                });
+                return ingest_article(hatch, link);
             }, { concurrency: concurrency }).then(function() {
                 return hatch.finish();
             })
