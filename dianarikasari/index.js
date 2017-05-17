@@ -2,14 +2,9 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const rp = require('request-promise');
 const Promise = require('bluebird');
-const request = require('request');
 const template = require('./template');
-const rss2json = require('rss-to-json');
 const url = require('url');
-const concurrency = 1;
-
 const base_uri = "http://dianarikasari.blogspot.com";
 
 // Remove elements (body)
@@ -17,12 +12,7 @@ const remove_elements = [
     'iframe',
     'noscript',
     'script',
-    'style',
-    '.box-share-img-detail',
-    '.lifestyle-in-content',
-    '.link-pagging-warper',
-    '.paging-related',
-    '.video-wrapper'
+    'style'
 ];
 
 // clean attr (tag)
@@ -128,7 +118,6 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const posts = new Promise((resolve, reject) => {
         libingester.util.fetch_html(base_uri).then(($posts) => {
             const posts_links = $posts('.post-title a').map(function() {
