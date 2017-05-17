@@ -66,12 +66,14 @@ function ingest_article(hatch, uri) {
                 }
             } else {
                 const asset = new libingester.NewsArticle();
-                const author = $profile(this).find('.post-author a span').text();
+                const author = $profile(this).find('.post-author a').first();
                 let body = $profile(this).find('.post-body').first();
                 
                 const category = $profile(this).find('.post-labels a').map(function() {
-                    return $profile(this).text();
-                }).get();                
+                    return $profile(this);
+                }).get();       
+
+                const section = $profile(this).find('.post-labels').text().replace('Labels:', '');
 
                 // Set title section
                 asset.set_title(title);
@@ -83,7 +85,7 @@ function ingest_article(hatch, uri) {
                     dots = '...';
                 }
                 asset.set_synopsis(body.text().substring(0, 140) + dots);
-                asset.set_section(category.join(', '));
+                asset.set_section(section);
 
                 // Download images
                 let isFirst = true;
@@ -111,7 +113,7 @@ function ingest_article(hatch, uri) {
                 }
 
                 const content = mustache.render(template.structure_template, {
-                    category: category.join(', '),
+                    category: category,
                     author: author,
                     date_published: date_published,
                     title: title,
