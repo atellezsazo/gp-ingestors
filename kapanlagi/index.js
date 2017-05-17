@@ -124,7 +124,7 @@ function ingest_article(hatch, uri) {
         };
 
         const promise = new Promise((resolve, reject) => {
-            ingest_body($profile, function() {
+            ingest_body($profile, () => {
                 const content = mustache.render(template.structure_template, {
                     title: title,
                     subtitle: subtitle,
@@ -154,7 +154,7 @@ function main() {
 
     rp({ uri: rss_uri, gzip: true }).then((res) => {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
-        parser.parseString(res, function(err, result) {
+        parser.parseString(res, (err, result) => {
             const rss = rss2json.parser(result);
             let links = [];
             rss.items.map((datum) => {
@@ -163,11 +163,9 @@ function main() {
                 }
             });
 
-            Promise.map(links, function(link) {
+            Promise.map(links, (link) => {
                 return ingest_article(hatch, link);
-            }, { concurrency: concurrency }).then(function() {
-                return hatch.finish();
-            })
+            }, { concurrency: concurrency }).then(() => hatch.finish());
         });
     });
 }
