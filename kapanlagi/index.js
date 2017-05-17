@@ -25,7 +25,6 @@ const remove_elements = [
     '.link-pagging-warper',
     '.paging-related',
     '.video-wrapper',
-    '.lifestyle-in-content'
 ];
 
 // clean attr (tag)
@@ -151,7 +150,6 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     rp({ uri: rss_uri, gzip: true }).then((res) => {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, (err, result) => {
