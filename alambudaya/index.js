@@ -2,6 +2,7 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
+const Promise = require('bluebird');
 const rp = require('request-promise');
 const template = require('./template');
 const url = require('url');
@@ -10,32 +11,31 @@ const rss2json = require('rss-to-json');
 const base_uri = 'http://www.alambudaya.com/';
 const rss_uri = 'http://www.alambudaya.com/feeds/posts/default';
 
+const clean_tag = [
+    'a',
+    'b',
+    'br',
+    'div',
+    'em',
+    'span',
+];
+
 //Remove metadata
 const img_metadata = [
+    'border',
     'class',
-    'data-jpibfi-indexer',
-    'data-jpibfi-post-excerpt',
-    'data-jpibfi-post-url',
-    'data-jpibfi-post-title',
     'height',
-    'id',
-    'rscset',
+    'imageanchor',
     'sizes',
     'src',
+    'rscset',
+    'style',
     'width',
 ];
 
 //Remove elements
 const remove_elements = [
-    // 'iframe',
-    // 'input',
-    // 'noscript', //any script injection
-    // 'script', //any script injection
-    // '.link_pages', //recomendation links
-    // '.jp-relatedposts', //related posts
-    // '.post-tags', //Tags
-    // '.sharedaddy', //share elements
-    // '[id*="more-"]', //more span
+    'style',
 ];
 
 //embed content
@@ -43,32 +43,34 @@ const video_iframes = [
     'youtube', //YouTube
 ];
 
-function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
-        const base_uri = libingester.util.get_doc_base_uri($, uri);
+function ingest_article(hatch, obj) {
+    return libingester.util.fetch_html(obj.uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        const title = $('meta[property="og:title"]').attr('content');
+        const base_uri = libingester.util.get_doc_base_uri($, obj.uri);
+        const modified_date = new Date(Date.parse(obj.updated));
         const synopsis = $('meta[property="og:description"]').attr('content');
-        const thumb_url = $('meta[property="og:image"]').attr('content');
-        const thumb = libingester.util.download_image(thumb_url);
-        hatch.save_asset(thumb);
+        const title = $('meta[property="og:title"]').attr('content');
 
-        thumb.set_title(title);
-        asset.set_thumbnail(thumb);
-        asset.set_section('algo');
-        asset.set_canonical_uri(uri);
-        asset.set_last_modified_date(new Date()); // no date
+        asset.set_title(title);
+        asset.set_section('Article');
+        asset.set_canonical_uri(obj.uri);
+        asset.set_last_modified_date(modified_date); // no date
         asset.set_title(title);
         asset.set_synopsis(synopsis);
 
         const body = $('#Blog1 .post-body').first();
 
         //Download images
+        let firstImage = true;
         body.find("img").map(function() {
             if (this.attribs.src) {
                 const image = libingester.util.download_img(this, base_uri);
                 image.set_title(title);
                 hatch.save_asset(image);
+                if( firstImage ) {
+                    asset.set_thumbnail(image);
+                    firstImage = false;
+                }
                 this.attribs["data-libingester-asset-id"] = image.asset_id;
                 for (const img_meta of img_metadata) {
                     delete this.attribs[img_meta];
@@ -80,8 +82,20 @@ function ingest_article(hatch, uri) {
         for (const remove_element of remove_elements) {
             body.find(remove_element).remove();
         }
+        body.find('iframe').parent().remove();
+
+        //clean attributes
+        for(const tag of clean_tag) {
+            body.find(tag).map(function() {
+                for(const attr of img_metadata) {
+                    $(this).removeAttr(attr);
+                }
+            });
+        }
 
         const content = mustache.render(template.structure_template, {
+            author: obj.author,
+            date_published: obj.updated.substring(0,10), // only date (yyyy-mm-dd)
             title: title,
             body: body.html(),
         });
@@ -92,25 +106,21 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    // const hatch = new libingester.Hatch();
+    const concurrency = 2;
+    const hatch = new libingester.Hatch();
 
     libingester.util.fetch_html(rss_uri).then(($) => {
-        const links = $('entry').map(function() {
-            return $(this).find('link[rel="alternate"]').attr('href');
+        const objects = $('entry').map(function() {
+            return {
+                author: $(this).find('author name').text(),
+                updated: $(this).find('updated').text(),
+                uri: $(this).find('link[rel="alternate"]').attr('href'),
+            }
         }).get();
-        console.log(links);
+        Promise.map(objects, (obj) => ingest_article(hatch, obj), {concurrency: concurrency}).then(() => {
+            return hatch.finish();
+        });
     });
-    // rss2json.load(rss_uri, function(err, rss) {
-    //     const articles_links = rss.item.map((datum) => datum.url);
-    //     console.log(articles_links);
-    //     //Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
-    // });
-
-    // const links = [
-    //     'http://www.alambudaya.com/2010/07/asal-usul-suku-baduykanekes-banten.html',
-    //     'http://www.alambudaya.com/2014/12/7-tempat-wisata-wajib-di-macau-china.html',
-    // ];
-    // Promise.all(links.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
 }
 
 main();
