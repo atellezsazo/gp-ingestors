@@ -173,16 +173,16 @@ function main() {
             const uri = $artists(this).attr('href');
             return url.resolve(chronological_artists_uri, uri);
         }).get();
-    }).then((bacht_links) => {
-        return Promise.all(bacht_links.map((uri) => ingest_artist_profile(hatch, uri)));
+    }).then((links) => {
+        return Promise.all(links.map((uri) => ingest_artist_profile(hatch, uri)));
     });
 
     const paintings = rp({ uri: paintings_json_uri, json: true }).then((response) => {
         if (response.Paintings != null) {
             return response.Paintings.map((datum) => url.resolve(base_uri, datum.paintingUrl));
         }
-    }).then((bacht_paintings) => {
-        return Promise.all(bacht_paintings.map((uri) => ingest_artwork_profile(hatch, uri)));
+    }).then((links) => {
+        return Promise.all(links.map((uri) => ingest_artwork_profile(hatch, uri)));
     });
 
     Promise.all([artists, paintings]).then(() => {
