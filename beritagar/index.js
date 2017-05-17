@@ -253,7 +253,6 @@ function ingest_video(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const article = new Promise((resolve, reject) => {
         rss2json.load(rss_uri, (err, rss) => {
             Promise.all(rss.items.map((item) => ingest_article(hatch, item.url))).then(() => resolve());
@@ -261,12 +260,12 @@ function main() {
     });
 
     const gallery = libingester.util.fetch_html(page_gallery).then(($) => {
-        const tags = $('#main .swifts .content a.title').get(); // more recent media links
+        const tags = $('#main .swifts .content a.title').get();
         return Promise.all(tags.map((tag) => ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href))));
     });
 
     const video = libingester.util.fetch_html(page_video).then(($) => {
-        const tags = $('#main .swifts .content a.title').get(); // more recent media links
+        const tags = $('#main .swifts .content a.title').get();
         return Promise.all(tags.map((tag) => ingest_video(hatch, url.resolve(base_uri, tag.attribs.href))));
     });
 
