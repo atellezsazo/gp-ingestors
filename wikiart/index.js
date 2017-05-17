@@ -168,31 +168,24 @@ function ingest_artist_profile(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    const artists = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
-            const artists_link = $artists('.artists-list li:nth-child(-n+20) li.title a').map(function() { //First twenty
-                const uri = $artists(this).attr('href');
-                return url.resolve(chronological_artists_uri, uri);
-            }).get();
-
-            Promise.all(artists_link.map((uri) => ingest_artist_profile(hatch, uri))).then(() => {
-                resolve();
-            });
-        });
+    const artists = libingester.util.fetch_html(chronological_artists_uri).then(($artists) => {
+        return $artists('.artists-list li:nth-child(-n+20) li.title a').map(function() {
+            const uri = $artists(this).attr('href');
+            return url.resolve(chronological_artists_uri, uri);
+        }).get();
+    }).then((bacht_links) => {
+        return Promise.all(bacht_links.map((uri) => ingest_artist_profile(hatch, uri)));
     });
 
-    const paintings = new Promise((resolve, reject) => {
-        rp({ uri: paintings_json_uri, json: true }).then((response) => {
-            if (response.Paintings != null) {
-                const paintings_uris = response.Paintings.map((datum) => url.resolve(base_uri, datum.paintingUrl));
-                Promise.all(paintings_uris.map((uri) => ingest_artwork_profile(hatch, uri))).then(() => {
-                    resolve();
-                });
-            }
-        });
+    const paintings = rp({ uri: paintings_json_uri, json: true }).then((response) => {
+        if (response.Paintings != null) {
+            return response.Paintings.map((datum) => url.resolve(base_uri, datum.paintingUrl));
+        }
+    }).then((bacht_paintings) => {
+        return Promise.all(bacht_paintings.map((uri) => ingest_artwork_profile(hatch, uri)));
     });
 
-    Promise.all([paintings]).then(values => {
+    Promise.all([artists, paintings]).then(() => {
         return hatch.finish();
     });
 }
