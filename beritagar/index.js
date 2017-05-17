@@ -238,7 +238,6 @@ function ingest_video(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const ingest = (page_uri, resolved, concurrency = Infinity) => {
         if (page_uri.includes('rss')) {
             rss2json.load(rss_uri, function(err, rss) {
