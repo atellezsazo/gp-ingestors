@@ -23,6 +23,7 @@ const remove_elements = [
     '.link-pagging-warper',
     '.paging-related',
     '.video-wrapper',
+    '.lifestyle-in-content'
 ];
 
 //clean attr (tag)
@@ -36,7 +37,6 @@ const remove_attr = [
     'style',
     'width',
 ];
-
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
@@ -148,7 +148,6 @@ function ingest_article(hatch, uri) {
     }).catch((error) => {
         console.log("Ingest error: ", error); 
     });
-
 }
 
 function main() {
