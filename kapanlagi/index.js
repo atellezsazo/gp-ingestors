@@ -14,19 +14,21 @@ const base_uri = "https://www.kapanlagi.com/";
 const rss_uri = "https://www.kapanlagi.com/feed/";
 const concurrency = 1;
 
-//Remove elements (body)
+// Remove elements (body)
 const remove_elements = [
     'iframe',
     'noscript',
     'script',
+    'style',
     '.box-share-img-detail',
+    '.lifestyle-in-content',
     '.link-pagging-warper',
     '.paging-related',
     '.video-wrapper',
     '.lifestyle-in-content'
 ];
 
-//clean attr (tag)
+// clean attr (tag)
 const remove_attr = [
     'class',
     'height',
@@ -35,7 +37,7 @@ const remove_attr = [
     'src',
     'srcset',
     'style',
-    'width',
+    'width'
 ];
 
 function ingest_article(hatch, uri) {
@@ -78,10 +80,64 @@ function ingest_article(hatch, uri) {
         asset.set_section(category + "," + keywords);
 
         let pages = [];
+        const save_video_asset = (canonical_uri, download_uri) => {
+            if (canonical_uri && download_uri) {
+                if (canonical_uri.includes('http') && download_uri.includes('http')) {
+                    const video_asset = new libingester.VideoAsset();
+                    video_asset.set_canonical_uri(canonical_uri);
+                    video_asset.set_last_modified_date(modified_date);
+                    video_asset.set_title(title);
+                    video_asset.set_download_uri(download_uri);
+                    hatch.save_asset(video_asset);
+                }
+            }
+        }
+
+        const download_video = (src) => {
+            if (src) {
+                for (const domain of video_iframes) {
+                    if (src.includes(domain)) {
+                        switch (domain) {
+                            case 'a.kapanlagi': {
+                                return libingester.util.fetch_html(src).then(($) => {
+                                    const video_url = $('title').text();
+                                    save_video_asset(uri, video_url);
+                                });
+                                break; // exit 'a.kapanlagi'
+                            }
+                            case 'skrin.id': {
+                                const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
+                                const video_width = '480p.mp4';
+                                let video_url;
+                                libingester.util.fetch_html(src).then(($) => {
+                                    const ss = $('script')[3].children[0].data; //script data
+                                    const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[','');
+                                    const video_uris = json_sources.split('},').map((uri) => {
+                                        const relative_video_uri = uri.substring(uri.indexOf('url')+7, uri.indexOf('resolution')-3);
+                                        return url.resolve(base_video_uri, relative_video_uri);
+                                    });
+                                    for (const video_uri of video_uris) {
+                                        if (video_uri.includes(video_width)) {
+                                            video_url = video_uri;
+                                            break;
+                                        }
+                                    }
+                                    save_video_asset(uri, video_url || video_uris[video_uris.length-1]);
+                                });
+                                break; // exit 'skrin.id'
+                            }
+                            default: save_video_asset(uri, src);
+                        }
+                        break; // exit for
+                    }
+                }
+            }
+        }
+
         const ingest_body = ($profile, finish_process) => {
             let post_body = $profile('.entertainment-detail-news');
 
-            //Download images 
+            // Download images
             post_body.find("img").map(function() {
                 if (this.attribs.src) {
                     const image = libingester.util.download_img(this, base_uri);
@@ -92,15 +148,14 @@ function ingest_article(hatch, uri) {
                     }
                 }
             });
-
-            //clean elements
+          
             post_body.find("a, div, h1, h2, h3, h4, h5, h6, span").map(function() {
                 if (this.attribs.style) {
                     delete this.attribs.style;
                 }
             });
 
-            //resolve links 
+            // resolve links
             post_body.find("a").map(function() {
                 this.attribs.href = url.resolve(base_uri, this.attribs.href);
             });
@@ -108,7 +163,7 @@ function ingest_article(hatch, uri) {
             const next = $profile('.link-pagging-warper a').attr('href');
             const last_pagination = $profile('ul.pg-pagging li:last-child a').first();
 
-            //remove elements (body)
+            // remove elements (body)
             for (const remove_element of remove_elements) {
                 post_body.find(remove_element).remove();
             }
@@ -143,7 +198,7 @@ function ingest_article(hatch, uri) {
                 hatch.save_asset(asset);
                 resolve();
             });
-        });
+        })
         return Promise.all([promise]);
     }).catch((error) => {
         console.log("Ingest error: ", error); 
@@ -153,18 +208,19 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
 
-    rp({ uri: rss_uri, gzip: true, }).then((res) => {
+  rp({ uri: rss_uri, gzip: true }).then((res) => {
+
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, function(err, result) {
             const rss = rss2json.parser(result);
-            let promises = [];
+            let links = [];
             rss.items.map((datum) => {
                 if (!datum.link.includes("musik.kapanlagi.com")) { //disard musik subdomain
-                    promises.push(datum.link);
+                    links.push(datum.link);
                 }
             });
 
-            Promise.map(promises, function(link) {
+            Promise.map(links, function(link) {
                 return ingest_article(hatch, link).catch((error) => {
                     console.log("Ingestor err: ", error);
                 });

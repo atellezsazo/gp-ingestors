@@ -1,21 +1,61 @@
 'use strict';
 
-const structure_template = (`
+const template_article = (`
 <header>
+    <div class="extra-header">
+        <div class="context">{{{ category }}}</div>
+        <div class="extra-header-right">
+            {{{ authors }}}
+            <span class="date-published">{{{ published }}}</span>
+        </div>
+    </div>
     <h1>{{ title }}</h1>
-    {{{ category }}}
-    {{{ authors }}}
-    {{{ published }}}
 </header>
-{{#main_img}}
-<section class="main-image">
-    <img data-libingester-asset-id="{{ main_img.asset_id }}">
-    <p class="caption-image">{{ image_description }}</p>
-</section>
-{{/main_img}}
-<section class="body">
+<figure class="main-image">
+    <img data-libingester-asset-id="{{ main_image_id }}">
+    <figcaption class="caption-image">{{ main_image_caption }}</figcaption>
+</figure>
+<section class="post-body">
     {{{ body }}}
 </section>
 `);
 
-exports.structure_template = structure_template;
+const template_gallery = (`
+<header>
+    <div class="extra-header">
+        <div class="context">{{{ category }}}</div>
+        <div class="extra-header-right">
+            {{{ authors }}}
+            <span class="date-published">{{{ published }}}</span>
+        </div>
+    </div>
+    <h1>{{ title }}</h1>
+</header>
+<section class="post-body">
+    {{{ body_content }}}
+    {{{ body_gallery }}}
+</section>
+`);
+
+const template_video_post = (`
+<header>
+    <div class="extra-header">
+        <div class="context">{{{ category }}}</div>
+        <div class="extra-header-right">
+            {{{ authors }}}
+            <span class="date-published">{{{ published }}}</span>
+        </div>
+    </div>
+    <h1>{{ title }}</h1>
+</header>
+<section class="main-image">
+    <img data-libingester-asset-id="{{ main_image_id }}">
+</section>
+<section class="post-body">
+    {{{ body }}}
+</section>
+`);
+
+exports.template_article = template_article;
+exports.template_gallery = template_gallery;
+exports.template_video_post = template_video_post;

@@ -5,7 +5,8 @@ const structure_template = (`
     <div class="extra-header">
         <div class="context">{{{category}}}</div>
         <div class="extra-header-right">
-            <span class="author">{{author}}</span> 
+            <span class="author">{{author}}</span>
+            <span class="dot"> • </span>
             <span class="date-published">{{date_published}}</span>
         </div>
     </div>
@@ -19,11 +20,6 @@ const structure_template = (`
 </section>
 <section class="body">
     {{{ body }}}
-</section>
-<section class="footer">
-    {{#post_tags}}
-    <div class="post-tags">{{{ post_tags }}}</div>
-    {{/post_tags}}
 </section>
 `);
 
