@@ -67,7 +67,7 @@ function ingest_article(hatch, obj) {
                 const image = libingester.util.download_img(this, base_uri);
                 image.set_title(title);
                 hatch.save_asset(image);
-                if( firstImage ) {
+                if (firstImage) {
                     asset.set_thumbnail(image);
                     firstImage = false;
                 }
@@ -85,9 +85,9 @@ function ingest_article(hatch, obj) {
         body.find('iframe').parent().remove();
 
         //clean attributes
-        for(const tag of clean_tag) {
+        for (const tag of clean_tag) {
             body.find(tag).map(function() {
-                for(const attr of img_metadata) {
+                for (const attr of img_metadata) {
                     $(this).removeAttr(attr);
                 }
             });
@@ -95,7 +95,7 @@ function ingest_article(hatch, obj) {
 
         const content = mustache.render(template.structure_template, {
             author: obj.author,
-            date_published: obj.updated.substring(0,10), // only date (yyyy-mm-dd)
+            date_published: obj.updated.substring(0, 10), // only date (yyyy-mm-dd)
             title: title,
             body: body.html(),
         });
@@ -117,8 +117,10 @@ function main() {
                 uri: $(this).find('link[rel="alternate"]').attr('href'),
             }
         }).get();
-        Promise.map(objects, (obj) => ingest_article(hatch, obj), {concurrency: concurrency}).then(() => {
+        Promise.map(objects, (obj) => ingest_article(hatch, obj), { concurrency: concurrency }).then(() => {
             return hatch.finish();
+        }).catch((err) => {
+            console.log('Error ingestor:', err);
         });
     });
 }
