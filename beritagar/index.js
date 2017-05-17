@@ -225,6 +225,7 @@ function ingest_video(hatch, uri) {
         const copyright = $('meta[name="copyright"]').attr('content');
         const description = $('meta[property="og:description"]').attr('content');
         const modified_time = $('meta[property="article:modified_time"]').attr('content');
+        const date = new Date(Date.parse(modified_time));
         const title = $('meta[name="title"]').attr('content');
 
         // download background video (thumbnail)
@@ -233,35 +234,41 @@ function ingest_video(hatch, uri) {
         bg_img_video = libingester.util.download_image(bg_img_video_uri);
         bg_img_video.set_title(title);
         hatch.save_asset(bg_img_video);
+
+        // save video asset
+        const video_uri = $('.video-player iframe').first().attr('src');
+        if (video_uri) {
+            const video = new libingester.VideoAsset();
+            video.set_canonical_uri(uri);
+            video.set_download_uri(video_uri);
+            video.set_last_modified_date(date);
+            video.set_license(copyright);
+            video.set_thumbnail(bg_img_video);
+            video.set_title(title);
+            video.set_synopsis(description);
+            hatch.save_asset(video);
+        }
     })
 }
 
 function main() {
     const hatch = new libingester.Hatch();
-    const ingest = (page_uri, resolved, concurrency = Infinity) => {
-        if (page_uri.includes('rss')) {
-            rss2json.load(rss_uri, function(err, rss) {
-                Promise.map(rss.items, function(item) {
-                    return ingest_article(hatch, item.url); // post article
-                }, { concurrency: concurrency }).then(() => resolved());
-            });
-        } else {
-            libingester.util.fetch_html(page_uri).then(($) => {
-                const tags = $('#main .swifts .content a.title').get(); // more recent media links
-                Promise.map(tags, (tag) => {
-                    if (page_uri.includes('foto')) { // media gallery
-                        return ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href));
-                    } else if (page_uri.includes('video')) { // media video
-                        return ingest_video(hatch, url.resolve(base_uri, tag.attribs.href));
-                    }
-                }, { concurrency: concurrency }).then(() => resolved());
-            });
-        }
-    }
 
-    const article = new Promise((resolve, reject) => ingest(rss_uri, resolve));
-    const gallery = new Promise((resolve, reject) => ingest(page_gallery, resolve));
-    const video = new Promise((resolve, reject) => ingest(page_video, resolve));
+    const article = new Promise((resolve, reject) => {
+        rss2json.load(rss_uri, (err, rss) => {
+            Promise.all(rss.items.map((item) => ingest_article(hatch, item.url))).then(() => resolve());
+        });
+    });
+
+    const gallery = libingester.util.fetch_html(page_gallery).then(($) => {
+        const tags = $('#main .swifts .content a.title').get(); // more recent media links
+        return Promise.all(tags.map((tag) => ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href))));
+    });
+
+    const video = libingester.util.fetch_html(page_video).then(($) => {
+        const tags = $('#main .swifts .content a.title').get(); // more recent media links
+        return Promise.all(tags.map((tag) => ingest_video(hatch, url.resolve(base_uri, tag.attribs.href))));
+    });
 
     Promise.all([article, gallery, video]).then(() => {
         return hatch.finish();
