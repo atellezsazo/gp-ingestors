@@ -20,11 +20,6 @@ const structure_template = (`
 <section class="body">
     {{{ body }}}
 </section>
-<section class="footer">
-    {{#post_tags}}
-    <div class="post-tags">{{{ post_tags }}}</div>
-    {{/post_tags}}
-</section>
 `);
 
 exports.structure_template = structure_template;
