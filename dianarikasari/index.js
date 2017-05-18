@@ -2,7 +2,6 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const Promise = require('bluebird');
 const template = require('./template');
 const url = require('url');
 
@@ -35,11 +34,11 @@ const video_iframes = [
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        const post = $profile('.date-outer').map(function() { 
+        const post = $profile('.date-outer').map(function() {
             const date_published = new Date(Date.parse($profile(this).find('.date-header span').text()));
             const title = $profile(this).find('.post-title').text();
 
-            // download videos
+            // Ingest video post
             const videos = $profile(this).find('.post-body iframe').first()[0] || $profile(this).find('.post-body script').first()[0];
             if (videos) {
                 for (const video_iframe of video_iframes) {
@@ -52,16 +51,15 @@ function ingest_article(hatch, uri) {
                         video_asset.set_title(title);
                         video_asset.set_download_uri(full_uri);
                         hatch.save_asset(video_asset);
-                        return; 
+                        return;
                     }
                 }
             } else {
                 const asset = new libingester.NewsArticle();
-                const author = $profile(this).find('.post-author a').first();               
-                
+                const author = $profile(this).find('.post-author a').first();
                 const category = $profile(this).find('.post-labels a').map(function() {
                     return $profile(this);
-                }).get();       
+                }).get();
 
                 const section = $profile(this).find('.post-labels').text().replace('Labels:', '');
 
@@ -69,7 +67,7 @@ function ingest_article(hatch, uri) {
                 asset.set_title(title);
                 asset.set_canonical_uri(uri);
                 asset.set_last_modified_date(date_published);
-                asset.set_synopsis(body.text().substring(0, 140));
+
                 asset.set_section(section);
 
                 // Download images
@@ -96,9 +94,10 @@ function ingest_article(hatch, uri) {
                 for (const remove_element of remove_elements) {
                     $profile(this).find(remove_element).remove();
                 }
-                
-                let body = $profile(this).find('.post-body').first();
-                
+
+                const body = $profile(this).find('.post-body').first();
+                asset.set_synopsis(body.text().substring(0, 140));
+
                 const content = mustache.render(template.structure_template, {
                     category: category,
                     author: author,
@@ -127,13 +126,9 @@ function main() {
                 return url.resolve(base_uri, uri);
             }).get();
             Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
-                resolve(true);
+                return hatch.finish();
             });
         });
-    });
-
-    Promise.all([posts]).then(values => {
-        return hatch.finish();
     });
 }
 
