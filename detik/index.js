@@ -39,7 +39,7 @@ function ingest_article(hatch, uri) {
         const art_publishdate = $profile('meta[name="publishdate"]').attr('content');
         const art_author = $profile('meta[name="author"]').attr('content');
         const art_main_img = $profile('meta[property="og:image"]').attr('content');
-        const main_img_description = $profile('.pic_artikel-wrapper span').text();
+        const main_img_description = $profile('.pic_artikel-wrapper span, .pic_artikel span').text();
         const art_body = $profile('.detail_text');
         const art_uri = new URLParse(base_uri);
         const art_category = art_uri.host.split('.')[0];
