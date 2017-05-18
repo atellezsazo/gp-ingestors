@@ -17,13 +17,16 @@ const remove_elements = [
 
 // clean attr (tag)
 const remove_attr = [
+    'border',
     'class',
+    'dir',
     'height',
     'id',
     'sizes',
     'src',
     'srcset',
     'style',
+    'trbidi',
     'width'
 ];
 
@@ -67,7 +70,6 @@ function ingest_article(hatch, uri) {
                 asset.set_title(title);
                 asset.set_canonical_uri(uri);
                 asset.set_last_modified_date(date_published);
-
                 asset.set_section(section);
 
                 // Download images
@@ -98,6 +100,15 @@ function ingest_article(hatch, uri) {
                 const body = $profile(this).find('.post-body').first();
                 asset.set_synopsis(body.text().substring(0, 140));
 
+                //Delete style 
+                body.find("div, span, h1, h2, h3, h4, h5").map(function() {
+                    for (const attr of remove_attr) {
+                        if (this.attribs[attr]) {
+                            delete this.attribs[attr];
+                        }
+                    }
+                });
+
                 const content = mustache.render(template.structure_template, {
                     category: category,
                     author: author,
@@ -109,11 +120,10 @@ function ingest_article(hatch, uri) {
                 // save document
                 asset.set_document(content);
                 hatch.save_asset(asset);
-                return asset;
             }
-        }).get();
+        });
     }).catch((err) => {
-        console.log(err);
+        console.log("Ingestor: ", err);
     });
 }
 
