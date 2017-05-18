@@ -56,8 +56,7 @@ function ingest_article(hatch, uri) {
                 }
             } else {
                 const asset = new libingester.NewsArticle();
-                const author = $profile(this).find('.post-author a').first();
-                let body = $profile(this).find('.post-body').first();
+                const author = $profile(this).find('.post-author a').first();               
                 
                 const category = $profile(this).find('.post-labels a').map(function() {
                     return $profile(this);
@@ -96,7 +95,9 @@ function ingest_article(hatch, uri) {
                 for (const remove_element of remove_elements) {
                     $profile(this).find(remove_element).remove();
                 }
-
+                
+                let body = $profile(this).find('.post-body').first();
+                
                 const content = mustache.render(template.structure_template, {
                     category: category,
                     author: author,
