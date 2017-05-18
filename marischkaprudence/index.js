@@ -23,7 +23,6 @@ const remove_attr = [
     'border',
     'class',
     'dir',
-    'data-soma-job-id',
     'height',
     'id',
     'imageanchor',
