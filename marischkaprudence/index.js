@@ -2,7 +2,6 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const Promise = require('bluebird');
 const template = require('./template');
 const url = require('url');
 
@@ -15,7 +14,7 @@ const remove_elements = [
     'noscript',
     'script',
     'style',
-    '.post-body #related-posts'
+    '.post-body #related-posts',
 ];
 
 // clean attr (tag)
@@ -33,7 +32,7 @@ const remove_attr = [
     'srcset',
     'style',
     'trbidi',
-    'width'
+    'width',
 ];
 
 // clean attr (tag)
@@ -44,15 +43,16 @@ const clear_tags = [
     'div',
     'i',
     'img',
-    'span'
+    'span',
+    'table',
 ];
 
 function ingest_article(hatch, obj) {
     const uri = obj.uri;
     return libingester.util.fetch_html(uri).then(($profile) => {
         const asset = new libingester.NewsArticle();
-        const author = $profile('.pauthor a').first();   
-        const category = $profile('.meta_categories');    
+        const author = $profile('.pauthor a').first();
+        const category = $profile('.meta_categories');
 
         // clear tags (body)
         category.find('a').map(function() {
@@ -62,7 +62,6 @@ function ingest_article(hatch, obj) {
         });
 
         const date_published = new Date(Date.parse(obj.updated));
-        const synopsis = $profile('meta[property="og:description"]').attr('content');
         const section = $profile('.meta_categories').text();
         const title = $profile('meta[property="og:title"]').attr('content');
 
@@ -70,7 +69,6 @@ function ingest_article(hatch, obj) {
         asset.set_title(title);
         asset.set_canonical_uri(uri);
         asset.set_last_modified_date(date_published);
-        asset.set_synopsis(synopsis);
         asset.set_section(section);
 
         //Main image
@@ -86,13 +84,13 @@ function ingest_article(hatch, obj) {
                 const image = libingester.util.download_img(this, base_uri);
                 image.set_title(title);
                 hatch.save_asset(image);
-                asset.set_thumbnail(image);
                 this.attribs['data-libingester-asset-id'] = image.asset_id;
             }
         });
 
         const body = $profile('.post-body').first();
-        
+        asset.set_synopsis(body.text().substring(0, 140));
+
         // remove elements (body)
         for (const element of remove_elements) {
             body.find(element).remove();
@@ -118,7 +116,6 @@ function ingest_article(hatch, obj) {
         // save document
         asset.set_document(content);
         hatch.save_asset(asset);
-        return asset;
     }).catch((err) => {
         console.log(err);
     });
