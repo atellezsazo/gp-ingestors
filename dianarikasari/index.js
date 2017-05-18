@@ -5,6 +5,7 @@ const mustache = require('mustache');
 const Promise = require('bluebird');
 const template = require('./template');
 const url = require('url');
+
 const base_uri = "http://dianarikasari.blogspot.com";
 
 // Remove elements (body)
