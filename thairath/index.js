@@ -13,7 +13,7 @@ const rss_uri = "http://www.thairath.co.th/rss/news.xml";
 const remove_elements = ['iframe', 'script', 'video'];
 
 // clean attr (tag)
-const remove_attr = ['border', 'class', 'height', 'id', 'lang', 'rel', 'style',
+const remove_attr = ['border', 'class', 'data-srcset', 'height', 'id', 'lang', 'rel', 'style',
     'width', 'figure'
 ];
 
@@ -73,9 +73,12 @@ function ingest_article(hatch, uri) {
         // download images
         body.find('img').map(function() {
             if (this.attribs.src != undefined) {
-                const image = libingester.util.download_img(this, base_uri);
+                const image = libingester.util.download_img($profile(this), base_uri);
                 image.set_title(title);
                 hatch.save_asset(image);
+                for (const attr of remove_attr) {
+                    delete this.attribs[attr];
+                }
                 this.attribs["data-libingester-asset-id"] = image.asset_id;
             }
         });
