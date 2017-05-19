@@ -1,0 +1,11 @@
+{
+    "name": "ingestor-thairath",
+    "version": "0.0.1",
+    "license": "UNLICENSED",
+    "dependencies": {
+        "bootstrap": "^3.3.7",
+        "libingester": "https://github.com/endlessm/libingester.git",
+        "mustache": "^2.3.0",
+        "rss-to-json": "^1.0.2"
+    }
+}
