@@ -109,8 +109,8 @@ function main() {
     rss2json.load(rss_uri, (err, rss) => {
         const batch_links = rss.items.map(data => data.link);
         Promise.all(batch_links.map(uri => ingest_article(hatch, uri))).then(() => {
-                return hatch.finish();
-            });
+            return hatch.finish();
+        });
     });
 }
 
