@@ -11,13 +11,13 @@ const base_uri = "https://news.detik.com/";
 const rss_uri = "http://rss.detik.com/index.php/detikcom";
 
 // Remove elements (body)
-const remove_elements = ['#bx_polong', '#thepolong', '.detikads', '.news_tag',
-    '.newstag', '.thepolong', '[id^="beacon"]', 'a[href="#"]', 'iframe',
-    'script', 'video'
+const remove_elements = ['#bx_polong', '#thepolong', '#thumbs',
+    '.detikads', '.news_tag', '.newstag', '.thepolong', '[id^="beacon"]',
+    'a[href="#"]', 'iframe', 'script', 'video'
 ];
 
 // clean attr (tag)
-const remove_attr = ['border', 'class', 'height', 'id', 'lang', 'rel', 'style',
+const remove_attr = ['border', 'data-page', 'height', 'lang', 'rel', 'style',
     'width'
 ];
 
@@ -40,7 +40,7 @@ function ingest_article(hatch, uri) {
         const art_author = $profile('meta[name="author"]').attr('content');
         const art_main_img = $profile('meta[property="og:image"]').attr('content');
         const main_img_description = $profile('.pic_artikel-wrapper span, .pic_artikel span').text();
-        const art_body = $profile('.detail_text');
+        let art_body = $profile('.detail_text');
         const art_uri = new URLParse(base_uri);
         const art_category = art_uri.host.split('.')[0];
 
@@ -69,6 +69,9 @@ function ingest_article(hatch, uri) {
 
         // download images
         art_body.find('img').map(function() {
+            if (this.attribs['data-original']) {
+                $profile(this).attr('src', this.attribs['data-original']);
+            }
             if (this.attribs.src != undefined) {
                 const image = libingester.util.download_img(this, base_uri);
                 image.set_title(art_title);
