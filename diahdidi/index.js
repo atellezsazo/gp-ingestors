@@ -11,7 +11,7 @@ const base_uri = "http://www.diahdidi.com";
 const remove_elements = ['iframe', 'script', 'video'];
 
 // clean attr (tag)
-const remove_attr = ['border', 'class', 'data-srcset', 'height', 'id', 'lang', 'rel', 'style',
+const remove_attr = ['border', 'data-srcset', 'height', 'lang', 'rel', 'style',
     'width', 'figure'
 ];
 
@@ -101,20 +101,18 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    const posts = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(base_uri).then(($posts) => {
-            const posts_links = $posts('.date-outer .post-title a').map(function() {
-                const uri = $posts(this).attr('href');
-                return url.resolve(base_uri, uri);
-            }).get();
-            Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
-                return hatch.finish();
-            }).catch((err) => reject(err));
-        });
+    libingester.util.fetch_html(base_uri).then(($posts) => {
+        const posts_links = $posts('.date-outer .post-title a').map(function() {
+            const uri = $posts(this).attr('href');
+            return url.resolve(base_uri, uri);
+        }).get();
+        Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
+            return hatch.finish();
+        }).catch((err) => console.log(err));
     });
 }
 
 main();
 
 /* End of file index.js */
-/* Location: ./thairath/index.js */
+/* Location: ./diahdidi/index.js */

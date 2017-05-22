@@ -137,7 +137,7 @@ function main() {
             }).get();
             Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
                 return hatch.finish();
-            });
+            }).catch((err) => console.log(err));
         });
     });
 }

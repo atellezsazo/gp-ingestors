@@ -33,7 +33,6 @@ const clear_tags = ['a', 'b', 'br', 'div', 'em', 'i', 'img', 'span', 'ul'];
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        console.log(`Queuing webpage: ${uri}`);
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
         const post_title = $profile('meta[property="og:title"]').attr('content');
@@ -72,7 +71,7 @@ function ingest_article(hatch, uri) {
 
         post_body.find('img').map(function() {
             if (this.attribs.src != undefined) {
-                const image = libingester.util.download_image($profile(this), base_uri);
+                const image = libingester.util.download_img($profile(this), base_uri);
                 image.set_title(post_title);
                 hatch.save_asset(image);
                 this.attribs['data-libingester-asset-id'] = image.asset_id;
