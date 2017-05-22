@@ -189,7 +189,7 @@ function main() {
             const news_uris = rss.items.map((datum) => datum.link);
             Promise.all(news_uris.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
                 resolve();
-            }).catch((err) => reject(error));
+            }).catch((err) => reject(err));
         });
     });
 
@@ -201,7 +201,7 @@ function main() {
             }).get();
             Promise.all(foto_links.map((uri) => ingest_gallery_article_profile(hatch, uri))).then(() => {
                 resolve(true);
-            }).catch((err) => reject(error));
+            }).catch((err) => reject(err));
         });
     });
 
