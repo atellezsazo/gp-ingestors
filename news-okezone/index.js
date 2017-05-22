@@ -37,20 +37,6 @@ const remove_gallery_elements = [
     'script', //any script injection
 ];
 
-function add_embedded_images(base_uri, container, hatch, tag, title) {
-    container.find(tag).map(function() {
-        if (this.attribs.src) {
-            const image = libingester.util.download_img(this, base_uri);
-            image.set_title(title)
-            hatch.save_asset(image);
-            this.attribs["data-libingester-asset-id"] = image.asset_id;
-            for (const meta of remove_attrs_img) {
-                delete this.attribs[meta];
-            }
-        }
-    });
-}
-
 function ingest_article_profile(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
         const title = $profile('h1').first().text();
@@ -94,7 +80,17 @@ function ingest_article_profile(hatch, uri) {
         body.contents().filter((index, node) => node.type === 'comment').remove();
 
         //Download images
-        add_embedded_images(base_uri, body, hatch, "img", title);
+        body.find("img").map(function() {
+            if (this.attribs.src) {
+                const image = libingester.util.download_img($profile(this), base_uri);
+                image.set_title(title)
+                hatch.save_asset(image);
+                this.attribs["data-libingester-asset-id"] = image.asset_id;
+                for (const meta of remove_attrs_img) {
+                    delete this.attribs[meta];
+                }
+            }
+        });
 
         body.find("iframe").remove(); //Delete iframe container
 
@@ -153,7 +149,7 @@ function ingest_gallery_article_profile(hatch, uri) {
 
         const image_gallery = $profile('.aphotos img').map(function() {
             this.attribs.src = this.attribs.src.replace('small.', 'large.');
-            const img_gallery = libingester.util.download_img(this, base_uri);
+            const img_gallery = libingester.util.download_img($profile(this), base_uri);
             hatch.save_asset(img_gallery);
             return img_gallery;
         }).get();
@@ -176,33 +172,25 @@ function ingest_gallery_article_profile(hatch, uri) {
         asset.set_document(content);
         hatch.save_asset(asset);
     }).catch((err) => {
-        if (err.code == -1 || err.statusCode == 403) {
-            return ingest_gallery_article_profile(hatch, uri);
+        if (err.statusCode == 403) {
+            return ingest_gallery_article_profile(hatch, uri, attempt++);
         }
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch();
-    const news = new Promise((resolve, reject) => {
-        rss2json.load(rss_uri, function(err, rss) {
-            const news_uris = rss.items.map((datum) => datum.link);
-            Promise.all(news_uris.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
-                resolve();
-            }).catch((err) => reject(err));
-        });
+    const news = rss2json.load(rss_uri, function(err, rss) {
+        const news_uris = rss.items.map((datum) => datum.link);
+        return Promise.all(news_uris.map((uri) => ingest_article_profile(hatch, uri)));
     });
 
-    const gallery = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(gallery_section).then(($galleries) => {
-            const foto_links = $galleries('ul.list-berita li .wp-thumb-news a:first-of-type').map(function() {
-                const uri = $galleries(this).attr('href');
-                return url.resolve(gallery_section, uri);
-            }).get();
-            Promise.all(foto_links.map((uri) => ingest_gallery_article_profile(hatch, uri))).then(() => {
-                resolve(true);
-            }).catch((err) => reject(err));
-        });
+    const gallery = libingester.util.fetch_html(gallery_section).then(($galleries) => {
+        const foto_links = $galleries('ul.list-berita li .wp-thumb-news a:first-of-type').map(function() {
+            const uri = $galleries(this).attr('href');
+            return url.resolve(gallery_section, uri);
+        }).get();
+        return Promise.all(foto_links.map((uri) => ingest_gallery_article_profile(hatch, uri)));
     });
 
     Promise.all([news, gallery]).then(values => {
