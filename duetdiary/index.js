@@ -1,12 +1,11 @@
 'use strict';
 
-const cheerio = require('cheerio');
-const concurrency = 1;
 const libingester = require('libingester');
 const mustache = require('mustache');
 const Promise = require('bluebird');
 const rss2json = require('rss-to-json');
 const template = require('./template');
+const url = require('url');
 
 // Url
 const base_uri = "http://www.duetdiary.com/";
@@ -34,6 +33,7 @@ const clear_tags = ['a', 'b', 'br', 'div', 'em', 'i', 'img', 'span', 'ul'];
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
+        console.log(`Queuing webpage: ${uri}`);
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
         const post_title = $profile('meta[property="og:title"]').attr('content');
@@ -66,14 +66,13 @@ function ingest_article(hatch, uri) {
         });
 
         // remove comments (body)
-        post_body.contents().filter(function(){
+        post_body.contents().filter(function() {
             return this.nodeType == 8;
         }).remove();
 
         post_body.find('img').map(function() {
             if (this.attribs.src != undefined) {
-                const $img = cheerio.load(`<img src="${this.attribs.src}" />`)
-                const image = libingester.util.download_img($img('img'), base_uri);
+                const image = libingester.util.download_image($profile(this), base_uri);
                 image.set_title(post_title);
                 hatch.save_asset(image);
                 this.attribs['data-libingester-asset-id'] = image.asset_id;
@@ -102,10 +101,11 @@ function ingest_article(hatch, uri) {
 
         asset.set_document(content);
         hatch.save_asset(asset);
+        return uri;
     }).catch((err) => {
-        if (err.code == -1 || err.statusCode == 403) {
-            return ingest_article(hatch, uri);
-        }
+        console.error("Error ingesting webpage!");
+        console.error(err.stack);
+        throw err;
     });
 }
 
@@ -118,12 +118,15 @@ function main() {
     const hatch = new libingester.Hatch();
     rss2json.load(rss_uri, (err, rss) => {
         const batch_links = rss.items.map(data => data.url);
-        Promise.map(batch_links, link => {
-            return ingest_article(hatch, link);
-        }, {concurrency: concurrency}).then(() => {
-            return hatch.finish();
-        }).catch((err) => {
-            console.log('ingestor error: ', err);
+        rss2json.load(rss_uri, (err, rss) => {
+            const batch_links = rss.items.map(data => data.url);
+            Promise.map(batch_links, (link) => {
+                return ingest_article(hatch, link);
+            }, { concurrency: 1 }).then(() => {
+                return hatch.finish();
+            }).catch((err) => {
+                console.log('ingestor error: ', err);
+            });
         });
     });
 }
