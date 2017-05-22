@@ -2,6 +2,7 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
+const Promise = require("bluebird");
 const template = require('./template');
 const url = require('url');
 
@@ -131,8 +132,13 @@ function main() {
                     uri: $(this).find('link[rel="alternate"]').attr('href'),
                 }
             }).get();
-            Promise.all(objects.map((obj) => ingest_article(hatch, obj))).then(() => {
+
+            Promise.map(objects, (obj) => {
+                return ingest_article(hatch, obj);
+            }, { concurrency: 1 }).then(() => {
                 return hatch.finish();
+            }).catch((err) => {
+                console.log('ingestor error: ', err);
             });
         });
     });
