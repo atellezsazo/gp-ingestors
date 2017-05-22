@@ -3,15 +3,13 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const Promise = require('bluebird');
-const request = require('request');
 const rp = require('request-promise');
-const rss2json = require('rss-to-json');
 const template = require('./template');
 const url = require('url');
 
 const base_uri = 'https://www.bola.net/';
+const gallery_uri = 'https://www.bola.net/galeri/';
 const rss_uri = 'https://www.bola.net/feed/';
-const galery_uri = 'https://www.bola.net/galeri/';
 
 // clean images
 const remove_attr = [
@@ -65,7 +63,7 @@ const rp_download_image = (hatch, src, image) => {
         image.set_last_modified_date(new Date());
         image.set_image_data(response.headers['content-type'], response.body);
         hatch.save_asset(image);
-    }).catch(() => {
+    }).catch((err) => {
         return rp_download_image(hatch, src, image);
     });
 }
@@ -83,65 +81,65 @@ function pad(n, width, z='0') {
 }
 
 function ingest_article(hatch, obj) {
-        return libingester.util.fetch_html(obj.uri).then(($) => {
-            const asset = new libingester.NewsArticle();
-            asset.set_canonical_uri(obj.uri);
-            const section = $('meta[name="keywords"]').attr('content');
-            asset.set_section(section);
-            asset.set_title(obj.title);
-            const synopsis = $('meta[property="og:description"]').attr('content');
-            asset.set_synopsis(synopsis);
-            const category = $('div.nav').first();
-            category.find('a').map(function() {
-                this.attribs.href = url.resolve(base_uri, this.attribs.href);
-                for(const attr of remove_attr) {
-                    $(this).removeAttr(attr);
-                }
-            });
-
-            const modified_time = $('div.newsdatetime').text();
-            let date = new Date(Date.parse(obj.pubDate));
-            if (!date) {
-                date = new Date();
+    return libingester.util.fetch_html(obj.uri).then(($) => {
+        const asset = new libingester.NewsArticle();
+        asset.set_canonical_uri(obj.uri);
+        const section = $('meta[name="keywords"]').attr('content');
+        asset.set_section(section);
+        asset.set_title(obj.title);
+        const synopsis = $('meta[property="og:description"]').attr('content');
+        asset.set_synopsis(synopsis);
+        const category = $('div.nav').first();
+        category.find('a').map(function() {
+            this.attribs.href = url.resolve(base_uri, this.attribs.href);
+            for(const attr of remove_attr) {
+                $(this).removeAttr(attr);
             }
-            asset.set_last_modified_date(date);
-
-            // main image
-            const main_image_uri = $('meta[property="og:image"]').attr('content');
-            const main_image = new libingester.ImageAsset();
-            main_image.set_title(obj.title);
-            const promise_main = rp_download_image(hatch, main_image_uri, main_image);
-            asset.set_thumbnail(main_image);
-            const body = $('div.ncont').first();
-
-            // remove elements and comments
-            body.contents().filter((index, node) => node.type === 'comment').remove();
-            for(const element of remove_elements) {
-                body.find(element).remove();
-            }
-
-            const promises_images = Promise.map(body.find('img').get(), (img) => {
-                const src = img.attribs['data-src'];
-                const image = new libingester.ImageAsset();
-                image.set_title(obj.title);
-                img.attribs["data-libingester-asset-id"] = image.asset_id;
-                return rp_download_image(hatch, src, image);
-            }, {concurrency: Infinity}).then(() => {
-                const post_data = {
-                    title: obj.title,
-                    published: modified_time,
-                    category: category.html(),
-                    main_image: main_image,
-                    body: body.html(),
-                }
-
-                render_template(hatch, asset, template.structure_template, post_data);
-            });
-
-            return Promise.all([promises_images, promise_main]);
-        }).catch((err) => {
-            return ingest_article(hatch, obj);
         });
+
+        const modified_time = $('div.newsdatetime').text();
+        let date = new Date(Date.parse(obj.pubDate));
+        if (!date) {
+            date = new Date();
+        }
+        asset.set_last_modified_date(date);
+
+        // main image
+        const main_image_uri = $('meta[property="og:image"]').attr('content');
+        const main_image = new libingester.ImageAsset();
+        main_image.set_title(obj.title);
+        const promise_main = rp_download_image(hatch, main_image_uri, main_image);
+        asset.set_thumbnail(main_image);
+        const body = $('div.ncont').first();
+
+        // remove elements and comments
+        body.contents().filter((index, node) => node.type === 'comment').remove();
+        for(const element of remove_elements) {
+            body.find(element).remove();
+        }
+
+        const promises_images = Promise.map(body.find('img').get(), (img) => {
+            const src = img.attribs['data-src'];
+            const image = new libingester.ImageAsset();
+            image.set_title(obj.title);
+            img.attribs["data-libingester-asset-id"] = image.asset_id;
+            return rp_download_image(hatch, src, image);
+        }, {concurrency: Infinity}).then(() => {
+            const post_data = {
+                title: obj.title,
+                published: modified_time,
+                category: category.html(),
+                main_image: main_image,
+                body: body.html(),
+            }
+
+            render_template(hatch, asset, template.structure_template, post_data);
+        });
+
+        return Promise.all([promises_images, promise_main]);
+    }).catch((err) => {
+        return ingest_article(hatch, obj);
+    });
 }
 
 function ingest_gallery(hatch, uri) {
@@ -224,22 +222,24 @@ function ingest_video(hatch, obj) {
         const synopsis = $('meta[name="description"]').attr('content');
         const title = obj.title || $('.op-line h1').text();
 
-        // download background video (thumbnail)
+        // background video (thumbnail)
         const thumb_url = $('meta[property="og:image"]').attr('content');
-        const thumbnail = new libingester.ImageAsset();
-        thumbnail.set_title(title);
-        const promise_thumb = rp_download_image(hatch, thumb_url, thumbnail);
 
         const save_video_asset = (video_url) => {
             if (video_url) {
-                const video = new libingester.VideoAsset();
-                video.set_canonical_uri(obj.uri);
-                video.set_download_uri(video_url);
-                video.set_last_modified_date(date);
-                video.set_thumbnail(thumbnail);
-                video.set_title(title);
-                video.set_synopsis(synopsis);
-                hatch.save_asset(video);
+                // thumbnail
+                const thumbnail = new libingester.ImageAsset();
+                thumbnail.set_title(title);
+                return rp_download_image(hatch, thumb_url, thumbnail).then(() => {
+                    const video = new libingester.VideoAsset();
+                    video.set_canonical_uri(obj.uri);
+                    video.set_download_uri(video_url);
+                    video.set_last_modified_date(date);
+                    video.set_thumbnail(thumbnail);
+                    video.set_title(title);
+                    video.set_synopsis(synopsis);
+                    hatch.save_asset(video);
+                });
             }
         }
 
@@ -252,7 +252,7 @@ function ingest_video(hatch, obj) {
                         case 'a.kapanlagi': {
                             return libingester.util.fetch_html(video_page).then(($) => {
                                 const video_url = $('title').text();
-                                save_video_asset(video_url);
+                                return save_video_asset(video_url);
                             });
                             break; // exit 'a.kapanlagi'
                         }
@@ -275,12 +275,12 @@ function ingest_video(hatch, obj) {
                                     }
                                 }
                                 video_url = temp_uri || video_uris[video_uris.length-1];
-                                save_video_asset(video_url);
+                                return save_video_asset(video_url);
                             });
                             break; // exit 'skrin.id'
                         }
                         default: {
-                            save_video_asset(video_page);
+                            return save_video_asset(video_page);
                         }
                     }
                 }
@@ -306,7 +306,7 @@ function main() {
                     pubDate: $(item).find('pubDate').text(),
                     title: $(item).find('title').html().replace('<!--[CDATA[','').replace(']]-->',''),
                     uri: $(item).find('link')[0].next['data'].replace('\n','').replace("'",""),
-                })
+                });
             }
         }
 
@@ -319,9 +319,9 @@ function main() {
         }, { concurrency: concurrency });
     });
 
-    const galery = libingester.util.fetch_html(galery_uri).then(($) => {
+    const galery = libingester.util.fetch_html(gallery_uri).then(($) => {
         const data = $('.photonews_preview .title').get().map((item) => {
-            return url.resolve(galery_uri, item.attribs.href);
+            return url.resolve(gallery_uri, item.attribs.href);
         });
 
         return Promise.map(data, function(uri) {
