@@ -29,12 +29,11 @@ function ingest_article(hatch, uri) {
         const base_uri = libingester.util.get_doc_base_uri($profile, uri);
         const asset = new libingester.NewsArticle();
         const title = $profile('meta[property="og:title"]').attr('content');
-        const synopsis = $profile('meta[property="og:description"]').attr('content');
-        const publishdate = $profile('.date-header').text();
+        const publishdate = $profile('abbr.published').attr('title');
         const author = $profile('.post-author a');
         const main_img = $profile('meta[property="og:image"]').attr('content');
-        const body = $profile('#mainContent article');
-        const section = $profile('.post-labels').text().replace('Labels:', '');
+        const body = $profile('.post-body');
+        const post_tags = $profile('.post-labels').text().replace('Label:', '');
 
         // Pull out the main image
         const main_image = libingester.util.download_image(main_img, uri);
@@ -44,17 +43,19 @@ function ingest_article(hatch, uri) {
         // Article Settings
         asset.set_canonical_uri(uri);
         asset.set_title(title);
-        asset.set_synopsis(synopsis);
+        asset.set_synopsis(body.text().substring(0, 140));
         asset.set_last_modified_date(new Date(Date.parse(publishdate)));
         asset.set_thumbnail(main_image);
-        asset.set_section(section);
+        asset.set_section(post_tags);
 
         // Get img from figure
-        body.find('figure').map(function() {
+        body.find('a').map(function() {
             let img = $profile(this).find('img').first();
 
             // Insert img after figure
-            $profile(this).replaceWith($profile(img));
+            if (img) {
+                $profile(this).replaceWith($profile(img));
+            }
         });
 
         // remove elements (body)
@@ -89,8 +90,8 @@ function ingest_article(hatch, uri) {
             title: title,
             author: author,
             date_published: publishdate,
-            main_image: main_image,
-            body: body.html()
+            body: body.html().replace(/<!--[\s\S]*?-->/g, ""),
+            post_tags: post_tags
         });
 
         asset.set_document(content);
@@ -108,7 +109,7 @@ function main() {
             }).get();
             Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
                 return hatch.finish();
-            });
+            }).catch((err) => reject(err));
         });
     });
 }
