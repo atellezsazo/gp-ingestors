@@ -173,7 +173,7 @@ function ingest_gallery_article_profile(hatch, uri) {
         hatch.save_asset(asset);
     }).catch((err) => {
         if (err.statusCode == 403) {
-            return ingest_gallery_article_profile(hatch, uri, attempt++);
+            return ingest_gallery_article_profile(hatch, uri);
         }
     });
 }
