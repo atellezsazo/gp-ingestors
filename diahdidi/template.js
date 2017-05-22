@@ -10,11 +10,13 @@ const structure_template = (`
     </div>
     <h1>{{ title }}</h1>
 </section>
-<section class="main-image">
-    <img data-libingester-asset-id="{{ main_image.asset_id }}">
-</section>
 <section class="body">
     {{{ body }}}
+</section>
+<section class="footer">
+    {{#post_tags}}
+    <div class="post-tags">{{{ post_tags }}}</div>
+    {{/post_tags}}
 </section>
 `);
 
