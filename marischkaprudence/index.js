@@ -20,10 +20,8 @@ const remove_elements = [
 // clean attr (tag)
 const remove_attr = [
     'border',
-    'class',
     'dir',
     'height',
-    'id',
     'imageanchor',
     'lang',
     'rel',
@@ -89,12 +87,13 @@ function ingest_article(hatch, obj) {
         });
 
         const body = $profile('.post-body').first();
-        asset.set_synopsis(body.text().substring(0, 140));
 
         // remove elements (body)
         for (const element of remove_elements) {
             body.find(element).remove();
         }
+
+        body.find('.BLOG_video_class').parent().remove(); //Delete videos
 
         // clear tags (body)
         for (const tag of clear_tags) {
@@ -104,6 +103,8 @@ function ingest_article(hatch, obj) {
                 }
             });
         }
+
+        asset.set_synopsis(body.text().substring(0, 140));
 
         const content = mustache.render(template.structure_template, {
             category: category,
