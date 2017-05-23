@@ -56,9 +56,9 @@ const render_template = (hatch, asset, template, post_data) => {
     hatch.save_asset(asset);
 }
 
-function pad(n, width, z='0') {
-  n = n + '';
-  return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+function pad(n, width, z = '0') {
+    n = n + '';
+    return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 }
 
 function ingest_article(hatch, obj) {
@@ -73,7 +73,7 @@ function ingest_article(hatch, obj) {
         const category = $('div.nav').first();
         category.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
-            for(const attr of remove_attr) {
+            for (const attr of remove_attr) {
                 $(this).removeAttr(attr);
             }
         });
@@ -95,7 +95,7 @@ function ingest_article(hatch, obj) {
 
         // remove elements and comments
         body.contents().filter((index, node) => node.type === 'comment').remove();
-        for(const element of remove_elements) {
+        for (const element of remove_elements) {
             body.find(element).remove();
         }
 
@@ -119,7 +119,7 @@ function ingest_article(hatch, obj) {
 
         render_template(hatch, asset, template.structure_template, post_data);
     }).catch((err) => {
-        console.log('err article ',err);
+        console.log('err article ', err);
         return ingest_article(hatch, obj);
     });
 }
@@ -137,14 +137,14 @@ function ingest_gallery(hatch, uri) {
         const category = $('div.nav').first();
         category.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
-            for(const attr of remove_attr) {
+            for (const attr of remove_attr) {
                 $(this).removeAttr(attr);
             }
         });
 
         const modified_time = $('div.photonewsdatetime').text();
         let pd = modified_time;
-        pd = pd.substring(pd.indexOf(',')+2,pd.length);
+        pd = pd.substring(pd.indexOf(',') + 2, pd.length);
         pd = pd.split('-');
         pd = pd[1] + '-' + pd[0] + '-' + pd[2];
         let date = new Date(pd);
@@ -160,20 +160,20 @@ function ingest_gallery(hatch, uri) {
         main_image.set_title(title);
         asset.set_thumbnail(main_image);
         hatch.save_asset(main_image);
-        image_id.push({id: main_image.asset_id});
+        image_id.push({ id: main_image.asset_id });
 
         // max number of images
         let max_num = $('.photonews_top').first();
         max_num.find('a').remove();
         max_num = max_num.text();
-        const firstIndex = max_num.indexOf('1 dari')+7;
-        const lastIndex = max_num.indexOf('foto')-1;
+        const firstIndex = max_num.indexOf('1 dari') + 7;
+        const lastIndex = max_num.indexOf('foto') - 1;
         max_num = parseInt(max_num.substring(firstIndex, lastIndex));
 
         // generating image links
         let image_uris = [];
-        for(var i=2; i<=max_num; i++){
-            image_uris.push( main_image_uri.replace('001-bola',pad(i,3)+'-bola') );
+        for (var i = 2; i <= max_num; i++) {
+            image_uris.push(main_image_uri.replace('001-bola', pad(i, 3) + '-bola'));
         }
 
         // download images
@@ -181,7 +181,7 @@ function ingest_gallery(hatch, uri) {
             const image = libingester.util.download_image(link);
             image.set_title(title);
             hatch.save_asset(image);
-            image_id.push({id: image.asset_id});
+            image_id.push({ id: image.asset_id });
         });
 
         const post_data = {
@@ -194,7 +194,7 @@ function ingest_gallery(hatch, uri) {
 
         render_template(hatch, asset, template.template_gallery, post_data);
     }).catch((err) => {
-        console.log('err galery ',err);
+        console.log('err galery ', err);
         return ingest_gallery(hatch, uri);
     });
 }
@@ -232,46 +232,49 @@ function ingest_video(hatch, obj) {
             for (const domain of video_iframes) {
                 if (video_page.includes(domain)) {
                     switch (domain) {
-                        case 'a.kapanlagi': {
-                            return libingester.util.fetch_html(video_page).then(($) => {
-                                const video_url = $('title').text();
-                                return save_video_asset(video_url);
-                            });
-                            break; // exit 'a.kapanlagi'
-                        }
-                        case 'skrin.id': {
-                            const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
-                            const video_width = '480p.mp4';
-                            let video_url;
-                            console.log(video_page);
-                            return libingester.util.fetch_html(video_page).then(($) => {
-                                const ss = $('script')[2].children[0].data; //script data
-                                const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[','');
-                                let temp_uri;
-                                const video_uris = json_sources.split('},').map((uri) => {
-                                    const relative_video_uri = uri.substring(uri.indexOf('url')+7, uri.indexOf('resolution')-3);
-                                    return url.resolve(base_video_uri, relative_video_uri);
+                        case 'a.kapanlagi':
+                            {
+                                return libingester.util.fetch_html(video_page).then(($) => {
+                                    const video_url = $('title').text();
+                                    return save_video_asset(video_url);
                                 });
-                                for (const video_uri of video_uris) {
-                                    if (video_uri.includes(video_width)) {
-                                        temp_uri = video_uri;
-                                        break;
+                                break; // exit 'a.kapanlagi'
+                            }
+                        case 'skrin.id':
+                            {
+                                const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
+                                const video_width = '480p.mp4';
+                                let video_url;
+                                console.log(video_page);
+                                return libingester.util.fetch_html(video_page).then(($) => {
+                                    const ss = $('script')[2].children[0].data; //script data
+                                    const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[', '');
+                                    let temp_uri;
+                                    const video_uris = json_sources.split('},').map((uri) => {
+                                        const relative_video_uri = uri.substring(uri.indexOf('url') + 7, uri.indexOf('resolution') - 3);
+                                        return url.resolve(base_video_uri, relative_video_uri);
+                                    });
+                                    for (const video_uri of video_uris) {
+                                        if (video_uri.includes(video_width)) {
+                                            temp_uri = video_uri;
+                                            break;
+                                        }
                                     }
-                                }
-                                video_url = temp_uri || video_uris[video_uris.length-1];
-                                return save_video_asset(video_url);
-                            });
-                            break; // exit 'skrin.id'
-                        }
-                        default: {
-                            return save_video_asset(video_page);
-                        }
+                                    video_url = temp_uri || video_uris[video_uris.length - 1];
+                                    return save_video_asset(video_url);
+                                });
+                                break; // exit 'skrin.id'
+                            }
+                        default:
+                            {
+                                return save_video_asset(video_page);
+                            }
                     }
                 }
             }
         }
     }).catch((err) => {
-        console.log('err video ',err);
+        console.log('err video ', err);
         return ingest_video(hatch, obj);
     });
 }
@@ -282,15 +285,15 @@ function main() {
 
     const article = libingester.util.fetch_html(rss_uri).then(($) => {
         let data = [];
-        for (const item of $('item').get()){
+        for (const item of $('item').get()) {
             const category = $(item).find('category').text();
-            if( category != 'galeri' ) {
+            if (category != 'galeri') {
                 data.push({
                     author: $(item).find('author').text(),
                     category: category,
                     pubDate: $(item).find('pubDate').text(),
-                    title: $(item).find('title').html().replace('<!--[CDATA[','').replace(']]-->',''),
-                    uri: $(item).find('link')[0].next['data'].replace('\n','').replace("'",""),
+                    title: $(item).find('title').html().replace('<!--[CDATA[', '').replace(']]-->', ''),
+                    uri: $(item).find('link')[0].next['data'].replace('\n', '').replace("'", ""),
                 });
             }
         }
@@ -309,7 +312,7 @@ function main() {
         //     uri: 'https://www.bola.net/open-play/inilah-5-legenda-klub-yang-nomer-punggungnya-dipensiunkan-e243a8.html',
         // }];
         return Promise.map(data, function(obj) {
-            if( obj.uri.includes('open-play') ) {
+            if (obj.uri.includes('open-play')) {
                 return ingest_video(hatch, obj);
             } else {
                 return ingest_article(hatch, obj);
