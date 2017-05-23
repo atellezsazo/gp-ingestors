@@ -49,25 +49,6 @@ const video_iframes = [
     'youtube',
 ];
 
-// promise download image
-const rp_download_image = (hatch, src, image) => {
-    return rp({
-        uri: src,
-        encoding: null,
-        headers: {
-            'User-Agent': 'libingester',
-        },
-        resolveWithFullResponse: true,
-    }).then((response) => {
-        image.set_canonical_uri(src);
-        image.set_last_modified_date(new Date());
-        image.set_image_data(response.headers['content-type'], response.body);
-        hatch.save_asset(image);
-    }).catch((err) => {
-        return rp_download_image(hatch, src, image);
-    });
-}
-
 // render
 const render_template = (hatch, asset, template, post_data) => {
     const content = mustache.render(template, post_data);
@@ -106,10 +87,10 @@ function ingest_article(hatch, obj) {
 
         // main image
         const main_image_uri = $('meta[property="og:image"]').attr('content');
-        const main_image = new libingester.ImageAsset();
+        const main_image = libingester.util.download_image(main_image_uri);
         main_image.set_title(obj.title);
-        const promise_main = rp_download_image(hatch, main_image_uri, main_image);
         asset.set_thumbnail(main_image);
+        hatch.save_asset(main_image);
         const body = $('div.ncont').first();
 
         // remove elements and comments
@@ -118,26 +99,27 @@ function ingest_article(hatch, obj) {
             body.find(element).remove();
         }
 
-        const promises_images = Promise.map(body.find('img').get(), (img) => {
+        // download images
+        body.find('img').get().map((img) => {
             const src = img.attribs['data-src'];
-            const image = new libingester.ImageAsset();
+            const image = libingester.util.download_image(src);
             image.set_title(obj.title);
             img.attribs["data-libingester-asset-id"] = image.asset_id;
-            return rp_download_image(hatch, src, image);
-        }, {concurrency: Infinity}).then(() => {
-            const post_data = {
-                title: obj.title,
-                published: modified_time,
-                category: category.html(),
-                main_image: main_image,
-                body: body.html(),
-            }
-
-            render_template(hatch, asset, template.structure_template, post_data);
+            hatch.save_asset(image);
         });
 
-        return Promise.all([promises_images, promise_main]);
+        const post_data = {
+            author: obj.author,
+            body: body.html(),
+            category: category.html(),
+            main_image: main_image,
+            published: modified_time,
+            title: obj.title,
+        }
+
+        render_template(hatch, asset, template.structure_template, post_data);
     }).catch((err) => {
+        console.log('err article ',err);
         return ingest_article(hatch, obj);
     });
 }
@@ -174,10 +156,10 @@ function ingest_gallery(hatch, uri) {
         // main image
         let image_id = [];
         const main_image_uri = $('.photonews_image img').first().attr('data-src');
-        const main_image = new libingester.ImageAsset();
-        asset.set_thumbnail(main_image);
+        const main_image = libingester.util.download_image(main_image_uri);
         main_image.set_title(title);
-        const promise_main = rp_download_image(hatch, main_image_uri, main_image);
+        asset.set_thumbnail(main_image);
+        hatch.save_asset(main_image);
         image_id.push({id: main_image.asset_id});
 
         // max number of images
@@ -188,30 +170,31 @@ function ingest_gallery(hatch, uri) {
         const lastIndex = max_num.indexOf('foto')-1;
         max_num = parseInt(max_num.substring(firstIndex, lastIndex));
 
-        // download gallery images
+        // generating image links
         let image_uris = [];
         for(var i=2; i<=max_num; i++){
             image_uris.push( main_image_uri.replace('001-bola',pad(i,3)+'-bola') );
         }
 
-        const promises_images = Promise.map(image_uris, function(img_uri) {
-            const image = new libingester.ImageAsset();
+        // download images
+        image_uris.map((link) => {
+            const image = libingester.util.download_image(link);
             image.set_title(title);
+            hatch.save_asset(image);
             image_id.push({id: image.asset_id});
-            return rp_download_image(hatch, img_uri, image);
-        }, {concurrency: 10}).then(() => {
-            const post_data = {
-                title: title,
-                published: modified_time,
-                category: category.html(),
-                gallery: image_id,
-                body: synopsis,
-            }
-            render_template(hatch, asset, template.template_gallery, post_data);
         });
 
-        return Promise.all([promises_images, promise_main]);
+        const post_data = {
+            title: title,
+            published: modified_time,
+            category: category.html(),
+            gallery: image_id,
+            body: synopsis,
+        }
+
+        render_template(hatch, asset, template.template_gallery, post_data);
     }).catch((err) => {
+        console.log('err galery ',err);
         return ingest_gallery(hatch, uri);
     });
 }
@@ -228,18 +211,18 @@ function ingest_video(hatch, obj) {
         const save_video_asset = (video_url) => {
             if (video_url) {
                 // thumbnail
-                const thumbnail = new libingester.ImageAsset();
+                const thumbnail = libingester.util.download_image(thumb_url);
                 thumbnail.set_title(title);
-                return rp_download_image(hatch, thumb_url, thumbnail).then(() => {
-                    const video = new libingester.VideoAsset();
-                    video.set_canonical_uri(obj.uri);
-                    video.set_download_uri(video_url);
-                    video.set_last_modified_date(date);
-                    video.set_thumbnail(thumbnail);
-                    video.set_title(title);
-                    video.set_synopsis(synopsis);
-                    hatch.save_asset(video);
-                });
+                hatch.save_asset(thumbnail);
+
+                const video = new libingester.VideoAsset();
+                video.set_canonical_uri(obj.uri);
+                video.set_download_uri(video_url);
+                video.set_last_modified_date(date);
+                video.set_synopsis(synopsis);
+                video.set_thumbnail(thumbnail);
+                video.set_title(title);
+                hatch.save_asset(video);
             }
         }
 
@@ -260,8 +243,9 @@ function ingest_video(hatch, obj) {
                             const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
                             const video_width = '480p.mp4';
                             let video_url;
+                            console.log(video_page);
                             return libingester.util.fetch_html(video_page).then(($) => {
-                                const ss = $('script')[3].children[0].data; //script data
+                                const ss = $('script')[2].children[0].data; //script data
                                 const json_sources = ss.substring(ss.indexOf('JSON.parse(\'['), ss.indexOf(']\');')).replace('JSON.parse(\'[','');
                                 let temp_uri;
                                 const video_uris = json_sources.split('},').map((uri) => {
@@ -287,6 +271,7 @@ function ingest_video(hatch, obj) {
             }
         }
     }).catch((err) => {
+        console.log('err video ',err);
         return ingest_video(hatch, obj);
     });
 }
@@ -309,7 +294,20 @@ function main() {
                 });
             }
         }
-
+        // Para pruebas solo un link de article y video
+        // const data = [{
+        //     author: 'author',
+        //     category: 'article',
+        //     pubDate: '01-01-2017 08:00',
+        //     title: 'titulo',
+        //     uri: 'https://www.bola.net/inggris/pogba-rahasiakan-cederanya-b49670.html',
+        // },{
+        //     author: 'author',
+        //     category: 'open-play',
+        //     pubDate: '01-01-2017 08:00',
+        //     title: 'play',
+        //     uri: 'https://www.bola.net/open-play/inilah-5-legenda-klub-yang-nomer-punggungnya-dipensiunkan-e243a8.html',
+        // }];
         return Promise.map(data, function(obj) {
             if( obj.uri.includes('open-play') ) {
                 return ingest_video(hatch, obj);
@@ -323,7 +321,8 @@ function main() {
         const data = $('.photonews_preview .title').get().map((item) => {
             return url.resolve(gallery_uri, item.attribs.href);
         });
-
+        // Para pruba solo un link de galeria
+        // const data = ['https://www.bola.net/galeri/barcelona_vs_villarreal_la_liga_2016-2017.html'];
         return Promise.map(data, function(uri) {
             return ingest_gallery(hatch, uri);
         }, { concurrency: concurrency });
