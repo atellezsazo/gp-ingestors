@@ -17,7 +17,7 @@ const remove_elements = ['.adsbygoogle', '.essb_links', 'a[href="#"]', 'div',
 ];
 
 // clean attr (tag)
-const remove_attr = ['border', 'class', 'height', 'id', 'lang', 'rel', 'src',
+const remove_attr = ['border', 'height', 'lang', 'rel', 'src',
     'style', 'width'
 ];
 
@@ -119,9 +119,7 @@ function main() {
         const batch_links = rss.items.map(data => data.url);
         rss2json.load(rss_uri, (err, rss) => {
             const batch_links = rss.items.map(data => data.url);
-            Promise.map(batch_links, (link) => {
-                return ingest_article(hatch, link);
-            }, { concurrency: 1 }).then(() => {
+            return Promise.all(batch_links.map((uri) => ingest_article(hatch, uri))).then(() => {
                 return hatch.finish();
             }).catch((err) => {
                 console.log('ingestor error: ', err);
