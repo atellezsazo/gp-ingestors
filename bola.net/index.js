@@ -288,16 +288,16 @@ function main() {
 
     // all ingestor for article and video posts
     const article = libingester.util.fetch_html(rss_uri).then(($) => {
-        let promesas = [];
+        let promises = [];
         for (const item of $('item').get()) {
             const obj = get_obj($, item);
             if( obj.category == 'open-play' ) {
-                promesas.push( ingest_video(hatch, obj) );
+                promises.push( ingest_video(hatch, obj) ); // video articles
             } else if( obj.category != 'galeri' ){
-                promesas.push( ingest_article(hatch, obj) );
+                promises.push( ingest_article(hatch, obj) ); // post articles
             }
         }
-        return Promise.all(promesas);
+        return Promise.all(promises);
     });
 
     // all ingestor for gallery posts
