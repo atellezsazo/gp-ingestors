@@ -19,7 +19,6 @@ const remove_elements = ['.clear', '.detail-slot-youtube', '.promo-ta',
     '.related_content_widget', '.twitter-tweet', '#iframe_video_partner',
     '#infeed-desktop-cont', 'iframe', 'link', 'script', 'style'
 ];
-const remove_parent_elements = ['iframe'];
 
 // embed video
 const video_iframes = ['a.kapanlagi', 'skrin.id', 'streamable', 'youtube'];
@@ -64,6 +63,7 @@ function ingest_article(hatch, obj) {
         const section = $('meta[name="keywords"]').attr('content');
         const synopsis = $('meta[property="og:description"]').attr('content');
 
+        // article settings
         asset.set_canonical_uri(obj.uri);
         asset.set_section(section);
         asset.set_title(obj.title);
@@ -102,17 +102,14 @@ function ingest_article(hatch, obj) {
             hatch.save_asset(image);
         });
 
-        // data for template
-        const post_data = {
+        render_template(hatch, asset, template.structure_template, {
             author: obj.author,
             body: body.html(),
             category: category.html(),
             main_image: main_image,
             published: modified_time,
             title: obj.title,
-        }
-
-        render_template(hatch, asset, template.structure_template, post_data);
+        });
     }).catch((err) => {
         return ingest_article(hatch, obj);
     });
@@ -181,16 +178,13 @@ function ingest_gallery(hatch, uri) {
             image_id.push({id: image.asset_id});
         });
 
-        // data for template
-        const post_data = {
+        render_template(hatch, asset, template.template_gallery, {
             title: title,
             published: modified_time,
             category: category.html(),
             gallery: image_id,
             body: synopsis,
-        }
-
-        render_template(hatch, asset, template.template_gallery, post_data);
+        });
     }).catch((err) => {
         return ingest_gallery(hatch, uri);
     });
@@ -309,7 +303,7 @@ function main() {
         );
     });
 
-    Promise.all(article, gallery).then(() => {
+    Promise.all([article, gallery]).then(() => {
         return hatch.finish();
     });
 }
