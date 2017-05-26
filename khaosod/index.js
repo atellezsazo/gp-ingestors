@@ -2,177 +2,117 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const Promise = require("bluebird");
-const request = require('request');
-const rp = require('request-promise');
-const rss2json = require('rss-to-json');
 const template = require('./template');
-const url = require('url');
-const xml2js = require('xml2js');
 
 const base_uri = 'https://www.khaosod.co.th/';
 const uri_article = 'https://www.khaosod.co.th/breaking-news';
 
-// Remove elements (body)
-const remove_elements = [
-    'iframe',
-    'noscript',
-    'script',
-    'style',
-    '.box-share-img-detail',
-    '.lifestyle-in-content',
-    '.link-pagging-warper',
-    '.paging-related',
-    '.video-wrapper',
+// cleaning elements
+const clean_elements = ['a', 'div', 'figure', 'i', 'p', 'span'];
+
+// delete attr (tag)
+const remove_attr = ['class', 'height', 'id', 'itemscope', 'itemprop', 'itemtype',
+    'sizes', 'style', 'title', 'width',
 ];
 
-// clean attr (tag)
-const remove_attr = [
-    'class',
-    'height',
-    'id',
-    'sizes',
-    'src',
-    'srcset',
-    'style',
-    'width'
+// remove elements (body)
+const remove_elements = ['.td-post-featured-image', '.ud-video-wrapper', 'iframe',
+    'noscript', 'script', 'style',
 ];
 
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
+    return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        asset.set_canonical_uri(uri);
+        const author = $('meta[name="author"]').attr('content');
+        const category = $('.entry-crumbs').first();
+        const body = $('.td-post-content').first();
+        const description = $('meta[property="og:description"]').attr('content');
+        const entry_date = $('time.entry-date').first();
+        const modified_date = new Date(Date.parse(entry_date.attr('datetime'))); // for asset
+        const modified_time = entry_date.text(); // for template
+        const section = $('meta[property="article:section"]').attr('content');
+        const title = $('meta[property="og:title"]').attr('content');
+        const uri_main_image = body.find('.entry-thumb').first().attr('src');
+        const uri_image_video = $('meta[property="og:image"]').attr('content');
 
-        //Set title section
-        const title = $profile("#newsdetail-right-new h1").first().text();
-        const category = $profile(".newsdetail-categorylink").first().text();
-        const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
+        // article settings
+        asset.set_canonical_uri(uri);
+        asset.set_last_modified_date(modified_date);
+        asset.set_section(section);
+        asset.set_synopsis(description);
         asset.set_title(title);
 
-        const reporter = $profile('.vcard .newsdetail-schedule-new a').text();
-        const date = $profile('.vcard .newsdetail-schedule-new.updated').text();
-
-        // Pull out the main image
-        const main_img = $profile('meta[property="og:image"]').attr('content');
-        const main_image = libingester.util.download_image(main_img, uri);
+        // main image or video background
+        const main_image = libingester.util.download_image(uri_main_image || uri_image_video);
         main_image.set_title(title);
-        const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
-        hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
+        hatch.save_asset(main_image);
 
-        const synopsis = $profile('meta[name="description"]').attr('content');
-        asset.set_synopsis(synopsis);
-        const post_tags = $profile('.box-content a');
+        // remove elements and clean tags
+        const clean_attr = (tag, a=remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
+        body.find('#AdAsia').parent().remove();
+        body.find( remove_elements.join(',') ).remove();
+        category.find('img, i, meta').remove();
+        clean_tags(body.find( clean_elements.join(',') ));
+        clean_tags(category.find( clean_elements.join(',') ));
 
-        // Pull out the updated date
-        const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
-        let modified_date = new Date(Date.parse(info_date));
-        if (!info_date) {
-            modified_date = new Date();
-        }
+        // download images
+        body.find('img').get().map((img) => {
+            clean_attr(img);
+            const image = libingester.util.download_img(img);
+            image.set_title(title);
+            hatch.save_asset(image);
+        });
 
-        asset.set_last_modified_date(modified_date);
-        asset.set_section(category);
+        const content = mustache.render(template.structure_template, {
+            author: author,
+            body: body.html(),
+            category: category.html(),
+            date_published: modified_time,
+            main_image: main_image,
+            title: title,
+        });
 
-        let pages = [];
-        const ingest_body = ($profile, finish_process) => {
-            let post_body = $profile('.entertainment-detail-news');
-            // Download images
-            post_body.find("img").map(function() {
-                if (this.attribs.src) {
-                    const image = libingester.util.download_img(this, base_uri);
-                    image.set_title(title);
-                    hatch.save_asset(image);
-                    this.attribs["data-libingester-asset-id"] = image.asset_id;
-                    for (const attr of remove_attr) {
-                        delete this.attribs[attr];
-                    }
-                }
-            });
-
-            post_body.find("a, div, h1, h2, h3, h4, h5, h6, span").map(function() {
-                if (this.attribs.style) {
-                    delete this.attribs.style;
-                }
-            });
-
-            // resolve links
-            post_body.find("a").map(function() {
-                this.attribs.href = url.resolve(base_uri, this.attribs.href);
-            });
-
-            const next = $profile('.link-pagging-warper a').attr('href');
-            const last_pagination = $profile('ul.pg-pagging li:last-child a').first();
-
-            // remove elements (body)
-            for (const remove_element of remove_elements) {
-                post_body.find(remove_element).remove();
-            }
-
-            pages.push(post_body.html());
-
-            if (next && last_pagination.length != 0) {
-                libingester.util.fetch_html(url.resolve(base_uri, next)).then(($next_profile) => {
-                    ingest_body($next_profile, finish_process);
-                });
-            } else {
-                finish_process();
-            }
-        };
-
-        const promise = new Promise((resolve, reject) => {
-            ingest_body($profile, () => {
-                const content = mustache.render(template.structure_template, {
-                    title: title,
-                    subtitle: subtitle,
-                    author: reporter,
-                    category: category,
-                    date_published: date,
-                    main_image: main_image,
-                    image_credit: image_credit,
-                    body: pages.join(''),
-                    post_tags: post_tags,
-                });
-
-                // save document
-                asset.set_document(content);
-                hatch.save_asset(asset);
-                resolve();
-            });
-        })
-        return Promise.all([promise]);
-    }).catch((error) => {
-        console.log("Ingest error: ", error);
+        asset.set_document(content);
+        hatch.save_asset(asset);
     });
 }
 
-function addDay(date, numDays){
-    return new Date(date.setDate(date.getDate()+numDays))
-}
-
 function main() {
-    // const hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch();
 
-    // libingester.util.fetch_html(base_uri+'home/').then(($) => {
-    //     let links = [];
-    //     for(const tag of $('.entry-date').get()) {
-    //         const tag_date = new Date(Date.parse($(tag).attr('datetime')));
-    //         const date = new Date();
-    //         let tag_article = $(tag);
-    //         if(tag_date >= date) {
-    //             for(let i=0; i<3; i++) {
-    //                 tag_article = tag_article.parent();
-    //             }
-    //             links.push( tag_article.find('h3 a').first().attr('href') );
-    //         }
-    //     }
-    //     console.log(links);
-    // });
+    function _add_day(date, numDays=0){
+        return numDays==0 ? date : new Date(date.setDate(date.getDate()+numDays));
+    }
 
-    let d = new Date();
-    console.log(d);
-    console.log(addDay(d,8));
+    libingester.util.fetch_html(base_uri+'home/').then(($) => {
+        let links = [], max_category = 3, num = 1, category = '';
+        const regex1 = /[\s\S]*khaosod.co.th\/([\s\S]*)\/[\s\S]*/;
+        const regex2 = /([\s\S]*)\/[\s\S]*/;
+
+        // getting all links and filtering by date (yestarday and today)
+        for(const tag of $('.entry-date').get()) {
+            const tag_date = new Date(Date.parse($(tag).attr('datetime')));
+            const date = _add_day(new Date(),-1);
+            let tag_article = $(tag);
+            if(tag_date >= date) {
+                for(let i=0; i<3; i++) tag_article = tag_article.parent();
+                const uri = tag_article.find('h3 a').first().attr('href');
+                if( uri.includes('khaosod.co.th') && !uri.includes('/feed/') ) {
+                    const new_category = uri.replace(regex1,'$1').replace(regex2,'$1');
+                    if( category == '' ) category = new_category;
+                    if( category != new_category ) num = 1;
+                    if( num++ <= max_category ) links.push( uri );
+                    category = new_category;
+                }
+            }
+        }
+
+        Promise.all(links.map((uri) => ingest_article(hatch, uri))).then(() => {
+            return hatch.finish();
+        });
+    });
 }
 
 main();
