@@ -29,61 +29,63 @@ const render_template = (hatch, asset, template, post_data) => {
     hatch.save_asset(asset);
 }
 
-function get_date($) {
-    let d = $('.titlenews .black13').text() ||
-            $('.newsde-title .black11').text() ||
-            $('.toptitle2 .black13t').text() ||
-            $('.date-time').text();
-    return d.replace(/[\s\S]*(\d{2,}\/\d+\/\d+)\s(\d+:\d+:\d+)[\s\S]*/, "$1 $2");
-}
-
-function get_description($) {
-    let d = $('meta[property="og:description"]').attr('content') ||
-            $('meta[name="description"]').attr('content') ||
-            $('meta[name="Description"]').attr('content') || '';
-    return d.replace(/[\t\n]/g,'');
-}
-
-function get_keywords($) {
-    let k = $('meta[name="keywords"]').attr('content') ||
-            $('meta[name="KeyWords"]').attr('content') ||
-            $('meta[name="Keywords"]').attr('content');
-    return k || "";
-}
-
-function get_title($) {
-    let t = $('meta[property="og:title"]').attr('content') ||
-            $('title').text();
-    return t.replace(/[\t\n]/g,'');
-}
-
-function get_body($) {
-    let b = $('.newsdetail').first()[0] ||
-            $('.txtdetails').first()[0] ||
-            $('.newsde-text').first()[0];
-    return $(b);
-}
-
-function get_last_modified_date(date) {
-    let modified_date;
-    const c=date,d=c.substring(0,10),a=d.substring(0,2),b=d.substring(3,5);
-    const format_date = d.replace(b,a).replace(a,b);
-    if( modified_date = Date.parse(format_date) ) {
-        modified_date = new Date(modified_date);
-    } else {
-        modified_date = new Date();
+const ingest = new function() {
+    this.get_body = function($) {
+        let b = $('.newsdetail').first()[0] ||
+        $('.txtdetails').first()[0] ||
+        $('.newsde-text').first()[0];
+        return $(b);
     }
-    return modified_date;
-}
+
+    this.get_date = function($) {
+        let d = $('.titlenews .black13').text() ||
+                $('.newsde-title .black11').text() ||
+                $('.toptitle2 .black13t').text() ||
+                $('.date-time').text();
+        return d.replace(/[\s\S]*(\d{2,}\/\d+\/\d+)\s(\d+:\d+:\d+)[\s\S]*/, "$1 $2");
+    }
+
+    this.get_description = function($) {
+        let d = $('meta[property="og:description"]').attr('content') ||
+                $('meta[name="description"]').attr('content') ||
+                $('meta[name="Description"]').attr('content') || '';
+        return d.replace(/[\t\n]/g,'');
+    }
+
+    this.get_keywords = function($) {
+        let k = $('meta[name="keywords"]').attr('content') ||
+                $('meta[name="KeyWords"]').attr('content') ||
+                $('meta[name="Keywords"]').attr('content');
+        return k || "";
+    }
+
+    this.get_last_modified_date = function(date) {
+        let modified_date;
+        const c=date,d=c.substring(0,10),a=d.substring(0,2),b=d.substring(3,5);
+        const format_date = d.replace(b,a).replace(a,b);
+        if( modified_date = Date.parse(format_date) ) {
+            modified_date = new Date(modified_date);
+        } else {
+            modified_date = new Date();
+        }
+        return modified_date;
+    }
+
+    this.get_title = function($) {
+        let t = $('meta[property="og:title"]').attr('content') ||
+        $('title').text();
+        return t.replace(/[\t\n]/g,'');
+    }
+};
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        const body = get_body($);
-        const keywords = get_keywords($);
-        const description = get_description($);
-        const modified_time = get_date($);
-        const title = get_title($);
+        const body = ingest.get_body($);
+        const keywords = ingest.get_keywords($);
+        const description = ingest.get_description($);
+        const modified_time = ingest.get_date($);
+        const title = ingest.get_title($);
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
         if( !title ) return; // Some links return "File Not Found !"
@@ -101,7 +103,7 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(main_image);
 
         // set last modified date
-        const modified_date = get_last_modified_date(modified_time);
+        const modified_date = ingest.get_last_modified_date(modified_time);
         asset.set_last_modified_date(modified_date);
 
         // remove elements and comments
@@ -163,7 +165,7 @@ function ingest_gallery(hatch, uri) {
         let data = $('.font-pink11').first().parent().text();
         const regex = /[\s\S]*(\d{2,}\/\d+)\/(\d{2})[\s\S]*(\d{2,}:\d{2,})[\s\S]*/;
         const date = data.replace(regex, "$1/20$2 $3:00");
-        asset.set_last_modified_date( get_last_modified_date(date) );
+        asset.set_last_modified_date( ingest.get_last_modified_date(date) );
 
         // get all image links
         let image_links = $('a[rel="exgroup"]').get().map((a) => {
@@ -193,11 +195,11 @@ function ingest_gallery(hatch, uri) {
 
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
-        const description = get_description($);
-        const keywords = get_keywords($);
-        const modified_time = get_date($);
+        const description = ingest.get_description($);
+        const keywords = ingest.get_keywords($);
+        const modified_time = ingest.get_date($);
         const thumb_url = $('meta[property="og:image"]').attr('content');
-        const title = get_title($);
+        const title = ingest.get_title($);
         const video_url = $('.embed-container').find('iframe').attr('src') || '';
 
         for(const domain of video_iframes) {
@@ -209,7 +211,7 @@ function ingest_video(hatch, uri) {
                 const video = new libingester.VideoAsset();
                 video.set_canonical_uri(uri);
                 video.set_download_uri(video_url);
-                video.set_last_modified_date( get_last_modified_date(modified_time) );
+                video.set_last_modified_date( ingest.get_last_modified_date(modified_time) );
                 video.set_synopsis(description);
                 video.set_thumbnail(thumbnail);
                 video.set_title(title);
