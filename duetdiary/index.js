@@ -47,7 +47,10 @@ function ingest_article(hatch, uri) {
         }).get();
 
         // Pull out the main image
-        const asset_main_image = libingester.util.download_image(post_main_img, base_uri);
+        if (!post_main_img) { //problem with incomplete $profile 
+            throw { code: -1 };
+        }
+        const asset_main_image = libingester.util.download_image(url.resolve(base_uri, post_main_img), base_uri);
         asset_main_image.set_title(post_title);
         hatch.save_asset(asset_main_image);
 
@@ -102,17 +105,14 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(asset);
         return uri;
     }).catch((err) => {
+        if (err.code == -1 || err.statusCode == 403) {
+            return ingest_article(hatch, uri);
+        }
         console.error("Error ingesting webpage!");
         console.error(err.stack);
-        throw err;
     });
 }
 
-/**
- * main function
- *
- * @returns {Promise}
- */
 function main() {
     const hatch = new libingester.Hatch();
     rss2json.load(rss_uri, (err, rss) => {

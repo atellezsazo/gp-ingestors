@@ -32,21 +32,20 @@ const render_template = (hatch, asset, template, post_data) => {
 
 // extract data for video
 function get_json_parse(source) {
-    const s = source.substring(source.indexOf('JSON.parse(\'[')+13);
-	return (s.substring(0, s.indexOf(');')-3).replace(new RegExp('["{]','g'),'')).split('},').map((s) => {
-		let dic = {};
-		for(const d of s.split(',')) {
-			dic[d.substring(0,d.indexOf(':'))] = d.substring(d.indexOf(':')+1);
-		}
-		return dic;
-	});
+    const s = source.substring(source.indexOf('JSON.parse(\'[') + 13);
+    return (s.substring(0, s.indexOf(');') - 3).replace(new RegExp('["{]', 'g'), '')).split('},').map((s) => {
+        let dic = {};
+        for (const d of s.split(',')) {
+            dic[d.substring(0, d.indexOf(':'))] = d.substring(d.indexOf(':') + 1);
+        }
+        return dic;
+    });
 }
 
-function pad(n, width, z='0') {
-  n = n + '';
-  return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
+function pad(n, width, z = '0') {
+    n = n + '';
+    return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
 }
-
 
 /**
  * ingest_article
@@ -72,7 +71,7 @@ function ingest_article(hatch, obj) {
         // fixing relative paths
         category.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
-            for(const attr of remove_attr) {
+            for (const attr of remove_attr) {
                 $(this).removeAttr(attr);
             }
         });
@@ -90,7 +89,7 @@ function ingest_article(hatch, obj) {
 
         // remove elements and comments
         body.contents().filter((index, node) => node.type === 'comment').remove();
-        for(const element of remove_elements) {
+        for (const element of remove_elements) {
             body.find(element).remove();
         }
 
@@ -138,15 +137,18 @@ function ingest_gallery(hatch, uri) {
         // fixing relative paths
         category.find('a').map(function() {
             this.attribs.href = url.resolve(base_uri, this.attribs.href);
-            for(const attr of remove_attr) {
+            for (const attr of remove_attr) {
                 $(this).removeAttr(attr);
             }
         });
 
         // change date format (dd/mm/yyyy) by (mm/dd/yyyy)
         const modified_time = $('div.photonewsdatetime').text();
-        const c=modified_time,d=c.substring(c.indexOf(',')+2),a=d.substring(0,2),b=d.substring(3,5);
-        const format_date = d.replace(b,a).replace(a,b);
+        const c = modified_time,
+            d = c.substring(c.indexOf(',') + 2),
+            a = d.substring(0, 2),
+            b = d.substring(3, 5);
+        const format_date = d.replace(b, a).replace(a, b);
         const date = new Date(Date.parse(format_date));
         asset.set_last_modified_date(date);
 
@@ -157,17 +159,18 @@ function ingest_gallery(hatch, uri) {
         main_image.set_title(title);
         asset.set_thumbnail(main_image);
         hatch.save_asset(main_image);
-        image_id.push({id: main_image.asset_id});
+        image_id.push({ id: main_image.asset_id });
 
         // max number of images for generate links
         let max_num = $('.photonews_top').first().text().split('\n')[2];
-        const m=max_num,n=m.substring(m.indexOf('dari')+5,m.indexOf('foto')-1);
+        const m = max_num,
+            n = m.substring(m.indexOf('dari') + 5, m.indexOf('foto') - 1);
         max_num = parseInt(n);
 
         // generating image links
         let image_uris = [];
-        for(var i=2; i<=max_num; i++){
-            image_uris.push( main_image_uri.replace('001-bola',pad(i,3)+'-bola') );
+        for (var i = 2; i <= max_num; i++) {
+            image_uris.push(main_image_uri.replace('001-bola', pad(i, 3) + '-bola'));
         }
 
         // download images
@@ -175,7 +178,7 @@ function ingest_gallery(hatch, uri) {
             const image = libingester.util.download_image(link);
             image.set_title(title);
             hatch.save_asset(image);
-            image_id.push({id: image.asset_id});
+            image_id.push({ id: image.asset_id });
         });
 
         render_template(hatch, asset, template.template_gallery, {
@@ -227,36 +230,39 @@ function ingest_video(hatch, obj) {
             for (const domain of video_iframes) {
                 if (video_page.includes(domain)) {
                     switch (domain) {
-                        case 'a.kapanlagi': {
-                            return libingester.util.fetch_html(video_page).then(($) => {
-                                const video_url = $('title').text();
-                                return save_video_asset(video_url);
-                            });
-                            break; // exit 'a.kapanlagi'
-                        }
-                        case 'skrin.id': {
-                            const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
-                            const video_width = '480p.mp4';
-                            let temp_uri;
-                            return libingester.util.fetch_html(video_page).then(($) => {
-                                const ss = $('script')[2].children[0].data; //script data
-                                const video_uris = get_json_parse(ss).map((data) => {
-                                	return url.resolve(base_video_uri, data.url);
+                        case 'a.kapanlagi':
+                            {
+                                return libingester.util.fetch_html(video_page).then(($) => {
+                                    const video_url = $('title').text();
+                                    return save_video_asset(video_url);
                                 });
-                                for (const video_uri of video_uris) {
-                                    if (video_uri.includes(video_width)) {
-                                        temp_uri = video_uri;
-                                        break;
+                                break; // exit 'a.kapanlagi'
+                            }
+                        case 'skrin.id':
+                            {
+                                const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
+                                const video_width = '480p.mp4';
+                                let temp_uri;
+                                return libingester.util.fetch_html(video_page).then(($) => {
+                                    const ss = $('script')[2].children[0].data; //script data
+                                    const video_uris = get_json_parse(ss).map((data) => {
+                                        return url.resolve(base_video_uri, data.url);
+                                    });
+                                    for (const video_uri of video_uris) {
+                                        if (video_uri.includes(video_width)) {
+                                            temp_uri = video_uri;
+                                            break;
+                                        }
                                     }
-                                }
-                                const video_url = temp_uri || video_uris[video_uris.length-1];
-                                return save_video_asset(video_url);
-                            });
-                            break; // exit 'skrin.id'
-                        }
-                        default: {
-                            return save_video_asset(video_page);
-                        }
+                                    const video_url = temp_uri || video_uris[video_uris.length - 1];
+                                    return save_video_asset(video_url);
+                                });
+                                break; // exit 'skrin.id'
+                            }
+                        default:
+                            {
+                                return save_video_asset(video_page);
+                            }
                     }
                 }
             }
@@ -275,8 +281,8 @@ function main() {
             author: $(item).find('author').text(),
             category: $(item).find('category').text(),
             pubDate: $(item).find('pubDate').text(),
-            title: $(item).find('title').html().replace('<!--[CDATA[','').replace(']]-->',''),
-            uri: $(item).find('link')[0].next['data'].replace(new RegExp('[\n\']','g'),''),
+            title: $(item).find('title').html().replace('<!--[CDATA[', '').replace(']]-->', ''),
+            uri: $(item).find('link')[0].next['data'].replace(new RegExp('[\n\']', 'g'), ''),
         }
     }
 
@@ -285,10 +291,10 @@ function main() {
         let promises = [];
         for (const item of $('item').get()) {
             const obj = get_obj($, item);
-            if( obj.category == 'open-play' ) {
-                promises.push( ingest_video(hatch, obj) ); // video articles
-            } else if( obj.category != 'galeri' ){
-                promises.push( ingest_article(hatch, obj) ); // post articles
+            if (obj.category == 'open-play') {
+                promises.push(ingest_video(hatch, obj)); // video articles
+            } else if (obj.category != 'galeri') {
+                promises.push(ingest_article(hatch, obj)); // post articles
             }
         }
         return Promise.all(promises);
