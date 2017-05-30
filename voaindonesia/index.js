@@ -66,21 +66,6 @@ const download_img = (hatch, img) => {
     }
 }
 
-const download_video = (hatch, data) => {
-    if (data.download_uri) {
-        const video = new libingester.VideoAsset();
-        video.set_canonical_uri(data.canonical_uri);
-        video.set_download_uri(data.download_uri);
-        video.set_last_modified_date(data.modified_date);
-        video.set_license(data.license);
-        video.set_thumbnail(data.thumbnail);
-        video.set_title(data.title);
-        video.set_synopsis(data.synopsis);
-        hatch.save_asset(video);
-        return video;
-    }
-}
-
 const get_post_data = ($, asset) => {
     // set title section
     const title = $('meta[property="og:title"]').attr('content');
@@ -89,6 +74,12 @@ const get_post_data = ($, asset) => {
     // pull out the updated date
     const section_type = $('meta[property="og:type"]').attr('content');
     asset.set_section(section_type);
+
+    const synopsis = $('meta[property="og:description"]').attr('content');
+    asset.set_section(synopsis);
+
+    const thumbnail = $('meta[property="og:image"]').attr('content');
+    asset.set_thumbnail(thumbnail);
 
     // data for template
     const $post_content = $('#content').first();
@@ -99,7 +90,7 @@ const get_post_data = ($, asset) => {
 
     // modified date
     const modified_date = published.find('time').attr('datetime');
-    let date = new Date( Date.parse(modified_date) );
+    let date = new Date(Date.parse(modified_date));
     if (!date){
         date = new Date();
     }
@@ -115,7 +106,7 @@ const get_post_data = ($, asset) => {
         category: category,
         date: date,
         published: published,
-        title: title,
+        title: title
     };
 }
 
@@ -175,12 +166,6 @@ function $ingest_article(hatch, asset, $, uri, resolved) { // ingest post articl
     remove_elements(body_content, remove_body_elements);
     body_content.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href || '#'));
     body_content.find('img').get().map((img) => download_img(hatch, img));
-    body_content.find('iframe').get().map((iframe) => download_video(hatch, {
-        canonical_uri: uri,
-        download_uri: iframe.src,
-        modified_date: post_data.date,
-        title: post_data.title
-    }));
 
     // render template
     post_data['main_image_id'] = main_image.asset_id;
@@ -209,14 +194,6 @@ function $ingest_media(hatch, asset, $, uri, resolved) { // ingest post video or
     const download_uri = video.attribs.src;
     const title = $('meta[property="og:title"]').attr('content');
 
-    download_video(hatch, {
-        canonical_uri: uri,
-        download_uri: download_uri,
-        modified_date: date,
-        thumbnail: main_image,
-        title: title,
-        synopsis: description
-    });
     resolved();
 }
 
@@ -234,7 +211,7 @@ function main() {
                     switch (type) {
                         case 'gallery': $ingest_gallery(hatch, asset, $, uri, resolve); break;
                         case 'player': $ingest_media(hatch, asset, $, uri, resolve); break;
-                        case 'summary': /*$ingest_media(hatch, asset, $, uri, resolve); */ break;
+                        case 'summary': resolve(); break;
                         case 'summary_large_image': $ingest_article(hatch, asset, $, uri, resolve); break;
                     }
                 });
