@@ -12,14 +12,14 @@ const rss_feed = 'http://www.khaosodenglish.com/feed/';
 const clean_elements = ['a', 'div', 'figure', 'i', 'p', 'span'];
 
 // delete attr (tag)
-const remove_attr = ['class', 'height', 'id', 'itemscope', 'itemprop', 'itemtype',
+const remove_attr = ['height', 'itemscope', 'itemprop', 'itemtype',
     'sizes', 'style', 'title', 'width',
 ];
 
 // remove elements (body)
 const remove_elements = ['.td-post-featured-image', '.twitter-tweet',
-  '.twitter-video', '.ud-video-wrapper', 'div', 'iframe', 'noscript', 'script',
-  'style'
+    '.twitter-video', '.ud-video-wrapper', 'div', 'iframe', 'noscript', 'script',
+    'style'
 ];
 
 function ingest_article(hatch, uri) {
@@ -51,13 +51,13 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(main_image);
 
         // remove elements and clean tags
-        const clean_attr = (tag, a=remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         body.find('#AdAsia').parent().remove();
-        body.find( remove_elements.join(',') ).remove();
+        body.find(remove_elements.join(',')).remove();
         category.find('img, i, meta').remove();
-        clean_tags(body.find( clean_elements.join(',') ));
-        clean_tags(category.find( clean_elements.join(',') ));
+        clean_tags(body.find(clean_elements.join(',')));
+        clean_tags(category.find(clean_elements.join(',')));
 
         // download images
         body.find('img').get().map((img) => {
@@ -83,19 +83,16 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
-    rss2json.load(rss_feed, function(err, rss) {
-      let promises = [];
-      rss.items.map((item) => {
-        // excluding "crime y legal"
-        if(!item.url.includes('/crimecourtscalamity/')) {
-          promises.push(ingest_article(hatch, item.url));
-        }
-      })
-
-      Promise.all(promises).then(() => {
-        return hatch.finish();
-      });
+    rss2json.load(rss_feed, (err, rss) => {
+        let promises = [];
+        rss.items.map((item) => {
+            if (!item.url.includes('/crimecourtscalamity/')) { // excluding "crime y legal"
+                promises.push(ingest_article(hatch, item.url));
+            }
+        })
+        Promise.all(promises).then(() => {
+            return hatch.finish();
+        });
     })
 }
 
