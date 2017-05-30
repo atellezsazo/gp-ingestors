@@ -11,7 +11,7 @@ const uri_article = 'https://www.khaosod.co.th/breaking-news';
 const clean_elements = ['a', 'div', 'figure', 'i', 'p', 'span'];
 
 // delete attr (tag)
-const remove_attr = ['class', 'height', 'id', 'itemscope', 'itemprop', 'itemtype',
+const remove_attr = ['height', 'itemscope', 'itemprop', 'itemtype',
     'sizes', 'style', 'title', 'width',
 ];
 
@@ -49,13 +49,13 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(main_image);
 
         // remove elements and clean tags
-        const clean_attr = (tag, a=remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         body.find('#AdAsia').parent().remove();
-        body.find( remove_elements.join(',') ).remove();
+        body.find(remove_elements.join(',')).remove();
         category.find('img, i, meta').remove();
-        clean_tags(body.find( clean_elements.join(',') ));
-        clean_tags(category.find( clean_elements.join(',') ));
+        clean_tags(body.find(clean_elements.join(',')));
+        clean_tags(category.find(clean_elements.join(',')));
 
         // download images
         body.find('img').get().map((img) => {
@@ -82,28 +82,31 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
 
-    function _add_day(date, numDays=0){
-        return numDays==0 ? date : new Date(date.setDate(date.getDate()+numDays));
+    const _add_day = (date, numDays = 0) => {
+        return numDays == 0 ? date : new Date(date.setDate(date.getDate() + numDays));
     }
 
-    libingester.util.fetch_html(base_uri+'home/').then(($) => {
-        let links = [], max_category = 3, num = 1, category = '';
+    libingester.util.fetch_html(base_uri + 'home/').then(($) => {
+        let links = [],
+            max_category = 3,
+            num = 1,
+            category = '';
         const regex1 = /[\s\S]*khaosod.co.th\/([\s\S]*)\/[\s\S]*/;
         const regex2 = /([\s\S]*)\/[\s\S]*/;
 
         // getting all links and filtering by date (yestarday and today)
-        for(const tag of $('.entry-date').get()) {
+        for (const tag of $('.entry-date').get()) {
             const tag_date = new Date(Date.parse($(tag).attr('datetime')));
-            const date = _add_day(new Date(),-1);
+            const date = _add_day(new Date(), -1);
             let tag_article = $(tag);
-            if(tag_date >= date) {
-                for(let i=0; i<3; i++) tag_article = tag_article.parent();
+            if (tag_date >= date) {
+                for (let i = 0; i < 3; i++) tag_article = tag_article.parent();
                 const uri = tag_article.find('h3 a').first().attr('href');
-                if( uri.includes('khaosod.co.th') && !uri.includes('/feed/') ) {
-                    const new_category = uri.replace(regex1,'$1').replace(regex2,'$1');
-                    if( category == '' ) category = new_category;
-                    if( category != new_category ) num = 1;
-                    if( num++ <= max_category ) links.push( uri );
+                if (uri.includes('khaosod.co.th') && !uri.includes('/feed/')) {
+                    const new_category = uri.replace(regex1, '$1').replace(regex2, '$1');
+                    if (category == '') category = new_category;
+                    if (category != new_category) num = 1;
+                    if (num++ <= max_category) links.push(uri);
                     category = new_category;
                 }
             }
