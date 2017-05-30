@@ -2,10 +2,11 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
+const rss2json = require('rss-to-json');
 const template = require('./template');
 
-const base_uri = 'https://www.khaosod.co.th/';
-const uri_article = 'https://www.khaosod.co.th/breaking-news';
+const base_uri = 'http://www.khaosodenglish.com/';
+const rss_feed = 'http://www.khaosodenglish.com/feed/';
 
 // cleaning elements
 const clean_elements = ['a', 'div', 'figure', 'i', 'p', 'span'];
@@ -16,8 +17,9 @@ const remove_attr = ['height', 'itemscope', 'itemprop', 'itemtype',
 ];
 
 // remove elements (body)
-const remove_elements = ['.td-post-featured-image', '.ud-video-wrapper', 'iframe',
-    'noscript', 'script', 'style',
+const remove_elements = ['.td-post-featured-image', '.twitter-tweet',
+    '.twitter-video', '.ud-video-wrapper', 'div', 'iframe', 'noscript', 'script',
+    'style'
 ];
 
 function ingest_article(hatch, uri) {
@@ -81,41 +83,17 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
-    const _add_day = (date, numDays = 0) => {
-        return numDays == 0 ? date : new Date(date.setDate(date.getDate() + numDays));
-    }
-
-    libingester.util.fetch_html(base_uri + 'home/').then(($) => {
-        let links = [],
-            max_category = 3,
-            num = 1,
-            category = '';
-        const regex1 = /[\s\S]*khaosod.co.th\/([\s\S]*)\/[\s\S]*/;
-        const regex2 = /([\s\S]*)\/[\s\S]*/;
-
-        // getting all links and filtering by date (yestarday and today)
-        for (const tag of $('.entry-date').get()) {
-            const tag_date = new Date(Date.parse($(tag).attr('datetime')));
-            const date = _add_day(new Date(), -1);
-            let tag_article = $(tag);
-            if (tag_date >= date) {
-                for (let i = 0; i < 3; i++) tag_article = tag_article.parent();
-                const uri = tag_article.find('h3 a').first().attr('href');
-                if (uri.includes('khaosod.co.th') && !uri.includes('/feed/')) {
-                    const new_category = uri.replace(regex1, '$1').replace(regex2, '$1');
-                    if (category == '') category = new_category;
-                    if (category != new_category) num = 1;
-                    if (num++ <= max_category) links.push(uri);
-                    category = new_category;
-                }
+    rss2json.load(rss_feed, (err, rss) => {
+        let promises = [];
+        rss.items.map((item) => {
+            if (!item.url.includes('/crimecourtscalamity/')) { // excluding "crime y legal"
+                promises.push(ingest_article(hatch, item.url));
             }
-        }
-
-        Promise.all(links.map((uri) => ingest_article(hatch, uri))).then(() => {
+        })
+        Promise.all(promises).then(() => {
             return hatch.finish();
         });
-    });
+    })
 }
 
 main();

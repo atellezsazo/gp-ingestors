@@ -2,8 +2,8 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const template = require('./template');
 const rss2json = require('rss-to-json');
+const template = require('./template');
 const url = require('url');
 
 const base_uri = 'https://www.matichon.co.th/home';
@@ -15,7 +15,7 @@ const remove_elements = ['.td-a-rec', '.td-a-rec-id-content_inline',
     'script', 'video'
 ];
 
-const remove_attr = ['border', 'class', 'height', 'id', 'sizes', 'srcset',
+const remove_attr = ['alt', 'border', 'class', 'height', 'id', 'sizes', 'srcset',
     'style', 'width'
 ];
 
@@ -45,24 +45,24 @@ const clear_tags = ['figure', 'figcaption', 'img'];
         const post_tags = $('.td-tags > li > a');
         const post_date = new Date(item.created);
 
-        // main image
-        const main_image = libingester.util.download_image(main_image_uri);
-        main_image.set_title(item.title);
-        asset.set_thumbnail(main_image);
-        hatch.save_asset(main_image);
-
         // article settings
         asset.set_canonical_uri(item.url);
         asset.set_section(post_category);
         asset.set_title(item.title);
         asset.set_synopsis(post_synopsis);
         asset.set_last_modified_date(post_date);
+
+        // main image
+        const main_image = libingester.util.download_image(main_image_uri);
+        main_image.set_title(item.title);
+        asset.set_thumbnail(main_image);
+        hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
 
         // download images
         post_body.find('img').get().map((img) => {
             if (img.attribs.src != undefined) {
-                const image = libingester.util.download_image(img.attribs['src']);
+                const image = libingester.util.download_img($(img));
                 image.set_title(item.title);
                 img.attribs['data-libingester-asset-id'] = image.asset_id;
                 hatch.save_asset(image);
@@ -76,18 +76,14 @@ const clear_tags = ['figure', 'figcaption', 'img'];
 
         // remove elements and comments
         post_body.contents().filter((index, node) => node.type === 'comment').remove();
-        for (const element of remove_elements) {
-            post_body.find(element).remove();
-        }
+        post_body.find(remove_elements.join(',')).remove();
 
         // clear tags (body)
-        for (const tag of clear_tags) {
-            post_body.find(tag).map(function() {
-                for (const attr of remove_attr) {
-                    delete this.attribs[attr];
-                }
-            });
-        }
+        post_body.find(clear_tags.join(',')).map(function(index, elem) {
+            remove_attr.map((attr) => {
+                delete elem.attribs[attr]
+            })
+        });
 
         render_template(hatch, asset, template.structure_template, {
             author: post_author,
@@ -112,10 +108,9 @@ function main() {
 
     rss2json.load(rss_uri, (err, rss) => {
         const batch_items = rss.items.map(data => data);
-        Promise.all(batch_items.map(item => ingest_article(hatch, item)))
-            .then(() => {
-                return hatch.finish();
-            });
+        Promise.all(batch_items.map(item => ingest_article(hatch, item))).then(() => {
+            return hatch.finish();
+        });
     });
 }
 
