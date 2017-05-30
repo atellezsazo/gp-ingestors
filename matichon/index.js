@@ -15,7 +15,7 @@ const remove_elements = ['.td-a-rec', '.td-a-rec-id-content_inline',
     'script', 'video'
 ];
 
-const remove_attr = ['alt', 'border', 'class', 'height', 'id', 'sizes', 'srcset',
+const remove_attr = ['alt', 'border', 'height', 'sizes', 'srcset',
     'style', 'width'
 ];
 
@@ -27,12 +27,11 @@ const clear_tags = ['figure', 'figcaption', 'img'];
  * @param {Object} hatch The Hatch object of the Ingester library
  * @param {Object} item The objec {} with metadata (uri, author, etc)
  */
- function ingest_article(hatch, item) {
-    // render
+function ingest_article(hatch, item) {
     const render_template = (hatch, asset, template, post_data) => {
-         const content = mustache.render(template, post_data);
-         asset.set_document(content);
-         hatch.save_asset(asset);
+        const content = mustache.render(template, post_data);
+        asset.set_document(content);
+        hatch.save_asset(asset);
     }
 
     return libingester.util.fetch_html(item.url).then(($) => {
@@ -57,7 +56,6 @@ const clear_tags = ['figure', 'figcaption', 'img'];
         main_image.set_title(item.title);
         asset.set_thumbnail(main_image);
         hatch.save_asset(main_image);
-        asset.set_thumbnail(main_image);
 
         // download images
         post_body.find('img').get().map((img) => {
@@ -79,7 +77,7 @@ const clear_tags = ['figure', 'figcaption', 'img'];
         post_body.find(remove_elements.join(',')).remove();
 
         // clear tags (body)
-        post_body.find(clear_tags.join(',')).map(function(index, elem) {
+        post_body.find(clear_tags.join(',')).map((index, elem) => {
             remove_attr.map((attr) => {
                 delete elem.attribs[attr]
             })
@@ -94,9 +92,9 @@ const clear_tags = ['figure', 'figcaption', 'img'];
             post_tags: tags,
             title: item.title
         });
-     }).catch((err) => {
+    }).catch((err) => {
         return ingest_article(hatch, item);
-     });
+    });
 }
 
 /**
@@ -105,7 +103,6 @@ const clear_tags = ['figure', 'figcaption', 'img'];
  */
 function main() {
     const hatch = new libingester.Hatch();
-
     rss2json.load(rss_uri, (err, rss) => {
         const batch_items = rss.items.map(data => data);
         Promise.all(batch_items.map(item => ingest_article(hatch, item))).then(() => {
