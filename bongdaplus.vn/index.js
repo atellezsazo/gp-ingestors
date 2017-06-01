@@ -83,7 +83,7 @@ function ingest_article(hatch, uri) {
         const modified_date = $('meta[itemprop="dateModified"]').attr('content') // for asset
         const modified_time = modified_date.replace(' ', 'T').replace(/\s/g, '');
         const keywords = $('.taglst').first().clone();
-        const section = $('meta[property="og:type"]').attr('content');
+        const section = $('meta[name="keywords"]').attr('content');
         const title = body.find('.tit').text() || $('meta[property="og:title"]').attr('content');
         const uri_main_image = body.find('.news-avatar').first().attr('src');
         const uri_thumb = $('meta[property="og:image"]').attr('content');
