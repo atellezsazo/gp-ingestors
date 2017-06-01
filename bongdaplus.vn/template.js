@@ -12,11 +12,9 @@ const structure_template = (`
     </div>
     <h1>{{title}}</h1>
 </section>
-
 <section class="body">
     {{{body}}}
 </section>
-
 <section class="footer">
     <div class="tags">{{{tags}}}</div>
 </section>

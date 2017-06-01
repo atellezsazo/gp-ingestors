@@ -8,7 +8,7 @@ const template = require('./template');
 const url = require('url');
 
 const base_uri = 'http://bongdaplus.vn/';
-const max_links = 3; // max links per 'rss'
+const max_links = 5; // max links per 'rss'
 const rss_feed = [
     'http://bongdaplus.vn/rss/trang-chu.rss', // home
     'http://bongdaplus.vn/rss/viet-nam/2.rss', // vietnam
@@ -45,15 +45,18 @@ const remove_elements = ['.adtxt', '.auth', '.cl10', '.clr', '.cref',
 ];
 
 // delete duplicated elements in array
-Array.prototype.unique=function(a){
-    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+Array.prototype.unique = function(a) {
+    return function() { return this.filter(a) }
+}((a, b, c) => {
+    return c.indexOf(a, b + 1) < 0
 });
 
 // remove empty paragraphs
-function remove_empty_tag($, elem, tag='p') {
+function remove_empty_tag($, elem, tag = 'p') {
     $(elem).find(tag).get().map((t) => {
-        const text=$(t).text(), child=$(t).children();
-        if (child.length==0) {
+        const text = $(t).text(),
+            child = $(t).children();
+        if (child.length == 0) {
             $(t).remove();
         } else if (child.length == 1) {
             const ch = $(child[0]).children();
@@ -76,9 +79,9 @@ function ingest_article(hatch, uri) {
         const category = $('.breakcrum').first().clone();
         const copyright = $('.copybar b font').text();
         const description = $('meta[property="og:description"]').attr('content');
-        const published = body.find('.period').first().text().replace(' ',''); // for template
+        const published = body.find('.period').first().text().replace(' ', ''); // for template
         const modified_date = $('meta[itemprop="dateModified"]').attr('content') // for asset
-        const modified_time = modified_date.replace(' ','T').replace(/\s/g,'');
+        const modified_time = modified_date.replace(' ', 'T').replace(/\s/g, '');
         const keywords = $('.taglst').first().clone();
         const section = $('meta[property="og:type"]').attr('content');
         const title = body.find('.tit').text() || $('meta[property="og:title"]').attr('content');
@@ -94,7 +97,7 @@ function ingest_article(hatch, uri) {
         asset.set_title(title);
 
         // remove elements and clean tags
-        const clean_attr = (tag, a=remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         body.find(remove_elements.join(',')).remove();
         clean_tags(body.find(clean_elements.join(',')));
@@ -102,7 +105,7 @@ function ingest_article(hatch, uri) {
         body.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href));
         remove_empty_tag($, body);
         body.find('span').get().map((span) => {
-            const text = $(span).text().substring(0,8);
+            const text = $(span).text().substring(0, 8);
             if (text.includes('VIDEO:')) {
                 $(span).remove();
             }
@@ -153,24 +156,21 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
     let links = [];
-
     const get_links = (f) => {
-        return Promise.all(
-            rss_feed.map((uri_rss) => {
-                return new Promise((resolve, reject) => {
-                    rss2json.load(uri_rss, (err, rss) => {
-                        let l=1;
-                        for (const item of rss.items) {
-                            if (l++ > max_links) {
-                                break;
-                            }
-                            links.push(item.url);
-                        }
-                        resolve();
-                    });
+        return Promise.all(rss_feed.map((uri_rss) => {
+            return new Promise((resolve, reject) => {
+                rss2json.load(uri_rss, (err, rss) => {
+                    if (err) {
+                        reject(err);
+                    }
+                    for (let i = 0; i < max_links; i++) {
+                        const item = rss.items[i]
+                        links.push(item.url);
+                    }
+                    resolve();
                 })
             })
-        ).then(f);
+        })).then(f);
     }
 
     get_links(() => Promise.all(
