@@ -1,0 +1,10 @@
+{
+    "name": "ingestor-recursosgraficosblog",
+    "version": "0.0.1",
+    "license": "UNLICENSED",
+    "dependencies": {
+        "libingester": "ssh://git@github.com:endlessm/libingester.git",
+        "mustache": "^2.3.0",
+        "rss-to-json": "^1.0.2"
+    }
+}
