@@ -1,11 +1,5 @@
 'use strict';
 
-/*
-<section class="main-image">
-  <img data-libingester-asset-id="{{ main_image.asset_id }}">
-</section>
-*/
-
 const structure_template = (`
 <section class="header">
   <div class="extra-header">
