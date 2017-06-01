@@ -17,7 +17,10 @@ const BASE_URI = 'http://bk.asia-city.com/';
  */
 function utilities($) {
     /** array of tags to be removed */
-    const _remove_elements = ['iframe', 'script'];
+    const _remove_elements = [
+        'iframe',
+        'script'
+    ];
 
     /** array of attributes to be removed */
     const _remove_attr = [
@@ -93,10 +96,7 @@ function utilities($) {
             const content = mustache.render(template, post_data);
             asset.set_document(content);
             hatch.save_asset(asset);
-        },
-
-        /** remove_attr */
-        remove_attr: _remove_attr
+        }
     }
 }
 
@@ -104,7 +104,7 @@ function utilities($) {
  * ingest_article
  *
  * @param {Object} hatch The Hatch object of the Ingester library
- * @param {String} uri 
+ * @param {String} uri String URI of the post to ingest
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {

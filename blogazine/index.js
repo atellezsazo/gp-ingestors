@@ -38,7 +38,7 @@ function utilities(item, $) {
     const _cleaning_body = (content) => {
         content.contents().filter((index, node) => node.type === 'comment').remove();
         content.find(_remove_elements.join(',')).remove();
-        content.find(_clear_tags.join(',')).map(function(index, elem) {
+        content.find(_clear_tags.join(',')).map((index, elem) => {
             _remove_attr.map((attr) => {
                 delete elem.attribs[attr]
             })
@@ -47,7 +47,7 @@ function utilities(item, $) {
     };
 
     /** Utility to truncate the text of the synopsis */
-    const _truncate = function(str, length) {
+    const _truncate = (str, length) => {
         let _length = length || 150;
         let _end = '...';
 
