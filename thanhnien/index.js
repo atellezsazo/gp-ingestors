@@ -10,7 +10,7 @@ const BASE_URI = 'http://thanhnien.vn/';
 const RSS_FEED = 'http://thanhnien.vn/rss/home.rss';
 
 // cleaning elements
-const clean_elements = [
+const CLEAN_ELEMENTS = [
     'a',
     'div',
     'figure',
@@ -25,7 +25,7 @@ const clean_elements = [
 ];
 
 // delete attr (tag)
-const remove_attr = [
+const REMOVE_ATTR = [
     'align',
     'border',
     'bordercolor',
@@ -53,7 +53,7 @@ const remove_attr = [
 ];
 
 // remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
     '.morenews',
     '.sharing-zone',
     '.simplebanner',
@@ -93,11 +93,11 @@ function ingest_article(hatch, uri) {
         asset.set_title(title);
 
         // remove elements and clean tags
-        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
-        body.find(remove_elements.join(',')).remove();
-        clean_tags(body.find(clean_elements.join(',')));
-        clean_tags(category.find(clean_elements.join(',')));
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
+        clean_tags(category.find(CLEAN_ELEMENTS.join(',')));
         body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
 
         // generating tags
