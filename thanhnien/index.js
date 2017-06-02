@@ -6,8 +6,8 @@ const mustache = require('mustache');
 const url = require('url');
 const template = require('./template');
 
-const base_uri = 'http://vtv.vn/';
-const rss_feed = 'http://thanhnien.vn/rss/home.rss';
+const BASE_URI = 'http://thanhnien.vn/';
+const RSS_FEED = 'http://thanhnien.vn/rss/home.rss';
 
 // cleaning elements
 const clean_elements = [
@@ -98,16 +98,16 @@ function ingest_article(hatch, uri) {
         body.find(remove_elements.join(',')).remove();
         clean_tags(body.find(clean_elements.join(',')));
         clean_tags(category.find(clean_elements.join(',')));
-        body.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href));
+        body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
 
         // generating tags
         const categories = cheerio('<div></div>');
         category.find('a').get().map((a) => {
-            categories.append(cheerio(`<a href="${url.resolve(base_uri,a.attribs.href)}">${a.attribs.title || $(a).text()}</a>`));
+            categories.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${a.attribs.title || $(a).text()}</a>`));
         });
         const tags = cheerio('<div></div>');
         keywords.find('a').get().map((a) => {
-            tags.append(cheerio(`<a href="${url.resolve(base_uri,a.attribs.href)}">${a.attribs.title || $(a).text()}</a>`));
+            tags.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${a.attribs.title || $(a).text()}</a>`));
         });
 
         // download images
@@ -182,7 +182,7 @@ function ingest_video(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch();
 
-    libingester.util.fetch_html(rss_feed).then(($) => {
+    libingester.util.fetch_html(RSS_FEED).then(($) => {
         const links = $('item').get().map((item) => $(item).find('guid').text());
         Promise.all(
             links.map((uri) => {
