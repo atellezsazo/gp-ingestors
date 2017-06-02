@@ -1,12 +1,11 @@
 {
-    "name": "ingestor-vtv.vn",
+    "name": "ingestor-thanhnien",
     "version": "0.0.1",
     "license": "UNLICENSED",
     "dependencies": {
         "libingester": "^1.0.0",
         "mustache": "^2.3.0",
         "request": "^2.80.0",
-        "request-promise": "^4.1.1",
-        "rss-to-json": "^1.0.2"
+        "request-promise": "^4.1.1"
     }
 }
