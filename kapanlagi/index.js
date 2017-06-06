@@ -1,21 +1,19 @@
 'use strict';
 
+const cheerio = require('cheerio');
 const libingester = require('libingester');
 const mustache = require('mustache');
-const Promise = require("bluebird");
 const request = require('request');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
-const template = require('./template');
 const url = require('url');
 const xml2js = require('xml2js');
+const template = require('./template');
 
-const base_uri = "https://www.kapanlagi.com/";
-const rss_uri = "https://www.kapanlagi.com/feed/";
-const concurrency = 1;
+const RSS_URI = "https://www.kapanlagi.com/feed/";
 
 // Remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
     'iframe',
     'noscript',
     'script',
@@ -28,7 +26,7 @@ const remove_elements = [
 ];
 
 // clean attr (tag)
-const remove_attr = [
+const REMOVE_ATTR = [
     'class',
     'height',
     'id',
@@ -37,6 +35,21 @@ const remove_attr = [
     'srcset',
     'style',
     'width'
+];
+
+// clean attr (tag)
+const CLEAN_TAGS = [
+    'a',
+    'div',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'i',
+    'img',
+    'span',
+    'table',
 ];
 
 function ingest_article(hatch, uri) {
@@ -56,11 +69,13 @@ function ingest_article(hatch, uri) {
 
         // Pull out the main image
         const main_img = $profile('meta[property="og:image"]').attr('content');
-        const main_image = libingester.util.download_image(main_img, uri);
-        main_image.set_title(title);
-        const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
-        hatch.save_asset(main_image);
-        asset.set_thumbnail(main_image);
+        if (typeof main_img !== undefined) {
+            const main_image = libingester.util.download_image(main_img, uri);
+            main_image.set_title(title);
+            const image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
+            hatch.save_asset(main_image);
+            asset.set_thumbnail(main_image);
+        }
 
         const synopsis = $profile('meta[name="description"]').attr('content');
         asset.set_synopsis(synopsis);
@@ -77,40 +92,33 @@ function ingest_article(hatch, uri) {
         asset.set_section(category);
 
         let pages = [];
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
         const ingest_body = ($profile, finish_process) => {
             let post_body = $profile('.entertainment-detail-news');
             // Download images
             post_body.find("img").map(function() {
                 if (this.attribs.src) {
-                    const image = libingester.util.download_img(this, base_uri);
+                    const image = libingester.util.download_img($profile(this), base_uri);
                     image.set_title(title);
                     hatch.save_asset(image);
                     this.attribs["data-libingester-asset-id"] = image.asset_id;
-                    for (const attr of remove_attr) {
-                        delete this.attribs[attr];
-                    }
                 }
             });
 
-            post_body.find("a, div, h1, h2, h3, h4, h5, h6, span").map(function() {
-                if (this.attribs.style) {
-                    delete this.attribs.style;
-                }
-            });
+            post_body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
             // resolve links
             post_body.find("a").map(function() {
-                this.attribs.href = url.resolve(base_uri, this.attribs.href);
+                if (typeof this.attribs.href !== undefined)
+                    this.attribs.href = url.resolve(base_uri, this.attribs.href);
             });
 
             const next = $profile('.link-pagging-warper a').attr('href');
             const last_pagination = $profile('ul.pg-pagging li:last-child a').first();
 
-            // remove elements (body)
-            for (const remove_element of remove_elements) {
-                post_body.find(remove_element).remove();
-            }
-
+            // remove elements and comments
+            post_body.contents().filter((index, node) => node.type === 'comment').remove();
+            post_body.find(REMOVE_ELEMENTS.join(',')).remove();
             pages.push(post_body.html());
 
             if (next && last_pagination.length != 0) {
@@ -150,7 +158,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rp({ uri: rss_uri, gzip: true }).then((res) => {
+    rp({ uri: RSS_URI, gzip: true }).then((res) => {
         var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
         parser.parseString(res, (err, result) => {
             const rss = rss2json.parser(result);
@@ -161,13 +169,9 @@ function main() {
                 }
             });
 
-            Promise.map(links, (link) => {
-                return ingest_article(hatch, link);
-            }, { concurrency: concurrency }).then(() => {
+            Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
                 return hatch.finish();
-            }).catch((err) => {
-                console.log('ingestor error: ', err);
-            });
+            }).catch((err) => console.log(err));
         });
     });
 }
