@@ -2,17 +2,13 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const request = require('request');
-const rp = require('request-promise');
 const rss2json = require('rss-to-json');
 const template = require('./template');
-const url = require('url');
 
-const base_uri = 'https://www.pergidulu.com/';
-const rss_feed = 'https://www.pergidulu.com/feed/'; //Artists
+const RSS_FEED = 'https://www.pergidulu.com/feed/'; //Artists
 
 //Remove attributes (images)
-const attr_image = [
+const REMOVE_ATTR = [
     'class',
     'data-lazy-sizes',
     'data-lazy-src',
@@ -25,7 +21,7 @@ const attr_image = [
 ];
 
 //Remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
     'div',
     'noscript',
     'script',
@@ -33,7 +29,7 @@ const remove_elements = [
 ];
 
 //Remove parents from these elements (body)
-const rm_elem_parent = [
+const REMOVE_ELEMENTS_PARENT = [
     'a.nectar-button',
     'span.guide-info-box',
 ];
@@ -65,7 +61,7 @@ function ingest_article(hatch, uri) {
 
         // Pull out the main image
         let main_img = $profile('.post-featured-img img').first();
-        if (typeof main_img.attr('data-lazy-src') != undefined) {
+        if (typeof main_img.attr('data-lazy-src') !== undefined) {
             main_img.attr('src', main_img.attr('data-lazy-src'));
         }
         const main_image = libingester.util.download_img(main_img, base_uri);
@@ -73,27 +69,29 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
 
-        // remove elements (body)
-        for (const remove_element of remove_elements) {
-            body.find(remove_element).remove();
-        }
-        for (const elem of rm_elem_parent) {
+
+        // remove elements and comments
+        body.contents().filter((index, node) => node.type === 'comment').remove();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+
+        for (const elem of REMOVE_ELEMENTS_PARENT) {
             body.find(elem).first().parent().remove();
         }
 
         // download images
         body.find("img").map(function() {
-            if (typeof this.attribs['data-lazy-src'] != undefined) {
+            if (typeof this.attribs['data-lazy-src'] !== undefined) {
                 this.attribs.src = this.attribs['data-lazy-src'];
             }
-            const image = libingester.util.download_img(this, base_uri);
+            const image = libingester.util.download_img($profile(this), base_uri);
             image.set_title(title);
             hatch.save_asset(image);
             this.attribs["data-libingester-asset-id"] = image.asset_id;
-            for (const attr of attr_image) {
-                delete this.attribs[attr];
-            }
         });
+
+        //clean tags
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
+        body.find("img").get().map((tag) => clean_attr(tag));
 
         // render template
         const content = mustache.render(template.structure_template, {
@@ -112,7 +110,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_feed, (err, rss) => {
+    rss2json.load(RSS_FEED, (err, rss) => {
         const news_uris = rss.items.map((datum) => datum.url);
         Promise.all(news_uris.map((uri) => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();
