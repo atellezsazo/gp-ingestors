@@ -27,7 +27,7 @@ const RSS_FEED = [
 ];
 
 // cleaning elements
-const clean_elements = [
+const CLEAN_ELEMENTS = [
     'a',
     'div',
     'figure',
@@ -42,7 +42,7 @@ const clean_elements = [
 ];
 
 // delete attr (tag)
-const remove_attr = [
+const REMOVE_ATTR = [
     'align',
     'class',
     'data-field',
@@ -66,7 +66,7 @@ const remove_attr = [
 ];
 
 // remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
     '.adtxt',
     '.auth',
     '.cl10',
@@ -128,8 +128,6 @@ function ingest_article(hatch, uri) {
         const keywords = $('.taglst').first().clone();
         const section = $('meta[name="keywords"]').attr('content');
         const title = body.find('.tit').text() || $('meta[property="og:title"]').attr('content');
-        const uri_main_image = body.find('.news-avatar').first().attr('src');
-        const uri_thumb = $('meta[property="og:image"]').attr('content');
 
         // article settings
         asset.set_canonical_uri(uri);
@@ -140,11 +138,11 @@ function ingest_article(hatch, uri) {
         asset.set_title(title);
 
         // remove elements and clean tags
-        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
-        body.find(remove_elements.join(',')).remove();
-        clean_tags(body.find(clean_elements.join(',')));
-        clean_tags(category.find(clean_elements.join(',')));
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
+        clean_tags(category.find(CLEAN_ELEMENTS.join(',')));
         body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
         remove_empty_tag($, body);
         body.find('span').get().map((span) => {
