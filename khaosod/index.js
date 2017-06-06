@@ -4,20 +4,38 @@ const libingester = require('libingester');
 const mustache = require('mustache');
 const template = require('./template');
 
-const base_uri = 'https://www.khaosod.co.th/';
-const uri_article = 'https://www.khaosod.co.th/breaking-news';
+const BASE_URI = 'https://www.khaosod.co.th/';
 
 // cleaning elements
-const clean_elements = ['a', 'div', 'figure', 'i', 'p', 'span'];
+const CLEAN_ELEMENTS = [
+    'a',
+    'div',
+    'figure',
+    'i',
+    'p',
+    'span',
+];
 
 // delete attr (tag)
-const remove_attr = ['height', 'itemscope', 'itemprop', 'itemtype',
-    'sizes', 'style', 'title', 'width',
+const REMOVE_ATTR = [
+    'height',
+    'itemscope',
+    'itemprop',
+    'itemtype',
+    'sizes',
+    'style',
+    'title',
+    'width',
 ];
 
 // remove elements (body)
-const remove_elements = ['.td-post-featured-image', '.ud-video-wrapper', 'iframe',
-    'noscript', 'script', 'style',
+const REMOVE_ELEMENTS = [
+    '.td-post-featured-image',
+    '.ud-video-wrapper',
+    'iframe',
+    'noscript',
+    'script',
+    'style',
 ];
 
 function ingest_article(hatch, uri) {
@@ -49,13 +67,13 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(main_image);
 
         // remove elements and clean tags
-        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         body.find('#AdAsia').parent().remove();
-        body.find(remove_elements.join(',')).remove();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
         category.find('img, i, meta').remove();
-        clean_tags(body.find(clean_elements.join(',')));
-        clean_tags(category.find(clean_elements.join(',')));
+        clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
+        clean_tags(category.find(CLEAN_ELEMENTS.join(',')));
 
         // download images
         body.find('img').get().map((img) => {
@@ -83,10 +101,10 @@ function main() {
     const hatch = new libingester.Hatch();
 
     const _add_day = (date, numDays = 0) => {
-        return numDays == 0 ? date : new Date(date.setDate(date.getDate() + numDays));
-    }
+        return numDays === 0 ? date : new Date(date.setDate(date.getDate() + numDays));
+    };
 
-    libingester.util.fetch_html(base_uri + 'home/').then(($) => {
+    libingester.util.fetch_html(BASE_URI + 'home/').then(($) => {
         let links = [],
             max_category = 3,
             num = 1,
@@ -104,7 +122,7 @@ function main() {
                 const uri = tag_article.find('h3 a').first().attr('href');
                 if (uri.includes('khaosod.co.th') && !uri.includes('/feed/')) {
                     const new_category = uri.replace(regex1, '$1').replace(regex2, '$1');
-                    if (category == '') category = new_category;
+                    if (category === '') category = new_category;
                     if (category != new_category) num = 1;
                     if (num++ <= max_category) links.push(uri);
                     category = new_category;
