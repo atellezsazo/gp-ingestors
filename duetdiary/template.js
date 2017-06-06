@@ -25,6 +25,3 @@ const structure_template = (`
 `);
 
 exports.structure_template = structure_template;
-
-/* End of file template.js */
-/* Location: ./duetdiary/template.js */
