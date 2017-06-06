@@ -3,13 +3,12 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const template = require('./template');
-const url = require('url');
 
-const base_uri = "http://marischkaprudence.blogspot.com.br";
-const rss_uri = "http://marischkaprudence.blogspot.com.br/feeds/posts/default";
+const BASE_URI = "http://marischkaprudence.blogspot.com.br";
+const RSS_URI = "http://marischkaprudence.blogspot.com.br/feeds/posts/default";
 
 // Remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
     'iframe',
     'noscript',
     'script',
@@ -18,7 +17,7 @@ const remove_elements = [
 ];
 
 // clean attr (tag)
-const remove_attr = [
+const REMOVE_ATTR = [
     'border',
     'dir',
     'height',
@@ -34,7 +33,7 @@ const remove_attr = [
 ];
 
 // clean attr (tag)
-const clear_tags = [
+const CLEAN_TAGS = [
     'a',
     'b',
     'br',
@@ -53,11 +52,8 @@ function ingest_article(hatch, obj) {
         const category = $profile('.meta_categories');
 
         // clear tags (body)
-        category.find('a').map(function() {
-            for (const attr of remove_attr) {
-                delete this.attribs[attr];
-            }
-        });
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
+        category.find("a").get().map((tag) => clean_attr(tag));
 
         const date_published = new Date(Date.parse(obj.updated));
         const section = $profile('.meta_categories').text();
@@ -79,7 +75,7 @@ function ingest_article(hatch, obj) {
         // Download images
         $profile('.post-body img').map(function() {
             if (this.attribs.src) {
-                const image = libingester.util.download_img($profile(this), base_uri);
+                const image = libingester.util.download_img($profile(this), BASE_URI);
                 image.set_title(title);
                 hatch.save_asset(image);
                 this.attribs['data-libingester-asset-id'] = image.asset_id;
@@ -88,24 +84,15 @@ function ingest_article(hatch, obj) {
 
         const body = $profile('.post-body').first();
 
-        // remove elements (body)
-        for (const element of remove_elements) {
-            body.find(element).remove();
-        }
+        // remove elements and comments
+        body.contents().filter((index, node) => node.type === 'comment').remove();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
 
+        //clean tags
+        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
         body.find('.BLOG_video_class').parent().remove(); //Delete videos
 
-        // clear tags (body)
-        for (const tag of clear_tags) {
-            body.find(tag).map(function() {
-                for (const attr of remove_attr) {
-                    delete this.attribs[attr];
-                }
-            });
-        }
-
         asset.set_synopsis(body.text().substring(0, 140));
-
         const content = mustache.render(template.structure_template, {
             category: category,
             author: author,
@@ -124,16 +111,15 @@ function ingest_article(hatch, obj) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    const posts = libingester.util.fetch_html(rss_uri).then(($) => {
+    libingester.util.fetch_html(RSS_URI).then(($) => {
         const objects = $('entry:nth-child(-n+18)').map(function() {
             return {
                 updated: $(this).find('updated').text(),
                 uri: $(this).find('link[rel="alternate"]').attr('href'),
             }
         }).get();
-        return Promise.all(objects.map((obj) => ingest_article(hatch, obj))).then(values => {
-            return hatch.finish();
-        });
+        return Promise.all(objects.map((obj) => ingest_article(hatch, obj)))
+            .then(() => hatch.finish());
     });
 }
 

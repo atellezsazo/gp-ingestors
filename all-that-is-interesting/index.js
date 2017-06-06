@@ -73,7 +73,6 @@ function ingest_post(hatch, uri) {
 
         const ingest_body = ($profile, finish_process) => {
             const post_body = $profile('article.post-content');
-
             const info_img = $profile('.gallery-descriptions-wrap');
             post_body.find("img").map(function() {
                 const parent = $profile(this);
@@ -122,7 +121,7 @@ function ingest_post(hatch, uri) {
         };
 
         const body_promise = new Promise((resolve, reject) => {
-            ingest_body($profile, function() {
+            ingest_body($profile, () => {
                 const content = mustache.render(template.structure_template, {
                     title: title,
                     date_published: published,
@@ -137,7 +136,6 @@ function ingest_post(hatch, uri) {
                 resolve();
             });
         });
-
         return Promise.all([body_promise]);
     });
 }
