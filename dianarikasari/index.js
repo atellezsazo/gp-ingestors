@@ -2,21 +2,21 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const template = require('./template');
 const url = require('url');
+const template = require('./template');
 
-const base_uri = "http://dianarikasari.blogspot.com";
+const BASE_URI = "http://dianarikasari.blogspot.com";
 
 // Remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
     'iframe',
     'noscript',
     'script',
-    'style'
+    'style',
 ];
 
 // clean attr (tag)
-const remove_attr = [
+const REMOVE_ATTR = [
     'border',
     'class',
     'dir',
@@ -27,17 +27,29 @@ const remove_attr = [
     'srcset',
     'style',
     'trbidi',
-    'width'
+    'width',
 ];
 
-// embed video
-const video_iframes = [
-    'youtube',
+// clean attr (tag)
+const CLEAN_TAGS = [
+    'a',
+    'b',
+    'br',
+    'div',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'i',
+    'img',
+    'span',
+    'table',
 ];
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        const post = $profile('.date-outer').map(function() {
+        $profile('.date-outer').map(function() {
             const date_published = new Date(Date.parse($profile(this).find('.date-header span').text()));
             const title = $profile(this).find('.post-title').text();
 
@@ -76,7 +88,7 @@ function ingest_article(hatch, uri) {
                 let isFirst = true;
                 $profile(this).find('.post-body img').map(function() {
                     if (this.attribs.src) {
-                        const image = libingester.util.download_img(this, base_uri);
+                        const image = libingester.util.download_img(this, BASE_URI);
                         image.set_title(title);
                         hatch.save_asset(image);
 
@@ -84,30 +96,20 @@ function ingest_article(hatch, uri) {
                             asset.set_thumbnail(image);
                             isFirst = false;
                         }
-
                         this.attribs['data-libingester-asset-id'] = image.asset_id;
-                        for (const attr of remove_attr) {
-                            delete this.attribs[attr];
-                        }
                     }
                 });
-
-                // remove elements (body)
-                for (const remove_element of remove_elements) {
-                    $profile(this).find(remove_element).remove();
-                }
 
                 const body = $profile(this).find('.post-body').first();
                 asset.set_synopsis(body.text().substring(0, 140));
 
-                //Delete style 
-                body.find("div, span, h1, h2, h3, h4, h5").map(function() {
-                    for (const attr of remove_attr) {
-                        if (this.attribs[attr]) {
-                            delete this.attribs[attr];
-                        }
-                    }
-                });
+                // remove elements and comments
+                body.contents().filter((index, node) => node.type === 'comment').remove();
+                body.find(REMOVE_ELEMENTS.join(',')).remove();
+
+                //clean tags
+                const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
+                body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
                 const content = mustache.render(template.structure_template, {
                     category: category,
@@ -129,11 +131,11 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    const posts = new Promise((resolve, reject) => {
-        libingester.util.fetch_html(base_uri).then(($posts) => {
+    new Promise((resolve, reject) => {
+        libingester.util.fetch_html(BASE_URI).then(($posts) => {
             const posts_links = $posts('.post-title a').map(function() {
                 const uri = $posts(this).attr('href');
-                return url.resolve(base_uri, uri);
+                return url.resolve(BASE_URI, uri);
             }).get();
             Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
                 return hatch.finish();
