@@ -4,10 +4,8 @@ const libingester = require('libingester');
 const mustache = require('mustache');
 const rss2json = require('rss-to-json');
 const template = require('./template');
-const url = require('url');
 
-const base_uri = 'https://blogazine.pub/';
-const rss_uri = 'https://blogazine.pub/blog/feed';
+const RSS_URI = 'https://blogazine.pub/blog/feed';
 
 /**
  * utilities
@@ -19,13 +17,34 @@ const rss_uri = 'https://blogazine.pub/blog/feed';
  */
 function utilities(item, $) {
     /** array of tags to be removed */
-    const _remove_elements = ['iframe', 'ins', 'script', 'video'];
+    const _remove_elements = [
+        'iframe',
+        'ins',
+        'script',
+        'video',
+    ];
 
     /** array of attributes to be removed */
-    const _remove_attr = ['alt', 'class', 'dir', 'height', 'style', 'width'];
+    const _remove_attr = [
+        'alt',
+        'class',
+        'dir',
+        'height',
+        'style',
+        'width',
+    ];
 
     /** array of tags to be cleaned */
-    const _clear_tags = ['div', 'img', 'ol', 'p', 'span', 'strong', 'u', 'ul'];
+    const _clear_tags = [
+        'div',
+        'img',
+        'ol',
+        'p',
+        'span',
+        'strong',
+        'u',
+        'ul',
+    ];
 
     /** Cleans the HTML element to return a string */
     const _cleaning_tags = (tags) => {
@@ -111,13 +130,11 @@ function ingest_article(hatch, item) {
 
         // download images
         post.body.find('img').map((id, img) => {
-            if (img.attribs.src) {
-                const image = libingester.util.download_img($(img));
-                image.set_title(item.title);
-                hatch.save_asset(image);
-                if (id === 0) {
-                    post.thumbnail = image;
-                }
+            const image = libingester.util.download_img($(img));
+            image.set_title(item.title);
+            hatch.save_asset(image);
+            if (id === 0) {
+                post.thumbnail = image;
             }
         });
 
@@ -148,7 +165,7 @@ function ingest_article(hatch, item) {
  */
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, (err, rss) => {
+    rss2json.load(RSS_URI, (err, rss) => {
         const batch_items = rss.items.map(data => data);
         Promise.all(batch_items.map(item => ingest_article(hatch, item))).then(() => {
             return hatch.finish();
@@ -157,6 +174,3 @@ function main() {
 }
 
 main();
-
-/* End of file index.js */
-/* Location: ./blogazine/index.js */
