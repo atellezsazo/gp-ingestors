@@ -3,26 +3,51 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rss2json = require('rss-to-json');
-const template = require('./article_template');
-const url = require('url');
 const URLParse = require('url-parse');
 
-const base_uri = "https://news.detik.com/";
-const rss_uri = "http://rss.detik.com/index.php/detikcom";
+const template = require('./article_template');
+
+const RSS_URI = "http://rss.detik.com/index.php/detikcom";
 
 // Remove elements (body)
-const remove_elements = ['#bx_polong', '#thepolong', '#thumbs',
-    '.detikads', '.news_tag', '.newstag', '.thepolong', '[id^="beacon"]',
-    'a[href="#"]', 'iframe', 'script', 'video'
+const REMOVE_ELEMENTS = [
+    '#bx_polong',
+    '#thepolong',
+    '#thumbs',
+    '.detikads',
+    '.news_tag',
+    '.newstag',
+    '.thepolong',
+    '[id^="beacon"]',
+    'a[href="#"]',
+    'iframe',
+    'script',
+    'video',
 ];
 
 // clean attr (tag)
-const remove_attr = ['border', 'data-page', 'height', 'lang', 'rel', 'style',
-    'width'
+const REMOVE_ATTR = [
+    'border',
+    'data-page',
+    'height',
+    'lang',
+    'rel',
+    'style',
+    'width',
 ];
 
 // clean attr (tag)
-const clear_tags = ['a', 'b', 'br', 'div', 'em', 'i', 'img', 'span', 'ul'];
+const CLEAN_TAGS = [
+    'a',
+    'b',
+    'br',
+    'div',
+    'em',
+    'i',
+    'img',
+    'span',
+    'ul',
+];
 
 /**
  * ingest_article
@@ -57,15 +82,9 @@ function ingest_article(hatch, uri) {
         asset.set_thumbnail(main_image);
         asset.set_section(art_category);
 
-        // remove elements (body)
-        remove_elements.map(detach_element => {
-            art_body.find(detach_element).remove();
-        });
-
-        // remove comments (body)
-        art_body.contents().filter(function() {
-            return this.nodeType == 8;
-        }).remove();
+        // remove elements and comments
+        art_body.contents().filter((index, node) => node.type === 'comment').remove();
+        art_body.find(REMOVE_ELEMENTS.join(',')).remove();
 
         // download images
         art_body.find('img').map(function() {
@@ -80,14 +99,9 @@ function ingest_article(hatch, uri) {
             }
         });
 
-        // clear tags (body)
-        for (const tag of clear_tags) {
-            art_body.find(tag).map(function() {
-                for (const attr of remove_attr) {
-                    delete this.attribs[attr];
-                }
-            });
-        }
+        //clean tags
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
+        art_body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
         // render content
         const content = mustache.render(template.structure_template, {
@@ -107,7 +121,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, (err, rss) => {
+    rss2json.load(RSS_URI, (err, rss) => {
         const batch_links = rss.items.map(data => data.url);
         Promise.all(batch_links.map(uri => ingest_article(hatch, uri)))
             .then(() => {
@@ -117,6 +131,3 @@ function main() {
 }
 
 main();
-
-/* End of file index.js */
-/* Location: ./detik/index.js */
