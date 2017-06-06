@@ -5,17 +5,31 @@ const mustache = require('mustache');
 const rss2json = require('rss-to-json');
 const template = require('./template');
 
-const base_uri = 'http://www.mamomomomo.com/';
-const rss_uri = 'http://www.mamomomomo.com/feed/';
+const RSS_URI = 'http://www.mamomomomo.com/feed/';
 
 // clean tags
-const clean_tags = ['a', 'figure', 'p', 'span'];
+const CLEAN_TAGS = [
+    'a',
+    'figure',
+    'p',
+    'span',
+];
 
 // remove metadata
-const remove_attr = ['height', 'rscset', 'sizes', 'style', 'width'];
+const REMOVE_ATTR = [
+    'height',
+    'rscset',
+    'sizes',
+    'style',
+    'width'
+];
 
 // remove elements
-const remove_elements = ['noscript', 'script', 'style'];
+const REMOVE_ELEMENTS = [
+    'noscript',
+    'script',
+    'style',
+];
 
 /** ingest_article
  *  @param {Object} hatch The Hatch object of the Ingester library
@@ -42,10 +56,10 @@ function ingest_article(hatch, uri) {
         asset.set_title(title);
 
         // clean body
-        const clean_attr = (tag, a = remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
-        body.find(remove_elements.join(',')).remove();
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find('iframe').parent().remove();
-        body.find(clean_tags.join(',')).get().map((tag) => clean_attr(tag));
+        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
         // download main image
         let main_image, set_thumbnail = true;
@@ -84,12 +98,12 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, (err, rss) => {
+    rss2json.load(RSS_URI, (err, rss) => {
         Promise.all(
             rss.items.map((item) => ingest_article(hatch, item.url))
         ).then(() => {
             return hatch.finish();
-        })
+        });
     });
 }
 

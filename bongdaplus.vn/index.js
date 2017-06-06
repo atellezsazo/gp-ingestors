@@ -4,12 +4,11 @@ const cheerio = require('cheerio');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rss2json = require('rss-to-json');
-const template = require('./template');
 const url = require('url');
+const template = require('./template');
 
-const base_uri = 'http://bongdaplus.vn/';
-const max_links = 5; // max links per 'rss'
-const rss_feed = [
+const BASE_URI = 'http://bongdaplus.vn/';
+const RSS_FEED = [
     'http://bongdaplus.vn/rss/trang-chu.rss', // home
     'http://bongdaplus.vn/rss/viet-nam/2.rss', // vietnam
     'http://bongdaplus.vn/rss/anh/13.rss', // english
@@ -28,20 +27,64 @@ const rss_feed = [
 ];
 
 // cleaning elements
-const clean_elements = ['a', 'div', 'figure', 'h2', 'i', 'p', 'span', 'table',
-    'td', 'tr', 'ul'
+const clean_elements = [
+    'a',
+    'div',
+    'figure',
+    'h2',
+    'i',
+    'p',
+    'span',
+    'table',
+    'td',
+    'tr',
+    'ul',
 ];
 
 // delete attr (tag)
-const remove_attr = ['align', 'class', 'data-field', 'data-original', 'h',
-    'height', 'id', 'itemscope', 'itemprop', 'itemtype', 'photoid', 'rel',
-    'sizes', 'style', 'title', 'type', 'w', 'width', 'dir',
+const remove_attr = [
+    'align',
+    'class',
+    'data-field',
+    'data-original',
+    'dir',
+    'h',
+    'height',
+    'id',
+    'itemscope',
+    'itemprop',
+    'itemtype',
+    'photoid',
+    'rel',
+    'sizes',
+    'style',
+    'title',
+    'type',
+    'w',
+    'width',
+
 ];
 
 // remove elements (body)
-const remove_elements = ['.adtxt', '.auth', '.cl10', '.clr', '.cref',
-    '.embedbox', '.fbshr', '.goosip', '.moreref', '.nsrc', '.taglst', '.tit',
-    '#AbdVideoInPagePlayerWrapper', 'br', 'iframe', 'noscript', 'script', 'style'
+const remove_elements = [
+    '.adtxt',
+    '.auth',
+    '.cl10',
+    '.clr',
+    '.cref',
+    '.embedbox',
+    '.fbshr',
+    '.goosip',
+    '.moreref',
+    '.nsrc',
+    '.taglst',
+    '.tit',
+    '#AbdVideoInPagePlayerWrapper',
+    'br',
+    'iframe',
+    'noscript',
+    'script',
+    'style',
 ];
 
 // delete duplicated elements in array
@@ -102,7 +145,7 @@ function ingest_article(hatch, uri) {
         body.find(remove_elements.join(',')).remove();
         clean_tags(body.find(clean_elements.join(',')));
         clean_tags(category.find(clean_elements.join(',')));
-        body.find('a').get().map((a) => a.attribs.href = url.resolve(base_uri, a.attribs.href));
+        body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
         remove_empty_tag($, body);
         body.find('span').get().map((span) => {
             const text = $(span).text().substring(0, 8);
@@ -114,11 +157,11 @@ function ingest_article(hatch, uri) {
         // generating tags
         const categories = cheerio('<div></div>');
         category.find('a').get().map((a) => {
-            categories.append(cheerio(`<a href="${url.resolve(base_uri,a.attribs.href)}">${$(a).text()}</a>`));
+            categories.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${$(a).text()}</a>`));
         });
         const tags = cheerio('<div></div>');
         keywords.find('a').get().map((a) => {
-            tags.append(cheerio(`<a href="${url.resolve(base_uri,a.attribs.href)}">${$(a).text()}</a>`));
+            tags.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${$(a).text()}</a>`));
         });
 
         // download images
@@ -157,13 +200,13 @@ function main() {
     const hatch = new libingester.Hatch();
     let links = [];
     const get_links = (f) => {
-        return Promise.all(rss_feed.map((uri_rss) => {
+        return Promise.all(RSS_FEED.map((uri_rss) => {
             return new Promise((resolve, reject) => {
                 rss2json.load(uri_rss, (err, rss) => {
                     if (err) {
                         reject(err);
                     }
-                    for (let i = 0; i < max_links; i++) {
+                    for (let i = 0; i < 5; i++) {
                         const item = rss.items[i]
                         links.push(item.url);
                     }
@@ -171,7 +214,7 @@ function main() {
                 })
             })
         })).then(f);
-    }
+    };
 
     get_links(() => Promise.all(
         links.unique().map((uri) => ingest_article(hatch, uri))

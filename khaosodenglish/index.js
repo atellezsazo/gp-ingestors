@@ -5,21 +5,40 @@ const mustache = require('mustache');
 const rss2json = require('rss-to-json');
 const template = require('./template');
 
-const base_uri = 'http://www.khaosodenglish.com/';
-const rss_feed = 'http://www.khaosodenglish.com/feed/';
+const RSS_FEED = 'http://www.khaosodenglish.com/feed/';
 
 // cleaning elements
-const clean_elements = ['a', 'div', 'figure', 'i', 'p', 'span'];
+const clean_elements = [
+    'a',
+    'div',
+    'figure',
+    'i',
+    'p',
+    'span',
+];
 
 // delete attr (tag)
-const remove_attr = ['height', 'itemscope', 'itemprop', 'itemtype',
-    'sizes', 'style', 'title', 'width',
+const remove_attr = ['height',
+    'itemscope',
+    'itemprop',
+    'itemtype',
+    'sizes',
+    'style',
+    'title',
+    'width',
 ];
 
 // remove elements (body)
-const remove_elements = ['.td-post-featured-image', '.twitter-tweet',
-    '.twitter-video', '.ud-video-wrapper', 'div', 'iframe', 'noscript', 'script',
-    'style'
+const remove_elements = [
+    'div',
+    'iframe',
+    'noscript',
+    'script',
+    'style',
+    '.td-post-featured-image',
+    '.twitter-tweet',
+    '.twitter-video',
+    '.ud-video-wrapper',
 ];
 
 function ingest_article(hatch, uri) {
@@ -83,17 +102,17 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_feed, (err, rss) => {
+    rss2json.load(RSS_FEED, (err, rss) => {
         let promises = [];
         rss.items.map((item) => {
             if (!item.url.includes('/crimecourtscalamity/')) { // excluding "crime y legal"
                 promises.push(ingest_article(hatch, item.url));
             }
-        })
+        });
         Promise.all(promises).then(() => {
             return hatch.finish();
         });
-    })
+    });
 }
 
 main();

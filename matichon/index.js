@@ -3,23 +3,38 @@
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rss2json = require('rss-to-json');
-const template = require('./template');
 const url = require('url');
+const template = require('./template');
 
-const base_uri = 'https://www.matichon.co.th/home';
-const rss_uri = 'https://www.matichon.co.th/feed';
+const RSS_URI = 'https://www.matichon.co.th/feed';
 
 // Remove elements (body)
-const remove_elements = ['.td-a-rec', '.td-a-rec-id-content_inline',
-    '.td-post-featured-image', '.ud-article-info-table', 'iframe', 'ins',
-    'script', 'video'
+const REMOVE_ELEMENTS = [
+    '.td-a-rec',
+    '.td-a-rec-id-content_inline',
+    '.td-post-featured-image',
+    '.ud-article-info-table',
+    'iframe',
+    'ins',
+    'script',
+    'video'
 ];
 
-const remove_attr = ['alt', 'border', 'height', 'sizes', 'srcset',
-    'style', 'width'
+const REMOVE_ATTR = [
+    'alt',
+    'border',
+    'height',
+    'sizes',
+    'srcset',
+    'style',
+    'width'
 ];
 
-const clear_tags = ['figure', 'figcaption', 'img'];
+const CLEAR_TAGS = [
+    'figure',
+    'figcaption',
+    'img'
+];
 
 /**
  * ingest_article
@@ -59,12 +74,11 @@ function ingest_article(hatch, item) {
 
         // download images
         post_body.find('img').get().map((img) => {
-            if (img.attribs.src != undefined) {
-                const image = libingester.util.download_img($(img));
-                image.set_title(item.title);
-                img.attribs['data-libingester-asset-id'] = image.asset_id;
-                hatch.save_asset(image);
-            }
+            const image = libingester.util.download_img($(img));
+            image.set_title(item.title);
+            img.attribs['data-libingester-asset-id'] = image.asset_id;
+            hatch.save_asset(image);
+
         });
 
         // tags
@@ -74,14 +88,11 @@ function ingest_article(hatch, item) {
 
         // remove elements and comments
         post_body.contents().filter((index, node) => node.type === 'comment').remove();
-        post_body.find(remove_elements.join(',')).remove();
+        post_body.find(REMOVE_ELEMENTS.join(',')).remove();
 
-        // clear tags (body)
-        post_body.find(clear_tags.join(',')).map((index, elem) => {
-            remove_attr.map((attr) => {
-                delete elem.attribs[attr]
-            })
-        });
+        //clen tags
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+        post_body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
         render_template(hatch, asset, template.structure_template, {
             author: post_author,
@@ -103,7 +114,7 @@ function ingest_article(hatch, item) {
  */
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, (err, rss) => {
+    rss2json.load(RSS_URI, (err, rss) => {
         const batch_items = rss.items.map(data => data);
         Promise.all(batch_items.map(item => ingest_article(hatch, item))).then(() => {
             return hatch.finish();
@@ -112,6 +123,3 @@ function main() {
 }
 
 main();
-
-/* End of file index.js */
-/* Location: ./matichon/index.js */
