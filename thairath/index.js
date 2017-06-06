@@ -2,23 +2,44 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const template = require('./template');
-const url = require('url');
 const rss2json = require('rss-to-json');
+const template = require('./template');
 
-const base_uri = "http://www.thairath.co.th";
-const rss_uri = "http://www.thairath.co.th/rss/news.xml";
+const RSS_URI = "http://www.thairath.co.th/rss/news.xml";
 
 // Remove elements (body)
-const remove_elements = ['iframe', 'script', 'video'];
-
-// clean attr (tag)
-const remove_attr = ['border', 'class', 'data-srcset', 'height', 'id', 'lang', 'rel', 'style',
-    'width', 'figure'
+const REMOVE_ELEMENTS = [
+    'iframe',
+    'script',
+    'video',
 ];
 
 // clean attr (tag)
-const clear_tags = ['a', 'b', 'br', 'div', 'em', 'i', 'img', 'span', 'ul'];
+const REMOVE_ATTR = [
+    'border',
+    'class',
+    'data-srcset',
+    'figure',
+    'height',
+    'id',
+    'lang',
+    'rel',
+    'style',
+    'width',
+];
+
+// clean attr (tag)
+const CLEAN_TAGS = [
+    'a',
+    'b',
+    'br',
+    'div',
+    'em',
+    'i',
+    'img',
+    'span',
+    'ul',
+];
 
 /**
  * ingest_article
@@ -65,32 +86,21 @@ function ingest_article(hatch, uri) {
             $profile(this).replaceWith($profile(img));
         });
 
-        // remove elements (body)
-        remove_elements.map(detach_element => {
-            body.find(detach_element).remove();
-        });
+        // remove elements and comments
+        body.contents().filter((index, node) => node.type === 'comment').remove();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
 
         // download images
         body.find('img').map(function() {
-            if (this.attribs.src != undefined) {
-                const image = libingester.util.download_img($profile(this), base_uri);
-                image.set_title(title);
-                hatch.save_asset(image);
-                for (const attr of remove_attr) {
-                    delete this.attribs[attr];
-                }
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-            }
+            const image = libingester.util.download_img($profile(this), base_uri);
+            image.set_title(title);
+            hatch.save_asset(image);
+            this.attribs["data-libingester-asset-id"] = image.asset_id;
         });
 
-        // clear tags
-        for (const tag of clear_tags) {
-            $profile(tag).map(function() {
-                for (const attr of remove_attr) {
-                    delete this.attribs[attr];
-                }
-            });
-        }
+        //clean tags
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
+        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
         // render content
         const content = mustache.render(template.structure_template, {
@@ -109,7 +119,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, (err, rss) => {
+    rss2json.load(RSS_URI, (err, rss) => {
         const batch_links = rss.items.map(data => data.link);
         Promise.all(batch_links.map(uri => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();
@@ -118,6 +128,3 @@ function main() {
 }
 
 main();
-
-/* End of file index.js */
-/* Location: ./thairath/index.js */
