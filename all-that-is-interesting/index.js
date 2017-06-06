@@ -2,15 +2,11 @@
 
 const libingester = require('libingester');
 const mustache = require('mustache');
-const Promise = require('bluebird');
-const request = require('request');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
 const template = require('./template');
-const url = require('url');
 
-const base_uri = "http://all-that-is-interesting.com/";
-const rss_uri = "http://all-that-is-interesting.com/feed/";
+const RSS_URI = "http://all-that-is-interesting.com/feed/";
 
 //Remove elements (body)
 const remove_elements = [
@@ -79,7 +75,7 @@ function ingest_post(hatch, uri) {
             const post_body = $profile('article.post-content');
 
             const info_img = $profile('.gallery-descriptions-wrap');
-            const img_promise = post_body.find("img").map(function() {
+            post_body.find("img").map(function() {
                 const parent = $profile(this);
                 if (this.attribs.src) {
                     const description = this.parent.attribs['aria-describedby'];
@@ -148,13 +144,11 @@ function ingest_post(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, function(err, rss) {
-        let post_urls = rss.items.map((datum) => datum.url);
-        Promise.map(post_urls, function(url) {
-            return ingest_post(hatch, url);
-        }, { concurrency: 1 }).then(() => {
+    rss2json.load(RSS_URI, function(err, rss) {
+        const post_urls = rss.items.map((datum) => datum.url);
+        return Promise.all(post_urls.map((uri) => ingest_post(hatch, uri))).then(() => {
             return hatch.finish();
-        });
+        }).catch((err) => console.log(err));
     });
 }
 
