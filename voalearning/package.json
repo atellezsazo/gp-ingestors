@@ -1,0 +1,10 @@
+{
+    "name": "ingestor-learningenglish",
+    "version": "0.0.1",
+    "license": "UNLICENSED",
+    "dependencies": {
+        "libingester": "^1.0.0",
+        "request": "^2.80.0",
+        "request-promise": "^4.1.1",
+    }
+}
