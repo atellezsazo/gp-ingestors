@@ -1,6 +1,5 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rp = require('request-promise');
@@ -10,7 +9,7 @@ const xml2js = require('xml2js');
 const template = require('./template');
 
 const BASE_URI = 'https://www.kapanlagi.com/';
-const MAX_LINKS = 50;
+const MAX_LINKS = 60;
 const RSS_URI = 'https://www.kapanlagi.com/feed/';
 
 // Remove elements (body)
@@ -55,8 +54,8 @@ const CLEAN_TAGS = [
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($profile) => {
-        if ($profile('meta[http-equiv="REFRESH"]').length == 1) throw {name: 'Redirect'};
-        if ($profile('title').text().includes('404')) throw {name: 'Not Found 404'};
+        if ($profile('meta[http-equiv="REFRESH"]').length == 1) throw { name: 'Article have a redirect' };
+        if ($profile('title').text().includes('404')) throw { name: 'Not Found 404' };
 
         const asset = new libingester.NewsArticle();
         const category = $profile(".newsdetail-categorylink").first().text();
@@ -119,7 +118,6 @@ function ingest_article(hatch, uri) {
             pages.push(post_body.html());
 
             if (next && last_pagination.length != 0) {
-                console.log(url.resolve(uri, next));
                 libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
                     ingest_body($next_profile, finish_process);
                 });
@@ -155,13 +153,13 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-
     const __request = (f) => {
         rp({ uri: RSS_URI, gzip: true }).then((res) => {
             var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
             parser.parseString(res, (err, result) => {
                 const rss = rss2json.parser(result);
-                let links = [], n = 0;
+                let links = [],
+                    n = 0;
                 rss.items.map((datum) => {
                     if (!datum.link.includes("musik.kapanlagi.com") && n++ < MAX_LINKS) { //drop musik subdomain
                         links.push(datum.link);
@@ -170,7 +168,7 @@ function main() {
                 f(links); //callback
             });
         }).catch((err) => {
-            console.log('ERR RP: ',err.name);
+            console.log('ERR RP: ', err.name);
             __request(f);
         });
     }

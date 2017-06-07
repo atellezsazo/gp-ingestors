@@ -1,5 +1,5 @@
 {
-    "name": "ingestor-kapanlagi",
+    "name": "libingester-kapanlagi",
     "version": "0.0.1",
     "license": "UNLICENSED",
     "dependencies": {
