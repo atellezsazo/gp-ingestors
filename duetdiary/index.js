@@ -71,7 +71,6 @@ function ingest_article(hatch, uri) {
         if (!post_main_img) { //problem with incomplete $profile 
             throw { code: -1 };
         }
-
         const asset_main_image = libingester.util.download_image(url.resolve(base_uri, post_main_img), base_uri);
         asset_main_image.set_title(post_title);
         hatch.save_asset(asset_main_image);
