@@ -1,114 +1,114 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
-const rp = require('request-promise');
-const template = require('./template');
-const url = require('url');
+const rss2json = require('rss-to-json');
 
-const articles = "http://www.hipwee.com/terbaru"; // recent articles 
+const BASE_URI = 'http://www.hipwee.com/';
+const FEED_RSS = 'http://www.hipwee.com/feed/'; // recent articles
 
-//Remove elements
-const remove_elements = [
-    'banner', //ads
-    'iframe', //delete iframes
-    'noscript', //any script injection
-    'script', //any script injection
+// elements to remove
+const REMOVE_ELEMENTS = [
+    'banner',
+    'iframe',
+    'noscript',
+    'script',
     'video',
-    '.helpful-article', //recomendation articles 
-    '.single-share', //Share buttons
+    '.fb-like-box',
+    '.helpful-article',
+    '.single-share',
     '.wp-video',
 ];
 
-//Remove img metadata
-const remove_metadata = [
+// attributes to remove
+const REMOVE_ATTR = [
     'class',
+    'data-alt',
     'data-src',
+    'data-wpex-post-id',
     'height',
     'id',
     'sizes',
-    'src',
+    'srcset',
     'width',
 ];
 
-function ingest_article_profile(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
+function ingest_article(hatch, item) {
+    return libingester.util.fetch_html(item.url).then($ => {
         const asset = new libingester.NewsArticle();
+        const author = $('meta[name="author"]').attr('content');
+        const body = $('.post-content').first();
+        const canonical_uri = $('link[rel="canonical"]').attr('href');
+        const copyright = $('.copyright').first().text();
+        const description = $('meta[name="description"]').attr('content');
+        const first_p = body.find('p').first();
+        const modified_date = new Date(item.created);
+        const read_more = `Read more at <a href="${canonical_uri}">Ars Technica</a>`;
+        const section = $('meta[property="article:section"]').attr('content');
+        const source = 'hipwee';
+        const title = $('meta[name="title"]').attr('content');
+        const main_img = $('.post-image').first();
 
-        asset.set_canonical_uri(uri);
-
-        // Pull out the updated date
-        const modified_date = new Date(); //articles doesn´t have date modified 
+        // article settings
+        console.log('processing', title);
+        asset.set_authors([author]);
+        asset.set_body(body);
+        asset.set_canonical_uri(canonical_uri);
+        asset.set_date_published(item.created);
         asset.set_last_modified_date(modified_date);
-
-        const section = $profile('meta[property="article:section"]').attr('content');
+        asset.set_license(copyright);
+        asset.set_read_more_link(read_more);
         asset.set_section(section);
-
-        //Set title section
-        const title = $profile('meta[name="title"]').attr('content');
-        const description = $profile('meta[name="description"]').attr('content');
-        const author = $profile('meta[name="author"]').attr('content');
-        asset.set_title(title);
+        asset.set_source(source);
         asset.set_synopsis(description);
+        asset.set_title(title);
 
-        // Pull out the main image
-        let main_img = $profile('.post-image img').first();
-        const main_image = libingester.util.download_img(main_img, base_uri);
-        const image_credit = $profile('.image-credit').children();
+        // pull out the main image
+        const uri_main_image = main_img.find('img').first().attr('data-src');
+        const image_credit = main_img.find('.image-credit').first().children();
+        const main_image = libingester.util.download_image(uri_main_image);
         main_image.set_title(title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
+        asset.set_main_image(main_image, image_credit);
 
-        const body = $profile('.post-content').first();
+        // set first paragraph of the body
+        const lede = first_p.clone();
+        lede.find('img').remove();
+        asset.set_lede(lede);
 
-        //remove elements
-        for (const remove_element of remove_elements) {
-            body.find(remove_element).remove();
-        }
+        // remove and clean elements
+        const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        body.find(first_p).remove();
+        body.find('div').map((i,elem) => clean_attr(elem));
 
-        const post_tags = $profile('.article-tag').children();
-
-        //Download images 
-        body.find("img").map(function() {
-            if (this.attribs.src || this.attribs["data-src"]) {
-                const image = libingester.util.download_img(this, base_uri);
+        //Download images
+        body.find('img').map(function() {
+            const src = this.attribs.src || this.attribs['data-src'] || '';
+            if (src.includes('http')) {
+                this.attribs['src'] = src;
+                this.attribs['alt'] = this.attribs['data-alt'];
+                clean_attr(this);
+                const image = libingester.util.download_img($(this));
                 image.set_title(title);
                 hatch.save_asset(image);
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-                for (const meta of remove_metadata) {
-                    delete this.attribs[meta];
-                }
+            } else {
+                $(this).remove();
             }
         });
 
-        const content = mustache.render(template.structure_template, {
-            title: title,
-            author: author,
-            category: section,
-            main_image: main_image,
-            image_credit: image_credit,
-            body: body.html(),
-            post_tags: post_tags,
-        });
-
-        asset.set_document(content);
+        asset.render();
         hatch.save_asset(asset);
-    });
+    })
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
-    libingester.util.fetch_html(articles).then(($pages) => {
-        const articles_links = $pages('.archive-post .archive-base .post-title a:first-of-type').map(function() {
-            const uri = $pages(this).attr('href');
-            return url.resolve(articles, uri);
-        }).get();
+    const hatch = new libingester.Hatch('hipwee', { argv: process.argv.slice(2) });
 
-        Promise.all(articles_links.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
-            return hatch.finish();
-        });
-    });
+    rss2json.load(FEED_RSS, (err, rss) =>
+        Promise.all(rss.items.map(item => ingest_article(hatch, item)))
+            .then(() => hatch.finish())
+    );
 }
 
 main();
