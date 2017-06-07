@@ -3,7 +3,6 @@
 const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 
-const BASE_URI = 'http://www.hipwee.com/';
 const FEED_RSS = 'http://www.hipwee.com/feed/'; // recent articles
 
 // elements to remove
@@ -42,9 +41,9 @@ function ingest_article(hatch, item) {
         const description = $('meta[name="description"]').attr('content');
         const first_p = body.find('p').first();
         const modified_date = new Date(item.created);
-        const read_more = `Read more at <a href="${canonical_uri}">Ars Technica</a>`;
+        const page = 'hipwee';
+        const read_more = `Baca lebih lanjut tentang <a href="${canonical_uri}">${page}</a>`;
         const section = $('meta[property="article:section"]').attr('content');
-        const source = 'hipwee';
         const title = $('meta[name="title"]').attr('content');
         const main_img = $('.post-image').first();
 
@@ -58,7 +57,7 @@ function ingest_article(hatch, item) {
         asset.set_license(copyright);
         asset.set_read_more_link(read_more);
         asset.set_section(section);
-        asset.set_source(source);
+        asset.set_source(page);
         asset.set_synopsis(description);
         asset.set_title(title);
 
