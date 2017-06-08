@@ -2,12 +2,11 @@
     "name": "ingestor-news-okezone",
     "version": "0.0.1",
     "license": "UNLICENSED",
+    "scripts": {
+        "start": "node --harmony_default_parameters index.js"
+    },
     "dependencies": {
-        "bootstrap": "^3.3.7",
-        "libingester": "ssh://git@github.com:endlessm/libingester.git",
-        "mustache": "^2.3.0",
-        "request": "^2.80.0",
-        "request-promise": "^4.1.1",
+        "libingester": "https://github.com/endlessm/libingester.git",
         "rss-to-json": "^1.0.2"
     }
 }
