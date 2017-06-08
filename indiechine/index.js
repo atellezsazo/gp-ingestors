@@ -4,7 +4,6 @@ const cheerio = require('cheerio');
 const libingester = require('libingester');
 const mustache = require('mustache');
 const rss2json = require('rss-to-json');
-const url = require('url');
 const template = require('./template');
 
 const BASE_URI = 'http://bk.asia-city.com/';
@@ -75,14 +74,9 @@ function utilities($, item) {
     };
 
     /** removes the attributes of the designated HTML tags from the content */
-    const _sanitize_attr = (content, tags, attrs) => {
-        let cleantags = tags || _clean_tags;
-        let rmattrs = attrs || _remove_attr;
-        content.find(cleantags.join(',')).map(function(index, elem) {
-            _remove_attr.map((attr) => {
-                delete elem.attribs[attr]
-            })
-        });
+    const _sanitize_attr = (content) => {
+        const clean_attr = (tag, a = _remove_attr) => a.forEach((attr) => $(tag).removeAttr(attr));
+        content.find(_clean_tags.join(',')).get().map((tag) => clean_attr(tag));
         return content;
     }
 
@@ -159,6 +153,7 @@ function ingest_article(hatch, item) {
             title: post.title
         });
     }).catch((err) => {
+        console.log(err);
         return ingest_article(hatch, item);
     });
 }
@@ -173,6 +168,7 @@ function ingest_article(hatch, item) {
 function main() {
     const hatch = new libingester.Hatch();
     rss2json.load(RSS_URI, (err, rss) => {
+        console.log("aca");
         Promise.all(
             rss.items.map(item => ingest_article(hatch, item))
         ).then(() => {
