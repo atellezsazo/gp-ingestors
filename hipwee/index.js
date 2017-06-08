@@ -5,6 +5,29 @@ const rss2json = require('rss-to-json');
 
 const FEED_RSS = 'http://www.hipwee.com/feed/'; // recent articles
 
+const CUSTOM_CSS = `
+$primary-light-color: #E3A840;
+$primary-medium-color: #575C62;
+$primary-dark-color: #3D3B41;
+$accent-light-color: #FFA300;
+$accent-dark-color: #E59200;
+$background-light-color: #F6F6F6;
+$background-dark-color: #F0F0F0;
+$title-font: ‘Roboto’;
+$body-font: ‘Roboto’;
+$display-font: ‘Roboto’;
+$context-font: ‘Roboto Slab’;
+$support-font: ‘Roboto’;
+
+@import "_default";
+
+.CardDefaultFamily{
+	box-shadow: none;
+}
+.CardDefaultFamily__context, .CardList__context {
+	font-weight: normal;
+}`;
+
 // elements to remove
 const REMOVE_ELEMENTS = [
     'banner',
@@ -60,6 +83,7 @@ function ingest_article(hatch, item) {
         asset.set_source(page);
         asset.set_synopsis(description);
         asset.set_title(title);
+        asset.set_custom_scss(CUSTOM_CSS);
 
         // pull out the main image
         const uri_main_image = main_img.find('img').first().attr('data-src');
@@ -79,7 +103,7 @@ function ingest_article(hatch, item) {
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
         body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find(first_p).remove();
-        body.find('div').map((i,elem) => clean_attr(elem));
+        body.find('div').map((i, elem) => clean_attr(elem));
 
         //Download images
         body.find('img').map(function() {
@@ -103,10 +127,9 @@ function ingest_article(hatch, item) {
 
 function main() {
     const hatch = new libingester.Hatch('hipwee', { argv: process.argv.slice(2) });
-
     rss2json.load(FEED_RSS, (err, rss) =>
         Promise.all(rss.items.map(item => ingest_article(hatch, item)))
-            .then(() => hatch.finish())
+        .then(() => hatch.finish())
     );
 }
 

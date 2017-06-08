@@ -1,12 +1,13 @@
 {
-    "name": "ingestor-hipwee",
-    "version": "0.0.1",
+    "name": "libingester-hipwee",
+    "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
         "start": "node --harmony_default_parameters index.js"
     },
     "dependencies": {
         "bootstrap": "^3.3.7",
-        "libingester": "https://github.com/endlessm/libingester.git"
+        "libingester": "https://github.com/endlessm/libingester.git",
+        "rss-to-json": "^1.0.2"
     }
 }
