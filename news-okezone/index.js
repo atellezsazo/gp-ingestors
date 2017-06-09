@@ -7,6 +7,28 @@ const rss2json = require('rss-to-json');
 const FEED_RSS = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
 const PAGE_GALLERY = 'http://news.okezone.com/foto'; // Galleries home section
 
+const CUSTOM_SCSS = `
+    $primary-light-color: #E3A840;
+    $primary-medium-color: #575C62;
+    $primary-dark-color: #3D3B41;
+    $accent-light-color: #FFA300;
+    $accent-dark-color: #E59200;
+    $background-light-color: #F6F6F6;
+    $background-dark-color: #F0F0F0;
+    $title-font: ‘Roboto’;
+    $body-font: ‘Roboto’;
+    $display-font: ‘Roboto’;
+    $context-font: ‘Roboto Slab’;
+    $support-font: ‘Roboto’;
+    @import "_default";
+    .CardDefaultFamily{
+    	box-shadow: none;
+    }
+    .CardDefaultFamily__context, .CardList__context {
+    	font-weight: normal;
+    }
+`;
+
 //remove attributes from images
 const REMOVE_ATTR = [
     'border',
@@ -26,41 +48,57 @@ const REMOVE_ELEMENTS = [
     '.wrap-rekomen', //recomendation links
 ];
 
+// get articles metadata
+function _get_ingest_settings($) {
+    return {
+        author: $('.author .nmreporter div, .news-fr').text(),
+        canonical_uri: $('link[rel="canonical"]').attr('href'),
+        copyright: $('meta[name="copyright"]').attr('content'),
+        custom_scss: CUSTOM_SCSS,
+        section:  $('.bractive').first().text() || 'Gallery',
+        synopsis: $('meta[name="description"]').attr('content'),
+        source: 'news.okezone',
+        read_more: `Baca lebih lanjut tentang <a href="${$('link[rel="canonical"]').attr('href')}">news.okezone</a>`,
+        title: $('h1').first().text(),
+    }
+}
+
+// set articles metadata
+function _set_ingest_settings(asset, meta) {
+    if(meta.author) asset.set_authors(meta.author);
+    if(meta.body) asset.set_body(meta.body);
+    if(meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
+    if(meta.custom_scss) asset.set_custom_scss(meta.custom_scss);
+    if(meta.date_published) asset.set_date_published(meta.date_published);
+    if(meta.modified_date) asset.set_last_modified_date(meta.modified_date);
+    if(meta.lede) asset.set_lede(meta.lede);
+    if(meta.read_more) asset.set_read_more_link(meta.read_more);
+    if(meta.section) asset.set_section(meta.section);
+    if(meta.source) asset.set_source(meta.source);
+    if(meta.synopsis) asset.set_synopsis(meta.synopsis);
+    if(meta.title) asset.set_title(meta.title);
+}
+
+/** Ingest Articles **/
 function ingest_article(hatch, item) {
     return libingester.util.fetch_html(item.url).then($ => {
-        const title = $('h1').first().text();
-        if (!title) throw { code: -1 }; // malformed page
-
-        const asset = new libingester.NewsArticle();
-        const author = $('.author .nmreporter div').text();
-        const body = $('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
-        const canonical_uri = $('link[rel="canonical"]').attr('href');
-        const copyright = $('meta[name="copyright"]').attr('content');
-        const first_p = body.find('p').first();
-        const modified_date = new Date(item.created);
-        const page = 'news.okezone';
-        const read_more = `Baca lebih lanjut tentang <a href="${canonical_uri}">${page}</a>`;
-        const section = $('.bractive').first().text();
-        const uri_main_image = $('#imgCheck').attr('src');
+        let meta = _get_ingest_settings($);
+        if (!meta.title) throw { code: -1 }; // malformed page
 
         // article settings
-        console.log('processing', title);
-        asset.set_authors([author]); //**
-        asset.set_body(body);
-        asset.set_canonical_uri(canonical_uri); //**
-        asset.set_date_published(item.created); //**
-        asset.set_last_modified_date(modified_date); //**
-        asset.set_license(copyright);
-        asset.set_read_more_link(read_more); //**
-        asset.set_section(section); //**
-        asset.set_source(page); //**
-        asset.set_synopsis(item.description); //**
-        asset.set_title(item.title); //**
+        console.log('processing', meta.title);
+        meta['body'] = $('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
+        meta['modified_date'] = new Date(item.created);
+        meta['date_published'] = item.created;
+        const asset = new libingester.NewsArticle();
+        const first_p = meta.body.find('p').first();
+        const uri_main_image = $('#imgCheck').attr('src');
+        _set_ingest_settings(asset, meta);
 
         // pull out the main image
         const main_image = libingester.util.download_image(uri_main_image);
         const image_description = $('.caption-img-ab').children();
-        main_image.set_title(title);
+        main_image.set_title(meta.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
         asset.set_main_image(main_image, image_description);
@@ -72,12 +110,12 @@ function ingest_article(hatch, item) {
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
 
         //Download images
-        body.find('img').map(function() {
+        meta.body.find('img').map(function() {
             if (this.attribs.src) {
                 clean_attr(this);
                 const image = libingester.util.download_img($(this));
                 this.attribs['data-libingester-asset-id'] = image.asset_id
-                image.set_title(title)
+                image.set_title(meta.title)
                 hatch.save_asset(image);
             } else {
                 $(this).remove();
@@ -85,18 +123,18 @@ function ingest_article(hatch, item) {
         });
 
         // download videos
-        body.find('#molvideoplayer, p iframe').get().map(iframe => {
+        meta.body.find('#molvideoplayer, p iframe').get().map(iframe => {
             const video = libingester.util.get_embedded_video_asset($(iframe), iframe.attribs.src);
-            video.set_title(title);
+            video.set_title(meta.title);
             video.set_thumbnail(main_image);
             hatch.save_asset(video);
         });
 
         //remove and clean elements
-        body.find(REMOVE_ELEMENTS.join(',')).remove();
-        body.find(first_p).remove();
-        body.contents().filter((index, node) => node.type === 'comment').remove();
-        body.find('span').map((i,elem) => clean_attr(elem));
+        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+        meta.body.find(first_p).remove();
+        meta.body.contents().filter((index, node) => node.type === 'comment').remove();
+        meta.body.find('span').map((i,elem) => clean_attr(elem));
 
         asset.render();
         hatch.save_asset(asset);
@@ -107,47 +145,39 @@ function ingest_article(hatch, item) {
     });
 }
 
+/** Ingest Galleries **/
 function ingest_gallery(hatch, item) {
     return libingester.util.fetch_html(item.url).then($ => {
-        const title = $('h1').first().text();
-        if (!title) throw { code: -1 }; // malformed page
+        let meta = _get_ingest_settings($);
+        if (!meta.title) throw { code: -1 }; // malformed page
 
+        // arcitle settings
+        console.log('processing', meta.title);
         const asset = new libingester.NewsArticle();
-        const author = $('.news-fr').text();
-        const body = cheerio('<div></div>');
-        const canonical_uri = $('link[rel="canonical"]').attr('href');
-        const description = $('meta[name="description"]').attr('content');
-        const lede = cheerio(`<div><p>${description}</p></div>`);
-        const modified_date = new Date(item.pubDate); //This section doesn´t have date in metadata
-        const page = 'news.okezone';
-        const read_more = `Baca lebih lanjut tentang <a href="${canonical_uri}">${page}</a>`;
+        meta['body'] = cheerio('<div></div>');
+        meta['lede'] = cheerio(`<p>${meta.synopsis}</p>`);
+        meta['modified_date'] = new Date(item.pubDate);
+        meta['date_published'] = Date.now(meta.modified_date);
+        _set_ingest_settings(asset, meta);
 
-        console.log('processing', title);
-        asset.set_authors(author);
-        asset.set_canonical_uri(canonical_uri);
-        asset.set_date_published(Date.now(modified_date));
-        asset.set_last_modified_date(modified_date);
-        asset.set_lede(lede);
-        asset.set_read_more_link(read_more);
-        asset.set_section("Gallery");
-        asset.set_source(page);
-        asset.set_synopsis(description);
-        asset.set_title(title);
-
-        // Create constant for body
+        // Create body and download images
         let thumbnail;
-        $('.thumbnails img').get().map(img => {
-            img.attribs.src = img.attribs.src.replace('small.', 'large.');
-            const tag_img = $(img).clone();
-            tag_img.removeAttr('style');
-            const img_gallery = libingester.util.download_img(tag_img);
-            img_gallery.set_title(title);
-            hatch.save_asset(img_gallery);
-            if(!thumbnail) asset.set_thumbnail(thumbnail = img_gallery);
-            body.append(tag_img);
+        $('.thumbnails img').get().map(img => meta.body.append($(img).clone()));
+        meta.body.find('img').map(function() {
+            if (this.attribs.src) {
+                delete this.attribs.style;
+                this.attribs.src = this.attribs.src.replace('small.','large.');
+                const image = libingester.util.download_img($(this));
+                this.attribs['data-libingester-asset-id'] = image.asset_id;
+                image.set_title(meta.title);
+                hatch.save_asset(image);
+                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+            } else {
+                $(this).remove();
+            }
         });
 
-        asset.set_body(body);
+        asset.set_body(meta.body);
         asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
