@@ -8,24 +8,29 @@ const FEED_RSS = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News R
 const PAGE_GALLERY = 'http://news.okezone.com/foto'; // Galleries home section
 
 const CUSTOM_SCSS = `
-    $primary-light-color: #E3A840;
-    $primary-medium-color: #575C62;
-    $primary-dark-color: #3D3B41;
-    $accent-light-color: #FFA300;
-    $accent-dark-color: #E59200;
-    $background-light-color: #F6F6F6;
-    $background-dark-color: #F0F0F0;
-    $title-font: ‘Roboto’;
+    $primary-light-color: #EF4E43;
+    $primary-medium-color: #211E1E;
+    $primary-dark-color: #07295D;
+    $accent-light-color: #429BE6;
+    $accent-dark-color: #19588E;
+    $background-light-color: #FFFFFF;
+    $background-dark-color: #F2F2F2;
+    $title-font: ‘Poppins’;
     $body-font: ‘Roboto’;
-    $display-font: ‘Roboto’;
-    $context-font: ‘Roboto Slab’;
-    $support-font: ‘Roboto’;
+    $display-font: ‘Poppins’;
+    $context-font: ‘Roboto Condensed’;
+    $support-font: ‘Roboto Condensed’;
+
     @import "_default";
+
     .CardDefaultFamily{
-    	box-shadow: none;
+        box-shadow: none;
+    }
+    .CardList, .CardDefaultFamily {
+        background:#F2F2F2;
     }
     .CardDefaultFamily__context, .CardList__context {
-    	font-weight: normal;
+        font-weight: normal;
     }
 `;
 
@@ -68,7 +73,7 @@ function _set_ingest_settings(asset, meta) {
     if(meta.author) asset.set_authors(meta.author);
     if(meta.body) asset.set_body(meta.body);
     if(meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
-    if(meta.custom_scss) asset.set_custom_scss(meta.custom_scss);
+    asset.set_custom_scss(meta.custom_scss);
     if(meta.date_published) asset.set_date_published(meta.date_published);
     if(meta.modified_date) asset.set_last_modified_date(meta.modified_date);
     if(meta.lede) asset.set_lede(meta.lede);
@@ -138,7 +143,7 @@ function ingest_article(hatch, item) {
 
         asset.render();
         hatch.save_asset(asset);
-    }).catch((err) => {
+    }).catch((err) => { console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_article(hatch, item);
         }
