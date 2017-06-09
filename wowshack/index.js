@@ -6,25 +6,27 @@ const url = require('url');
 const BASE_URI = 'https://www.wowshack.com/';
 
 const CUSTOM_CSS = `
-$primary-light-color: #E3A840;
-$primary-medium-color: #575C62;
-$primary-dark-color: #3D3B41;
-$accent-light-color: #FFA300;
-$accent-dark-color: #E59200;
+$primary-light-color: #CB162D;
+$primary-medium-color: #1A1A1A;
+$primary-dark-color: #000000;
+$accent-light-color: #CB162D;
+$accent-dark-color: #670000;
 $background-light-color: #F6F6F6;
-$background-dark-color: #F0F0F0;
+$background-dark-color: #F6F6F6;
+
+
 $title-font: ‘Roboto’;
-$body-font: ‘Roboto’;
+$body-font: ‘Roboto Slab’;
 $display-font: ‘Roboto’;
+$logo-font: ‘Roboto’;
 $context-font: ‘Roboto Slab’;
 $support-font: ‘Roboto’;
+$title-font-composite: ‘Roboto’;
+$display-font-composite: ‘Roboto’;
+
 @import "_default";
-.CardDefaultFamily{
-	box-shadow: none;
-}
-.CardDefaultFamily__context, .CardList__context {
-	font-weight: normal;
-}`;
+
+`;
 
 //Remove elements
 const REMOVE_ELEMENTS = [
@@ -69,24 +71,28 @@ const REMOVE_ATTR = [
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
-        const asset = new libingester.NewsArticle();
-        const author = 'wowshack'; //////
-        const body = $('.entry-content');
+        const asset = new libingester.BlogArticle();
+        const author = 'wowshack';
+        const body = $('#canvas'); //$('.entry-content');
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('.entry-content .sqs-block-content').first().text();
         const date = $('time.published').attr('datetime');
         const modified_date= new Date(Date.parse(date));
         const page = 'wowshack';
-        const read_more = `Read more at <a href="${canonical_uri}">${page}</a>`;
+        const read_more = `Original Article at www.wowshack.com`;
         const section = 'Article';
         const title = $('meta[property="og:title"]').attr('content');
         const videos = body.find('.video-block').get().map(v => JSON.parse(v.attribs['data-block-json']));
+		const tags  = ['Article'];
 
-        // uri thumbnail
+
+		// uri thumbnail
         let uri_thumb_image = $('img[alt="Thumbnail"]').attr('src');
         if (videos[0] && !uri_thumb_image) {
             uri_thumb_image = videos[0].thumbnailUrl;
         }
+
+
 
         // remove and clean elements
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
@@ -95,11 +101,6 @@ function ingest_article(hatch, uri) {
         body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find(first_p).remove();
 
-        // set first paragraph
-        const lede = first_p.clone();
-        lede.find('img').remove();
-        asset.set_lede(lede);
-        body.find(first_p).remove();
 
         //Download images
         let thumbnail;
@@ -139,14 +140,14 @@ function ingest_article(hatch, uri) {
 
         // article settings
         console.log('processing', title);
-        asset.set_authors([author]);
+        asset.set_author(author);
         asset.set_body(body);
         asset.set_canonical_uri(canonical_uri);
-        asset.set_date_published(Date.now(modified_date));
-        asset.set_last_modified_date(modified_date);
-        asset.set_read_more_link(read_more);
-        asset.set_section(section);
-        asset.set_source(page);
+        asset.set_date_published(modified_date);
+        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        asset.set_read_more_text(read_more);
+        //asset.set_section(section);
+        asset.set_tags(tags);
         asset.set_synopsis(description);
         asset.set_title(title);
         asset.set_canonical_uri(uri);
@@ -158,6 +159,8 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
+
+
 const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
     libingester.util.fetch_html(BASE_URI).then(($pages) => {
         const articles_links = $pages('#page a.project:nth-child(-n + 30)').map(function() {
