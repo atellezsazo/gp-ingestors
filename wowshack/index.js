@@ -71,7 +71,7 @@ function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.BlogArticle();
         const author = 'wowshack';
-        const body = $('#canvas'); //$('.entry-content');
+        const body = $('#canvas');
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('.entry-content .sqs-block-content').first().text();
         const date = $('time.published').attr('datetime');
@@ -152,14 +152,12 @@ function ingest_article(hatch, uri) {
 
 function main() {
 	const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
-    libingester.util.fetch_html(BASE_URI).then(($) => {
-        const articles_links = $('#page a.project:nth-child(-n + 30)').map(function() {
-            const uri = $(this).attr('href');
-            return url.resolve(BASE_URI, uri);
+    libingester.util.fetch_html(BASE_URI).then($ => {
+        const links = $('#page a.project:nth-child(-n + 30)').map(function() {
+        	return url.resolve(BASE_URI, $(this).attr('href'));
         }).get();
-        Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => {
-            return hatch.finish();
-        });
+        Promise.all(links.map(uri => ingest_article(hatch, uri)))
+			.then(() => hatch.finish());
     });
 }
 
