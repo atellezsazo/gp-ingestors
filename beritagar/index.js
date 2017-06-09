@@ -6,13 +6,12 @@ const Promise = require('bluebird');
 const request = require('request');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
-const template = require('./template');
 const url = require('url');
 
 const base_uri = 'https://beritagar.id/';
 const page_gallery = 'https://beritagar.id/spesial/foto/';
 const page_video = 'https://beritagar.id/spesial/video/';
-const rss_uri = 'https://beritagar.id/rss/';
+const FEED_RSS = 'https://beritagar.id/rss/';
 
 // clean images
 const remove_attr_img = [
@@ -147,62 +146,112 @@ const render_template = (hatch, asset, template, post_data) => {
     hatch.save_asset(asset);
 }
 
-function ingest_article(hatch, uri) {
-    return new Promise((resolve, reject) => {
-        if (uri.includes('/media/')) { // avoid repeated links
-            resolve();
-            return;
+function ingest_article(hatch, item) {
+    return libingester.util.fetch_html(item).then($ => {
+        const asset = new libingester.NewsArticle();
+        let post_data = get_post_data(hatch, asset, $, uri);
+
+        const article_subtitle = $('.article-sub-title').first();
+        const body = get_body(hatch, asset, $, post_data);
+
+        // download background image
+        let bg_img;
+        const article_bg = $('.article-background-image').first();
+        if (article_bg.length != 0) {
+            const bg = article_bg[0].attribs.style; //get url
+            const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
+            bg_img = libingester.util.download_image(bg_img_uri);
+            bg_img.set_title(post_data.title);
+            hatch.save_asset(bg_img);
         }
-        libingester.util.fetch_html(uri).then(($) => {
-            const asset = new libingester.NewsArticle();
-            let post_data = get_post_data(hatch, asset, $, uri);
 
-            const article_subtitle = $('.article-sub-title').first();
-            const body = get_body(hatch, asset, $, post_data);
+        // download instagram images
+        const instagram_promises = body.find('blockquote.instagram-media').map(function() {
+            const href = $(this).find('a').first()[0].attribs.href;
+            if (href) {
+                return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
+                    const image_uri = $inst('meta[property="og:image"]').attr('content');
+                    const image_description = $inst('meta[property="og:description"]').attr('content');
+                    const image_title = $inst('meta[property="og:title"]').attr('content') || post_data.title;
+                    const image = libingester.util.download_image(image_uri);
+                    image.set_title(image_title);
+                    hatch.save_asset(image);
 
-            // download background image
-            let bg_img;
-            const article_bg = $('.article-background-image').first();
-            if (article_bg.length != 0) {
-                const bg = article_bg[0].attribs.style; //get url
-                const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
-                bg_img = libingester.util.download_image(bg_img_uri);
-                bg_img.set_title(post_data.title);
-                hatch.save_asset(bg_img);
+                    // replace tag 'blockquote' by tag 'figure'
+                    const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
+                    const figure = $inst(`<figure></figure>`);
+                    const img = $inst(`<img data-libingester-asset-id=${image.asset_id} >`);
+                    $(figure).append(img, figcaption);
+                    $(this).replaceWith(figure);
+                });
             }
+        }).get();
 
-            // download instagram images
-            const instagram_promises = body.find('blockquote.instagram-media').map(function() {
-                const href = $(this).find('a').first()[0].attribs.href;
-                if (href) {
-                    return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
-                        const image_uri = $inst('meta[property="og:image"]').attr('content');
-                        const image_description = $inst('meta[property="og:description"]').attr('content');
-                        const image_title = $inst('meta[property="og:title"]').attr('content') || post_data.title;
-                        const image = libingester.util.download_image(image_uri);
-                        image.set_title(image_title);
-                        hatch.save_asset(image);
-
-                        // replace tag 'blockquote' by tag 'figure'
-                        const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
-                        const figure = $inst(`<figure></figure>`);
-                        const img = $inst(`<img data-libingester-asset-id=${image.asset_id} >`);
-                        $(figure).append(img, figcaption);
-                        $(this).replaceWith(figure);
-                    });
-                }
-            }).get();
-
-            Promise.all(instagram_promises).then(() => {
-                post_data['article_subtitle'] = article_subtitle;
-                post_data['bg_img'] = bg_img;
-                post_data['body'] = body.html();
-                render_template(hatch, asset, template.structure_template, post_data);
-                resolve();
-            });
-        })
-    });
+        return Promise.all(instagram_promises).then(() => {
+            post_data['article_subtitle'] = article_subtitle;
+            post_data['bg_img'] = bg_img;
+            post_data['body'] = body.html();
+            render_template(hatch, asset, template.structure_template, post_data);
+        });
+    })
 }
+
+// function ingest_article(hatch, uri) {
+//     return new Promise((resolve, reject) => {
+//         if (uri.includes('/media/')) { // avoid repeated links
+//             resolve();
+//             return;
+//         }
+//         libingester.util.fetch_html(uri).then(($) => {
+//             const asset = new libingester.NewsArticle();
+//             let post_data = get_post_data(hatch, asset, $, uri);
+//
+//             const article_subtitle = $('.article-sub-title').first();
+//             const body = get_body(hatch, asset, $, post_data);
+//
+//             // download background image
+//             let bg_img;
+//             const article_bg = $('.article-background-image').first();
+//             if (article_bg.length != 0) {
+//                 const bg = article_bg[0].attribs.style; //get url
+//                 const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
+//                 bg_img = libingester.util.download_image(bg_img_uri);
+//                 bg_img.set_title(post_data.title);
+//                 hatch.save_asset(bg_img);
+//             }
+//
+//             // download instagram images
+//             const instagram_promises = body.find('blockquote.instagram-media').map(function() {
+//                 const href = $(this).find('a').first()[0].attribs.href;
+//                 if (href) {
+//                     return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
+//                         const image_uri = $inst('meta[property="og:image"]').attr('content');
+//                         const image_description = $inst('meta[property="og:description"]').attr('content');
+//                         const image_title = $inst('meta[property="og:title"]').attr('content') || post_data.title;
+//                         const image = libingester.util.download_image(image_uri);
+//                         image.set_title(image_title);
+//                         hatch.save_asset(image);
+//
+//                         // replace tag 'blockquote' by tag 'figure'
+//                         const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
+//                         const figure = $inst(`<figure></figure>`);
+//                         const img = $inst(`<img data-libingester-asset-id=${image.asset_id} >`);
+//                         $(figure).append(img, figcaption);
+//                         $(this).replaceWith(figure);
+//                     });
+//                 }
+//             }).get();
+//
+//             Promise.all(instagram_promises).then(() => {
+//                 post_data['article_subtitle'] = article_subtitle;
+//                 post_data['bg_img'] = bg_img;
+//                 post_data['body'] = body.html();
+//                 render_template(hatch, asset, template.structure_template, post_data);
+//                 resolve();
+//             });
+//         })
+//     });
+// }
 
 function ingest_gallery(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
@@ -253,34 +302,49 @@ function ingest_video(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch();
-    const ingest = (page_uri, resolved, concurrency = Infinity) => {
-        if (page_uri.includes('rss')) {
-            rss2json.load(rss_uri, function(err, rss) {
-                Promise.map(rss.items, function(item) {
-                    return ingest_article(hatch, item.url); // post article
-                }, { concurrency: concurrency }).then(() => resolved());
-            });
-        } else {
-            libingester.util.fetch_html(page_uri).then(($) => {
-                const tags = $('#main .swifts .content a.title').get(); // more recent media links
-                Promise.map(tags, (tag) => {
-                    if (page_uri.includes('foto')) { // media gallery
-                        return ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href));
-                    } else if (page_uri.includes('video')) { // media video
-                        return ingest_video(hatch, url.resolve(base_uri, tag.attribs.href));
-                    }
-                }, { concurrency: concurrency }).then(() => resolved());
-            });
-        }
-    }
+    const item = { title: 'Hamilton butuh upaya keras untuk hentikan Vettel di Kanada',
+        description: 'Mobil Ferrari yang dikendalikan Sebastian Vettel adalah mobil paling konsisten di musim F1 2017.',
+        link: 'http://beritagar.id/artikel/arena/hamilton-butuh-upaya-keras-untuk-hentikan-vettel-di-kanada',
+        url: 'http://beritagar.id/artikel/arena/hamilton-butuh-upaya-keras-untuk-hentikan-vettel-di-kanada',
+        created: 1497012417000
+    };
 
-    const article = new Promise((resolve, reject) => ingest(rss_uri, resolve));
-    const gallery = new Promise((resolve, reject) => ingest(page_gallery, resolve));
-    const video = new Promise((resolve, reject) => ingest(page_video, resolve));
+    ingest_article(hatch, item).then(() => hatch.finish());
+    // const ingest = (page_uri, resolved, concurrency = Infinity) => {
+    //     if (page_uri.includes('rss')) {
+    //         rss2json.load(FEED_RSS, function(err, rss) {
+    //             Promise.map(rss.items, function(item) {
+    //                 return ingest_article(hatch, item.url); // post article
+    //             }, { concurrency: concurrency }).then(() => resolved());
+    //         });
+    //     } else {
+    //         libingester.util.fetch_html(page_uri).then(($) => {
+    //             const tags = $('#main .swifts .content a.title').get(); // more recent media links
+    //             Promise.map(tags, (tag) => {
+    //                 if (page_uri.includes('foto')) { // media gallery
+    //                     return ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href));
+    //                 } else if (page_uri.includes('video')) { // media video
+    //                     return ingest_video(hatch, url.resolve(base_uri, tag.attribs.href));
+    //                 }
+    //             }, { concurrency: concurrency }).then(() => resolved());
+    //         });
+    //     }
+    // }
 
-    Promise.all([article, gallery, video]).then(() => {
-        return hatch.finish();
-    });
+    // const article = new Promise((resolve, reject) => {
+    //     rss2json.load(FEED_RSS, (err, rss) => {
+    //         // Promise.all(rss.items.map(item => ingest_article(hatch, item)))
+    //         //     .then(() => hatch.finish())
+    //     })
+    // });
+
+    // const article = new Promise((resolve, reject) => ingest(FEED_RSS, resolve));
+    // const gallery = new Promise((resolve, reject) => ingest(page_gallery, resolve));
+    // const video = new Promise((resolve, reject) => ingest(page_video, resolve));
+
+    // Promise.all([article, gallery, video]).then(() => {
+    //     return hatch.finish();
+    // });
 }
 
 main();
