@@ -1,201 +1,222 @@
 'use strict';
 
-const gallery_template = require('./gallery_template');
+const cheerio = require('cheerio');
 const libingester = require('libingester');
-const mustache = require('mustache');
-const rp = require('request-promise');
 const rss2json = require('rss-to-json');
-const template = require('./template');
-const url = require('url');
 
-const gallery_section = 'http://news.okezone.com/foto'; // Galleries home section
-const rss_uri = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
+const FEED_RSS = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
+const PAGE_GALLERY = 'http://news.okezone.com/foto'; // Galleries home section
+
+const CUSTOM_SCSS = `
+    $primary-light-color: #EF4E43;
+    $primary-medium-color: #211E1E;
+    $primary-dark-color: #07295D;
+    $accent-light-color: #429BE6;
+    $accent-dark-color: #19588E;
+    $background-light-color: #FFFFFF;
+    $background-dark-color: #F2F2F2;
+    $title-font: ‘Poppins’;
+    $body-font: ‘Roboto’;
+    $display-font: ‘Poppins’;
+    $context-font: ‘Roboto Condensed’;
+    $support-font: ‘Roboto Condensed’;
+
+    @import "_default";
+
+    .CardDefaultFamily{
+        box-shadow: none;
+    }
+    .CardList, .CardDefaultFamily {
+        background:#F2F2F2;
+    }
+    .CardDefaultFamily__context, .CardList__context {
+        font-weight: normal;
+    }
+`;
 
 //remove attributes from images
-const remove_attrs_img = [
+const REMOVE_ATTR = [
     'border',
     'class',
     'id',
-    'src',
+    'style',
 ];
 
 //Remove elements
-const remove_elements = [
-    '.wrap-rekomen', //recomendation links
-    '#AdAsia', //Asia ads
+const REMOVE_ELEMENTS = [
+    'iframe',
     'noscript', //any script injection
     'script', //any script injection
-];
-
-//Remove elements
-const remove_gallery_elements = [
-    '.new-meta-date', //date container
-    '.wrap-rekomen', //recomendation links
+    'style',
     '#AdAsia', //Asia ads
-    'h1', //gallery titles
-    'noscript', //any script injection
-    'script', //any script injection
+    '#sas_44269',
+    '.wrap-rekomen', //recomendation links
 ];
 
-function ingest_article_profile(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const title = $profile('h1').first().text();
-        if (!title) { //problem with incomplete $profile 
-            throw { code: -1 };
-            return;
-        }
+// get articles metadata
+function _get_ingest_settings($) {
+    return {
+        author: $('.author .nmreporter div, .news-fr').text(),
+        canonical_uri: $('link[rel="canonical"]').attr('href'),
+        copyright: $('meta[name="copyright"]').attr('content'),
+        custom_scss: CUSTOM_SCSS,
+        section:  $('.bractive').first().text() || 'Gallery',
+        synopsis: $('meta[name="description"]').attr('content'),
+        source: 'news.okezone',
+        read_more: `Baca lebih lanjut tentang <a href="${$('link[rel="canonical"]').attr('href')}">news.okezone</a>`,
+        title: $('h1').first().text(),
+    }
+}
+
+// set articles metadata
+function _set_ingest_settings(asset, meta) {
+    if(meta.author) asset.set_authors(meta.author);
+    if(meta.body) asset.set_body(meta.body);
+    if(meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
+    asset.set_custom_scss(meta.custom_scss);
+    if(meta.date_published) asset.set_date_published(meta.date_published);
+    if(meta.modified_date) asset.set_last_modified_date(meta.modified_date);
+    if(meta.lede) asset.set_lede(meta.lede);
+    if(meta.read_more) asset.set_read_more_link(meta.read_more);
+    if(meta.section) asset.set_section(meta.section);
+    if(meta.source) asset.set_source(meta.source);
+    if(meta.synopsis) asset.set_synopsis(meta.synopsis);
+    if(meta.title) asset.set_title(meta.title);
+}
+
+/** Ingest Articles **/
+function ingest_article(hatch, item) {
+    return libingester.util.fetch_html(item.url).then($ => {
+        let meta = _get_ingest_settings($);
+        if (!meta.title) throw { code: -1 }; // malformed page
+
+        // article settings
+        console.log('processing', meta.title);
+        meta['body'] = $('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
+        meta['modified_date'] = new Date(item.created);
+        meta['date_published'] = item.created;
         const asset = new libingester.NewsArticle();
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        asset.set_canonical_uri(uri);
+        const first_p = meta.body.find('p').first();
+        const uri_main_image = $('#imgCheck').attr('src');
+        _set_ingest_settings(asset, meta);
 
-        // Pull out the updated date
-        const metadata = JSON.parse($profile('script[type="application/ld+json"]').text());
-        const modified_date = new Date(Date.parse(metadata.dateModified));
-        const published = $profile('.meta-post time').first().text();
-
-        asset.set_last_modified_date(modified_date);
-        asset.set_section(metadata.keywords.join(', '));
-        asset.set_synopsis(metadata.description);
-        asset.set_title(title);
-
-        const date = new Date(Date.parse(metadata.datePublished));
-        const reporter = metadata.author.name;
-        const category = metadata.keywords.join(", ");
-
-        // Pull out the main image
-        const main_img = $profile('.detail-img img').first();
-        const main_image = libingester.util.download_img(main_img, base_uri);
-        const image_description = $profile('.caption-img-ab').children().text();
-        main_image.set_title(title);
+        // pull out the main image
+        const main_image = libingester.util.download_image(uri_main_image);
+        const image_description = $('.caption-img-ab').children();
+        main_image.set_title(meta.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
+        asset.set_main_image(main_image, image_description);
 
-        // Create constant for body
-        let body = $profile('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
-
-        //remove elements
-        for (const remove_element of remove_elements) {
-            body.find(remove_element).remove();
-        }
-        body.contents().filter((index, node) => node.type === 'comment').remove();
+        // set first paragraph of the body
+        const lede = first_p.clone();
+        lede.find('img').remove();
+        asset.set_lede(lede);
+        const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
 
         //Download images
-        body.find("img").map(function() {
+        meta.body.find('img').map(function() {
             if (this.attribs.src) {
-                const image = libingester.util.download_img($profile(this), base_uri);
-                image.set_title(title)
+                clean_attr(this);
+                const image = libingester.util.download_img($(this));
+                this.attribs['data-libingester-asset-id'] = image.asset_id
+                image.set_title(meta.title)
                 hatch.save_asset(image);
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-                for (const meta of remove_attrs_img) {
-                    delete this.attribs[meta];
-                }
+            } else {
+                $(this).remove();
             }
         });
 
-        body.find("iframe").remove(); //Delete iframe container
-
-        // Construct a new document containing the content we want.
-        const content = mustache.render(template.structure_template, {
-            title: title,
-            author: reporter,
-            date_published: published,
-            category: category,
-            main_image: main_image,
-            image_credit: image_description,
-            body: body.html(),
+        // download videos
+        meta.body.find('#molvideoplayer, p iframe').get().map(iframe => {
+            const video = libingester.util.get_embedded_video_asset($(iframe), iframe.attribs.src);
+            video.set_title(meta.title);
+            video.set_thumbnail(main_image);
+            hatch.save_asset(video);
         });
 
-        asset.set_document(content);
+        //remove and clean elements
+        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+        meta.body.find(first_p).remove();
+        meta.body.contents().filter((index, node) => node.type === 'comment').remove();
+        meta.body.find('span').map((i,elem) => clean_attr(elem));
+
+        asset.render();
         hatch.save_asset(asset);
-    }).catch((err) => {
+    }).catch((err) => { console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
-            return ingest_gallery_article_profile(hatch, uri);
+            return ingest_article(hatch, item);
         }
     });
 }
 
-function ingest_gallery_article_profile(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const title = $profile('h1').first().text();
-        if (!title) { //problem with incomplete profile 
-            throw { code: -1 };
-            return;
-        }
+/** Ingest Galleries **/
+function ingest_gallery(hatch, item) {
+    return libingester.util.fetch_html(item.url).then($ => {
+        let meta = _get_ingest_settings($);
+        if (!meta.title) throw { code: -1 }; // malformed page
+
+        // arcitle settings
+        console.log('processing', meta.title);
         const asset = new libingester.NewsArticle();
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        asset.set_canonical_uri(uri);
+        meta['body'] = cheerio('<div></div>');
+        meta['lede'] = cheerio(`<p>${meta.synopsis}</p>`);
+        meta['modified_date'] = new Date(item.pubDate);
+        meta['date_published'] = Date.now(meta.modified_date);
+        _set_ingest_settings(asset, meta);
 
-        const modified_date = new Date(); //This section doesn´t have date in metadata
-        asset.set_last_modified_date(modified_date);
-        asset.set_section("Gallery");
-
-        //Set title section
-        asset.set_title(title);
-        const description = $profile('meta[name="description"]').attr('content');
-        asset.set_synopsis(description);
-
-        const date = $profile('.news-fl').text();
-        const references = $profile('.news-fr').text();
-
-        let main_img = $profile('link[rel=image_src]').attr('href');
-        main_img = main_img.replace('small', 'large');
-
-        const main_image = libingester.util.download_image(main_img);
-        hatch.save_asset(main_image);
-        asset.set_thumbnail(main_image);
-
-        // Create constant for body
-        const body = $profile('.detail-isi').first();
-
-        const image_gallery = $profile('.aphotos img').map(function() {
-            this.attribs.src = this.attribs.src.replace('small.', 'large.');
-            const img_gallery = libingester.util.download_img($profile(this), base_uri);
-            hatch.save_asset(img_gallery);
-            return img_gallery;
-        }).get();
-
-        //remove elements
-        for (const remove_element of remove_gallery_elements) {
-            body.find(remove_element).remove();
-        }
-        body.contents().filter((index, node) => node.type === 'comment').remove();
-
-        // Construct a new document containing the content we want.
-        const content = mustache.render(gallery_template.gallery_structure_template, {
-            title: title,
-            author: references,
-            date_published: date,
-            images: image_gallery,
-            body: body.html(),
+        // Create body and download images
+        let thumbnail;
+        $('.thumbnails img').get().map(img => meta.body.append($(img).clone()));
+        meta.body.find('img').map(function() {
+            if (this.attribs.src) {
+                delete this.attribs.style;
+                this.attribs.src = this.attribs.src.replace('small.','large.');
+                const image = libingester.util.download_img($(this));
+                this.attribs['data-libingester-asset-id'] = image.asset_id;
+                image.set_title(meta.title);
+                hatch.save_asset(image);
+                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+            } else {
+                $(this).remove();
+            }
         });
 
-        asset.set_document(content);
+        asset.set_body(meta.body);
+        asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
-        if (err.statusCode == 403) {
-            return ingest_gallery_article_profile(hatch, uri);
+        if (err.code == -1 || err.statusCode == 403) {
+            return ingest_gallery(hatch, item);
         }
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch();
-    const news = rss2json.load(rss_uri, function(err, rss) {
-        const news_uris = rss.items.map((datum) => datum.link);
-        return Promise.all(news_uris.map((uri) => ingest_article_profile(hatch, uri)));
+    const get_item = ($, item) => {
+        return {
+            url: $(item).find('h3 a').attr('href'),
+            pubDate: $(item).find('time').text().replace(/[\t\n\r]/g,''),
+        }
+    }
+
+    // news articles
+    const news = new Promise((resolve, reject) => {
+        rss2json.load(FEED_RSS, function(err, rss) {
+            Promise.all(rss.items.map(item => ingest_article(hatch, item)))
+                .then(() => resolve());
+        });
     });
 
-    const gallery = libingester.util.fetch_html(gallery_section).then(($galleries) => {
-        const foto_links = $galleries('ul.list-berita li .wp-thumb-news a:first-of-type').map(function() {
-            const uri = $galleries(this).attr('href');
-            return url.resolve(gallery_section, uri);
-        }).get();
-        return Promise.all(foto_links.map((uri) => ingest_gallery_article_profile(hatch, uri)));
+    // gallery articles
+    const gallery = libingester.util.fetch_html(PAGE_GALLERY).then($ => {
+        const items = $('.content-hardnews').get().map(item => get_item($, item));
+        return Promise.all(items.map(item => ingest_gallery(hatch, item)));
     });
 
-    Promise.all([news, gallery]).then(values => {
-        return hatch.finish();
-    });
+    Promise.all([gallery, news])
+        .then(() => hatch.finish());
 }
 
 main();
