@@ -1,133 +1,162 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
-const rp = require('request-promise');
-const template = require('./template');
 const url = require('url');
 
-const home_page = 'https://www.wowshack.com/'; // Home section
+const BASE_URI = 'https://www.wowshack.com/';
+
+const CUSTOM_CSS = `
+$primary-light-color: #CB162D;
+$primary-medium-color: #1A1A1A;
+$primary-dark-color: #000000;
+$accent-light-color: #CB162D;
+$accent-dark-color: #670000;
+$background-light-color: #F6F6F6;
+$background-dark-color: #F6F6F6;
+
+$title-font: ‘Roboto’;
+$body-font: ‘Roboto Slab’;
+$display-font: ‘Roboto’;
+$logo-font: ‘Roboto’;
+$context-font: ‘Roboto Slab’;
+$support-font: ‘Roboto’;
+$title-font-composite: ‘Roboto’;
+$display-font-composite: ‘Roboto’;
+
+@import "_default";
+`;
 
 //Remove elements
-const remove_elements = [
-    'form', //Newsletter
-    'ins', //Ads
+const REMOVE_ELEMENTS = [
+    'header',
     'hr',
-    'noscript', //any script injection
-    'script', //any script injection
-    '.addthis_responsive_sharing', //sharing buttons
-    '.code-block', //recomendation links
-    '.embed-block-wrapper', //Image wrapper
-    '.fb-comments', //comments
-    '.image-block-outer-wrapper', //Image wrapper
-    '.intrinsic',
-    '.newsletter-form-field-wrapper', //Newsletter
-    '.newsletter-form-header-title', //Newsletter
-    '.newsletter-form-wrapper', //Newsletter
-    '.sqs-block-code', // Ads
-    '.sqs-block-video',
-    '#taboola-below-article-thumbnails', //Related articles
+    'img[alt="Reactions"]',
+    'ins',
+    'noscript',
+    'script',
+    'svg',
+    '.addthis_responsive_sharing',
+    '.embed-block-wrapper',
+    '.entry-title',
+    '.fb-comments',
+    '.image-block-wrapper has-aspect-ratio',
+    '.main-nav',
+    '.newsletter-form-field-wrapper',
+    '.newsletter-form-header-title',
+    '.newsletter-form-wrapper',
+    '.sqs-block-horizontalrule',
+    '#mobileMenuLink',
+    '#mobileNav',
+    '#mobileNavWrapper',
+    '#taboola-below-article-thumbnails',
+    '#topNav',
 ];
 
-const remove_metadata = [
+const REMOVE_ATTR = [
     'class',
     'data-image',
     'data-image-dimensions',
     'data-image-focal-point',
     'data-image-id',
+    'data-layout-label',
     'data-load',
     'data-src',
     'data-type',
+    'data-updated-on',
     'href',
-    'src',
+    'style'
 ];
 
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const videos = $profile(".sqs-block-video, .sqs-block-embed");
-        if (videos.length > 0) {
-            return false;
+    return libingester.util.fetch_html(uri).then($ => {
+        const asset = new libingester.BlogArticle();
+        const author = 'wowshack';
+        const body = $('#canvas'); //$('.entry-content');
+        const canonical_uri = $('link[rel="canonical"]').attr('href');
+        const description = $('.entry-content .sqs-block-content').first().text();
+        const date = $('time.published').attr('datetime');
+        const modified_date= new Date(Date.parse(date));
+        const page = 'wowshack';
+        const read_more = `Original Article at www.wowshack.com`;
+        const section = 'Article';
+        const title = $('meta[property="og:title"]').attr('content');
+        const videos = body.find('.video-block').get().map(v => JSON.parse(v.attribs['data-block-json']));
+		const tags  = ['Article'];
+
+		// uri thumbnail
+        let uri_thumb_image = $('img[alt="Thumbnail"]').attr('src');
+        if (videos[0] && !uri_thumb_image) {
+            uri_thumb_image = videos[0].thumbnailUrl;
         }
 
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        const asset = new libingester.NewsArticle();
+        // remove and clean elements
+        const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
+        body.find("h3").get().map(elem => elem.name = 'p');
+        const first_p = body.find('p').first();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        body.find(first_p).remove();
 
-        asset.set_canonical_uri(uri);
+        //Download images
+        let thumbnail;
+        body.find('img').map(function() {
+            const src = this.attribs.src || this.attribs['data-src'] || '';
+            if (src.includes('http') && !src.includes('visualegacy.org')) {
+                this.attribs['src'] = src;
+                clean_attr(this);
+                const image = libingester.util.download_img($(this));
+                image.set_title(title);
+                hatch.save_asset(image);
+                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+            } else {
+                $(this).remove();
+            }
+        });
 
-        // Pull out the updated date
-        const modified_date = new Date(Date.parse($profile('.date time').attr('datetime')));
-        asset.set_last_modified_date(modified_date);
-        asset.set_section("Article");
+        // download thumbnail of the video
+        if(!thumbnail) {
+            thumbnail = libingester.util.download_image(uri_thumb_image);
+            thumbnail.set_title(title);
+            asset.set_thumbnail(thumbnail);
+            hatch.save_asset(thumbnail);
+        }
 
-        //Set title section
-        const title = $profile('meta[property="og:title"]').attr('content');
-        const date = $profile('.date time').first().text();
+        // download video
+        body.find('.video-block').map((i, elem) => {
+            const meta = JSON.parse($(elem).attr('data-block-json'));
+            const src = meta.url;
+            const video = libingester.util.get_embedded_video_asset($(elem), src);
+            video.set_thumbnail(thumbnail);
+            hatch.save_asset(video);
+        });
+
+        // clean tags
+        body.find('div').map((i,elem) => clean_attr(elem));
+
+        // article settings
+        console.log('processing', title);
+        asset.set_author(author);
+        asset.set_body(body);
+        asset.set_canonical_uri(canonical_uri);
+        asset.set_date_published(modified_date);
+        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        asset.set_read_more_text(read_more);
+        asset.set_tags(tags);
+        asset.set_synopsis(description);
         asset.set_title(title);
-
-        //Delete image wrapper
-        $profile('.image-block-outer-wrapper').map(function() {
-            const parent = $profile(this);
-            parent.find("img.thumb-image, .image-caption").map(function() {
-                const child = $profile(this);
-                parent.before(child);
-            });
-        });
-
-        //Synopsis
-        const synopsis = $profile('.entry-content .sqs-block-content').first().text();
-        asset.set_synopsis(synopsis);
-
-        //remove elements
-        const layout = $profile('#canvas').first();
-        for (const remove_element of remove_elements) {
-            layout.find(remove_element).remove();
-        }
-
-        let article_content = $profile('.sqs-block-content');
-        //cleaning html use p in paragraphs 
-        article_content.find("h3").map(function() {
-            this.name = "p";
-        });
-
-        //Download images 
-        let img = 0;
-        article_content.find("img").map(function() {
-            const image = libingester.util.download_img(this, base_uri);
-            image.set_title(title);
-            hatch.save_asset(image);
-            this.attribs["data-libingester-asset-id"] = image.asset_id;
-            for (const meta of remove_metadata) {
-                delete this.attribs[meta];
-            }
-            if (img == 0) {
-                asset.set_thumbnail(image);
-            }
-            img++;
-        });
-
-        const body = article_content.map(function() {
-            return $profile(this).html();
-        }).get();
-
-        const content = mustache.render(template.structure_template, {
-            title: title,
-            date: date,
-            html: body.join(''),
-        });
-
-        asset.set_document(content);
+        asset.set_canonical_uri(uri);
+        asset.set_custom_scss(CUSTOM_CSS);
+        asset.render();
         hatch.save_asset(asset);
     });
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
-    libingester.util.fetch_html(home_page).then(($pages) => {
-        const articles_links = $pages('#page a.project:nth-child(-n + 30)').map(function() {
-            const uri = $pages(this).attr('href');
-            return url.resolve(home_page, uri);
+	const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
+    libingester.util.fetch_html(BASE_URI).then(($) => {
+        const articles_links = $('#page a.project:nth-child(-n + 30)').map(function() {
+            const uri = $(this).attr('href');
+            return url.resolve(BASE_URI, uri);
         }).get();
-
         Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => {
             return hatch.finish();
         });
