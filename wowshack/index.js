@@ -75,7 +75,7 @@ function ingest_article(hatch, uri) {
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('.entry-content .sqs-block-content').first().text();
         const date = $('time.published').attr('datetime');
-        const modified_date= new Date(Date.parse(date));
+        const modified_date = new Date(Date.parse(date));
         const page = 'wowshack';
         const read_more = `Original Article at www.wowshack.com`;
         const section = 'Article';
@@ -131,14 +131,14 @@ function ingest_article(hatch, uri) {
 
         // clean tags
         body.find('div').map((i,elem) => clean_attr(elem));
-
+	
         // article settings
         console.log('processing', title);
         asset.set_author(author);
         asset.set_body(body);
         asset.set_canonical_uri(canonical_uri);
-        asset.set_date_published(modified_date);
-        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        asset.set_date_published(Date.now(modified_date));
+        asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
         asset.set_tags(tags);
         asset.set_synopsis(description);
