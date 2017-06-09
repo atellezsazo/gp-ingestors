@@ -14,7 +14,6 @@ $accent-dark-color: #670000;
 $background-light-color: #F6F6F6;
 $background-dark-color: #F6F6F6;
 
-
 $title-font: ‘Roboto’;
 $body-font: ‘Roboto Slab’;
 $display-font: ‘Roboto’;
@@ -25,7 +24,6 @@ $title-font-composite: ‘Roboto’;
 $display-font-composite: ‘Roboto’;
 
 @import "_default";
-
 `;
 
 //Remove elements
@@ -85,14 +83,11 @@ function ingest_article(hatch, uri) {
         const videos = body.find('.video-block').get().map(v => JSON.parse(v.attribs['data-block-json']));
 		const tags  = ['Article'];
 
-
 		// uri thumbnail
         let uri_thumb_image = $('img[alt="Thumbnail"]').attr('src');
         if (videos[0] && !uri_thumb_image) {
             uri_thumb_image = videos[0].thumbnailUrl;
         }
-
-
 
         // remove and clean elements
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
@@ -100,7 +95,6 @@ function ingest_article(hatch, uri) {
         const first_p = body.find('p').first();
         body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find(first_p).remove();
-
 
         //Download images
         let thumbnail;
@@ -146,25 +140,21 @@ function ingest_article(hatch, uri) {
         asset.set_date_published(modified_date);
         asset.set_last_modified_date(new Date(Date.parse(modified_date)));
         asset.set_read_more_text(read_more);
-        //asset.set_section(section);
         asset.set_tags(tags);
         asset.set_synopsis(description);
         asset.set_title(title);
         asset.set_canonical_uri(uri);
         asset.set_custom_scss(CUSTOM_CSS);
-
         asset.render();
         hatch.save_asset(asset);
     });
 }
 
 function main() {
-
-
-const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
-    libingester.util.fetch_html(BASE_URI).then(($pages) => {
-        const articles_links = $pages('#page a.project:nth-child(-n + 30)').map(function() {
-            const uri = $pages(this).attr('href');
+	const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
+    libingester.util.fetch_html(BASE_URI).then(($) => {
+        const articles_links = $('#page a.project:nth-child(-n + 30)').map(function() {
+            const uri = $(this).attr('href');
             return url.resolve(BASE_URI, uri);
         }).get();
         Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => {

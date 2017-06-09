@@ -1,11 +1,11 @@
 {
     "name": "ingestor-wowshack",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
         "start": "node --harmony_default_parameters index.js"
     },
-    "dependencies": {        
+    "dependencies": {
         "libingester": "https://github.com/endlessm/libingester.git"
     }
 }
