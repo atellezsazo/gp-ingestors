@@ -81,9 +81,9 @@ function ingest_article(hatch, uri) {
         const section = 'Article';  //the blog doesn´t have section
         const title = $('meta[property="og:title"]').attr('content');
         const videos = body.find('.video-block').get().map(v => JSON.parse(v.attribs['data-block-json']));
-		const tags  = ['Article']; //the blog doesn´t have tags
+        const tags  = ['Article']; //the blog doesn´t have tags
 
-		// uri thumbnail
+        // uri thumbnail
         let uri_thumb_image = $('img[alt="Thumbnail"]').attr('src');
         if (videos[0] && !uri_thumb_image) {
             uri_thumb_image = videos[0].thumbnailUrl;
