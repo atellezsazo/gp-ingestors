@@ -78,10 +78,10 @@ function ingest_article(hatch, uri) {
         const modified_date = new Date(Date.parse(date));
         const page = 'wowshack';
         const read_more = `Original Article at www.wowshack.com`;
-        const section = 'Article';  //the blog doesn´t have section
+        const section = 'Article'; //the blog doesn´t have section
         const title = $('meta[property="og:title"]').attr('content');
         const videos = body.find('.video-block').get().map(v => JSON.parse(v.attribs['data-block-json']));
-        const tags  = ['Article']; //the blog doesn´t have tags
+        const tags = ['Article']; //the blog doesn´t have tags
 
         // uri thumbnail
         let uri_thumb_image = $('img[alt="Thumbnail"]').attr('src');
@@ -106,14 +106,14 @@ function ingest_article(hatch, uri) {
                 const image = libingester.util.download_img($(this));
                 image.set_title(title);
                 hatch.save_asset(image);
-                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+                if (!thumbnail) asset.set_thumbnail(thumbnail = image);
             } else {
                 $(this).remove();
             }
         });
 
         // download thumbnail of the video
-        if(!thumbnail) {
+        if (!thumbnail) {
             thumbnail = libingester.util.download_image(uri_thumb_image);
             thumbnail.set_title(title);
             asset.set_thumbnail(thumbnail);
@@ -131,7 +131,7 @@ function ingest_article(hatch, uri) {
         });
 
         // clean tags
-        body.find('div').map((i,elem) => clean_attr(elem));
+        body.find('div').map((i, elem) => clean_attr(elem));
 
         // article settings
         console.log('processing', title);
@@ -152,13 +152,13 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-	const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
+    const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
     libingester.util.fetch_html(BASE_URI).then($ => {
         const links = $('#page a.project:nth-child(-n + 30)').map(function() {
-        	return url.resolve(BASE_URI, $(this).attr('href'));
+            return url.resolve(BASE_URI, $(this).attr('href'));
         }).get();
         Promise.all(links.map(uri => ingest_article(hatch, uri)))
-			.then(() => hatch.finish());
+            .then(() => hatch.finish());
     });
 }
 
