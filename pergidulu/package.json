@@ -1,10 +1,11 @@
 {
-    "name": "libingester-pergidulu",
-    "version": "0.0.1",
-    "license": "UNLICENSED",
-    "dependencies": {
-        "libingester": "^1.0.0",
-        "mustache": "^2.3.0",
-        "rss-to-json": "^1.0.2"
-    }
+     "name": "ingestor-pergidulu",
+     "version": "0.0.2",
+     "license": "UNLICENSED",
+     "scripts": {
+         "start": "node --harmony_default_parameters index.js"
+    },
+     "dependencies": {
+         "libingester": "https://github.com/endlessm/libingester.git"
+     } 
 }
