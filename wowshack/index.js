@@ -78,10 +78,10 @@ function ingest_article(hatch, uri) {
         const modified_date = new Date(Date.parse(date));
         const page = 'wowshack';
         const read_more = `Original Article at www.wowshack.com`;
-        const section = 'Article';
+        const section = 'Article';  //the blog doesn´t have section
         const title = $('meta[property="og:title"]').attr('content');
         const videos = body.find('.video-block').get().map(v => JSON.parse(v.attribs['data-block-json']));
-		const tags  = ['Article'];
+		const tags  = ['Article']; //the blog doesn´t have tags
 
 		// uri thumbnail
         let uri_thumb_image = $('img[alt="Thumbnail"]').attr('src');
@@ -125,13 +125,14 @@ function ingest_article(hatch, uri) {
             const meta = JSON.parse($(elem).attr('data-block-json'));
             const src = meta.url;
             const video = libingester.util.get_embedded_video_asset($(elem), src);
+            video.set_title(title);
             video.set_thumbnail(thumbnail);
             hatch.save_asset(video);
         });
 
         // clean tags
         body.find('div').map((i,elem) => clean_attr(elem));
-	
+
         // article settings
         console.log('processing', title);
         asset.set_author(author);
