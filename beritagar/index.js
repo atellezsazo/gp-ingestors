@@ -348,22 +348,22 @@ function main() {
     });
 
     /** More recent galleries posted **/
-    // const gallery = libingester.util.fetch_html(PAGE_GALLERY).then($ =>
-    //     Promise.all( $('#main .swifts .content a.title').get()
-    //         .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
-    //         .map(uri => ingest_gallery(hatch, uri))
-    //     )
-    // );
+    const gallery = libingester.util.fetch_html(PAGE_GALLERY).then($ =>
+        Promise.all( $('#main .swifts .content a.title').get()
+            .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
+            .map(uri => ingest_gallery(hatch, uri))
+        )
+    );
 
     /** More recent videos posted **/
-    // const video = libingester.util.fetch_html(PAGE_VIDEO).then($ =>
-    //     Promise.all($('#main .swifts .content a.title').get()
-    //         .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
-    //         .map(uri => ingest_video(hatch, uri))
-    //     )
-    // );
+    const video = libingester.util.fetch_html(PAGE_VIDEO).then($ =>
+        Promise.all($('#main .swifts .content a.title').get()
+            .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
+            .map(uri => ingest_video(hatch, uri))
+        )
+    );
 
-    Promise.all([article])
+    Promise.all([article, gallery, video])
         .then(() => hatch.finish());
 }
 
