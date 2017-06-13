@@ -1,6 +1,5 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 const url = require('url');
@@ -15,6 +14,7 @@ const REMOVE_ATTR = [
     'class',
     'data-src',
     'id',
+    'slide-index',
     'style',
 ];
 
@@ -142,6 +142,13 @@ $support-font: ‘Dosis’;
 }
 `;
 
+/** delete wrappers **/
+function _delete_body_wrappers(meta, $){
+    while(meta.body.children().length == 1){
+        meta.body = meta.body.children()
+    }
+}
+
 /** get articles metadata **/
 function _get_ingest_settings($) {
     return {
@@ -181,13 +188,29 @@ function _set_ingest_settings(asset, meta) {
 function _download_image($, meta, hatch, asset) {
     let thumbnail;
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
-    meta.body.find('img').map((i, elem) => {
+    const images = meta.body.find('img');
+    const download = (elem) => {
         if (elem.attribs.src) {
-            clean_attr(elem);
             const image = libingester.util.download_img($(elem));
+            clean_attr(elem);
             image.set_title(meta.title);
             hatch.save_asset(image);
             if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+        }
+    }
+    meta.body.find('img').map((i, elem) => {
+        if ($(elem).parent()[0].name == 'figure') {
+            download(elem);
+        } else {
+            let $tag = $(elem);
+            while ($tag.parent()[0]) {
+                if ($tag.parent()[0].name != 'figure'){
+                    $tag = $tag.parent();
+                } else {
+                    $tag.replaceWith($(elem, $));
+                }
+            }
+            download(elem);
         }
     });
     return thumbnail;
@@ -202,21 +225,20 @@ function _remove_and_clen($, meta) {
     meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 }
 
-/** Ingest News Article (article content)**/
+/** @ Ingest News Article (article content)**/
 function ingest_article(hatch, item) {
     return libingester.util.fetch_html(item.url).then($ => {
         const asset = new libingester.NewsArticle();
-        let meta = _get_ingest_settings($, item);
+        let meta = _get_ingest_settings($);
         console.log('processing',meta.title);
 
         // first paragraph (set_lede)
         const first_p = $('.article-sub-title').first()[0]
             || $('.media-sub-title').first()[0]
             || meta.body.find('p').first()[0];
-        const lede = $(first_p).clone();
-        lede.find('img').remove();
+        meta['lede'] = $(first_p).clone();
+        meta.lede.find('img').remove();
         meta.body.find(first_p).remove();
-        meta['lede'] = lede;
 
         // download background image (sometimes)
         const article_bg = $('.article-background-image').first();
@@ -224,24 +246,12 @@ function ingest_article(hatch, item) {
             const bg = article_bg[0].attribs.style; //get url
             const src = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
             const info = $('.thumbnail-info').first().html();
-            const figure = cheerio('<figure></figure>');
-            const img = cheerio(`<img src="${src}" />`);
-            const figcaption = cheerio(`<figcaption>${info}</figcaption>`);
+            const figure = $('<figure></figure>');
+            const img = $(`<img src="${src}" />`);
+            const figcaption = $(`<figcaption>${info}</figcaption>`);
             figure.append(img).append(figcaption);
             meta.body.prepend(figure);
         }
-        const thumbnail = _download_image($, meta, hatch, asset);
-
-        // download videos
-        meta.body.find('iframe').map(function() {
-            const src = this.attribs.src || '';
-            if (src.includes('youtube')) {
-                const video = libingester.util.get_embedded_video_asset($(this), src);
-                video.set_title(meta.title);
-                video.set_thumbnail(thumbnail);
-                hatch.save_asset(video);
-            }
-        });
 
         // download instagram images
         const instagram_promises = meta.body.find('blockquote.instagram-media').map(function() {
@@ -251,22 +261,36 @@ function ingest_article(hatch, item) {
                     const image_uri = $inst('meta[property="og:image"]').attr('content');
                     const image_description = $inst('meta[property="og:description"]').attr('content');
                     const image_title = $inst('meta[property="og:title"]').attr('content') || meta.title;
-                    const image = libingester.util.download_image(image_uri);
-                    image.set_title(image_title);
-                    hatch.save_asset(image);
-
-                    // replace tag 'blockquote' by tag 'figure'
-                    const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
-                    const figure = $inst(`<figure></figure>`);
-                    const img = $inst(`<img data-libingester-asset-id=${image.asset_id} >`);
-                    $(figure).append(img, figcaption);
-                    $(this).replaceWith(figure);
+                    if(image_uri) {
+                        // replace tag 'blockquote' by tag 'figure'
+                        const figure = $inst(`<figure></figure>`);
+                        const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
+                        const img = $inst(`<img src="${image_uri}" alt="${image_title}"/>`);
+                        figure.append(img, figcaption);
+                        $(this).replaceWith(figure);
+                    } else {
+                        $(this).remove();
+                    }
                 });
             }
         }).get();
 
         return Promise.all(instagram_promises).then(() => {
+            const thumbnail = _download_image($, meta, hatch, asset);
+
+            // download videos
+            meta.body.find('iframe').map(function() {
+                const src = this.attribs.src || '';
+                if (src.includes('youtube')) {
+                    const video = libingester.util.get_embedded_video_asset($(this), src);
+                    video.set_title(meta.title);
+                    video.set_thumbnail(thumbnail);
+                    hatch.save_asset(video);
+                }
+            });
+
             _remove_and_clen($, meta);
+            _delete_body_wrappers(meta);
             _set_ingest_settings(asset, meta);
             asset.render();
             hatch.save_asset(asset);
@@ -276,7 +300,7 @@ function ingest_article(hatch, item) {
     });
 }
 
-/** Ingest News Article (gallery content)**/
+/** @ Ingest News Article (gallery content)**/
 function ingest_gallery(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
@@ -287,14 +311,12 @@ function ingest_gallery(hatch, uri) {
         // remove elements and clean tag's
         _remove_and_clen($, meta);
         meta.body.find('figure a').map((i, elem) => {
-            if (elem.attribs.href) {
-                $(elem).replaceWith($(elem).children());
-            }
+            if (elem.attribs.href) $(elem).replaceWith($(elem).children());
         });
 
         // download post images
         _download_image($, meta, hatch, asset);
-
+        _delete_body_wrappers(meta);
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
@@ -303,7 +325,7 @@ function ingest_gallery(hatch, uri) {
     });
 }
 
-/** Ingest Video Article (only video content)**/
+/** @ Ingest Video Article (only video content)**/
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
         let meta = _get_ingest_settings($);
@@ -340,10 +362,13 @@ function main() {
     /** More recent articles posted **/
     const article = new Promise((resolve, reject) => {
         rss2json.load(FEED_RSS, (err, rss) => {
-            if(err) reject();
-            Promise.all(rss.items.map(item => ingest_article(hatch, item)))
-                .then(() => resolve())
-                .catch(err => reject(err))
+            if (err) {
+                reject(err);
+            } else {
+                Promise.all(rss.items.map(item => ingest_article(hatch, item)))
+                    .then(() => resolve())
+                    .catch(err => reject(err))
+            }
         })
     });
 
