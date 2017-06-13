@@ -58,10 +58,10 @@ function ingest_article(hatch, uri) {
         const description = $('meta[property="og:description"]').attr('content');
         const date = $(info_article).find('span.date').text();
         const modified_date = $('meta[property="article:published_time"]').attr('content');
-        const section =$('meta[property="article:section"]').attr('content');
+        const section = $('meta[property="article:section"]').attr('content');
         const read_more = 'Original Article at www.pergidulu.com';
         const title = $('.entry-title').text() || $('meta[property="og:title"]').attr('content');
-        const tags  = $('meta[property="article:tag"]').map((i, elem) => elem.attribs.content).get();
+        const tags = $('meta[property="article:tag"]').map((i, elem) => elem.attribs.content).get();
 
         // Pull out the main image
         let main_img = $('.post-featured-img img').first();
@@ -93,7 +93,7 @@ function ingest_article(hatch, uri) {
         //clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find("img").get().map((tag) => clean_attr(tag));
-        body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        body.find('p').filter((i, elem) => $(elem).text().trim() === '').remove();
 
         console.log('processing', title);
         asset.set_author(author);
@@ -116,7 +116,7 @@ function main() {
         argv: process.argv.slice(2)
     });
     rss2json.load(RSS_FEED, (err, rss) => {
-        if(err) throw {code: -1, message: 'Error to load rss'}
+        if (err) throw { code: -1, message: 'Error to load rss' }
         const links = rss.items.map(item => item.url);
         Promise.all(links.map(uri => ingest_article(hatch, uri)))
             .then(() => hatch.finish());
