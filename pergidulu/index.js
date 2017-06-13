@@ -3,6 +3,7 @@
 const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 
+const BASE_URI = 'https://www.pergidulu.com/';
 const RSS_FEED = 'https://www.pergidulu.com/feed/'; //Artists
 
 //Remove attributes (images)
@@ -54,22 +55,19 @@ $display-font-composite: ‘Roboto’;
 `;
 
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const base_uri = libingester.util.get_doc_base_uri($, uri);
+    return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.BlogArticle();
-
-        // set title section
         const info_article = $('div#single-below-header').first();
         const author = $(info_article).find('span.fn').text();
         const body = $('div.post-content div.content-inner').first();
-        const canonical_uri = uri;
+        const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('meta[property="og:description"]').attr('content');
         const date = $(info_article).find('span.date').text();
         const modified_date = $('meta[property="article:published_time"]').attr('content');
         const page ='pergidulu';
         const section =$('meta[property="article:section"]').attr('content');
         const read_more = 'Original Article at www.pergidulu.com';
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $('.entry-title').text() || $('meta[property="og:title"]').attr('content');
         const tags  = $('meta[property="article:tag"]').map((i, elem) => elem.attribs.content).get();
 
         // Pull out the main image
@@ -77,7 +75,7 @@ function ingest_article(hatch, uri) {
         if (typeof main_img.attr('data-lazy-src') !== undefined) {
             main_img.attr('src', main_img.attr('data-lazy-src'));
         }
-        const main_image = libingester.util.download_img(main_img, base_uri);
+        const main_image = libingester.util.download_img(main_img, BASE_URI);
         main_image.set_title(title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
@@ -91,14 +89,14 @@ function ingest_article(hatch, uri) {
             if (typeof this.attribs['data-lazy-src'] !== undefined) {
                 this.attribs.src = this.attribs['data-lazy-src'];
             }
-            const image = libingester.util.download_img($profile(this), base_uri);
+            const image = libingester.util.download_img($(this), BASE_URI);
             image.set_title(title);
             hatch.save_asset(image);
             this.attribs["data-libingester-asset-id"] = image.asset_id;
         });
 
         //clean tags
-        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find("img").get().map((tag) => clean_attr(tag));
 
         console.log('processing', title);
@@ -119,9 +117,10 @@ function ingest_article(hatch, uri) {
 
 function main() {
     let hatch = new libingester.Hatch();
-   rss2json.load(RSS_FEED, function(err, rss) {
-       let articles_links = rss.items.map((datum) => datum.url);
-       Promise.all(articles_links.map((uri) => ingest_article(hatch, uri))).then(() => hatch.finish());
+    rss2json.load(RSS_FEED, function(err, rss) {
+        const links = rss.items.map(item => item.url); console.log(links);
+        Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
    });
 }
 

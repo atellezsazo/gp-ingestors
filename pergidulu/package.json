@@ -6,6 +6,7 @@
          "start": "node --harmony_default_parameters index.js"
     },
      "dependencies": {
-         "libingester": "https://github.com/endlessm/libingester.git"
-     } 
+         "libingester": "^2.0.1",
+         "rss-to-json": "^1.0.2"
+     }
 }
