@@ -36,14 +36,14 @@ $accent-dark-color: #670000;
 $background-light-color: #F6F6F6;
 $background-dark-color: #F6F6F6;
 
-$title-font: ‘Roboto’;
-$body-font: ‘Roboto Slab’;
-$display-font: ‘Roboto’;
-$logo-font: ‘Roboto’;
-$context-font: ‘Roboto Slab’;
-$support-font: ‘Roboto’;
-$title-font-composite: ‘Roboto’;
-$display-font-composite: ‘Roboto’;
+$title-font: 'Roboto';
+$body-font: 'Roboto Slab';
+$display-font: 'Roboto';
+$logo-font: 'Roboto';
+$context-font: 'Roboto Slab';
+$support-font: 'Roboto';
+$title-font-composite: 'Roboto';
+$display-font-composite: 'Roboto';
 
 @import "_default";
 `;
@@ -76,7 +76,6 @@ function ingest_article(hatch, uri) {
         // remove elements and comments
         body.contents().filter((index, node) => node.type === 'comment').remove();
         body.find(REMOVE_ELEMENTS.join(',')).remove();
-
 
         // download images
         body.find('img').map(function() {
@@ -116,7 +115,8 @@ function main() {
     const hatch = new libingester.Hatch('pergidulu', {
         argv: process.argv.slice(2)
     });
-    rss2json.load(RSS_FEED, function(err, rss) {
+    rss2json.load(RSS_FEED, (err, rss) => {
+        if(err) throw {code: -1, message: 'Error to load rss'}
         const links = rss.items.map(item => item.url);
         Promise.all(links.map(uri => ingest_article(hatch, uri)))
             .then(() => hatch.finish());
