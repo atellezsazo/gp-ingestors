@@ -27,12 +27,6 @@ const REMOVE_ELEMENTS = [
     '.post-featured-img',
 ];
 
-//Remove parents from these elements (body)
-const REMOVE_ELEMENTS_PARENT = [
-    'a.nectar-button',
-    'span.guide-info-box',
-];
-
 const CUSTOM_CSS = `
 $primary-light-color: #CB162D;
 $primary-medium-color: #1A1A1A;
@@ -64,7 +58,6 @@ function ingest_article(hatch, uri) {
         const description = $('meta[property="og:description"]').attr('content');
         const date = $(info_article).find('span.date').text();
         const modified_date = $('meta[property="article:published_time"]').attr('content');
-        const page ='pergidulu';
         const section =$('meta[property="article:section"]').attr('content');
         const read_more = 'Original Article at www.pergidulu.com';
         const title = $('.entry-title').text() || $('meta[property="og:title"]').attr('content');
@@ -84,12 +77,15 @@ function ingest_article(hatch, uri) {
         body.contents().filter((index, node) => node.type === 'comment').remove();
         body.find(REMOVE_ELEMENTS.join(',')).remove();
 
+
         // download images
-        body.find("img").map(function() {
+        body.find('img').map(function() {
             if (typeof this.attribs['data-lazy-src'] !== undefined) {
                 this.attribs.src = this.attribs['data-lazy-src'];
             }
-            const image = libingester.util.download_img($(this), BASE_URI);
+            let img = $('<figure></figure>').append($(this).clone());
+            const image = libingester.util.download_img(img.children());
+            $(this).replaceWith(img);
             image.set_title(title);
             hatch.save_asset(image);
             this.attribs["data-libingester-asset-id"] = image.asset_id;
@@ -98,6 +94,7 @@ function ingest_article(hatch, uri) {
         //clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find("img").get().map((tag) => clean_attr(tag));
+        body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
         console.log('processing', title);
         asset.set_author(author);
@@ -116,12 +113,14 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    let hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch('pergidulu', {
+        argv: process.argv.slice(2)
+    });
     rss2json.load(RSS_FEED, function(err, rss) {
-        const links = rss.items.map(item => item.url); console.log(links);
+        const links = rss.items.map(item => item.url);
         Promise.all(links.map(uri => ingest_article(hatch, uri)))
             .then(() => hatch.finish());
-   });
+    });
 }
 
 main();
