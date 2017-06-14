@@ -5,7 +5,6 @@ const rp = require('request-promise');
 const rss2json = require('rss-to-json');
 const url = require('url');
 const xml2js = require('xml2js');
-const template = require('./template');
 
 const BASE_URI = 'https://www.kapanlagi.com/';
 const MAX_LINKS = 60;
