@@ -57,11 +57,11 @@ $accent-light-color: #F2B328;
 $accent-dark-color: #F68B29;
 $background-light-color: #EDEDED;
 $background-dark-color: #E3E3E3;
-$title-font: ‘Lato’;
-$body-font: ‘Merriweather’;
-$display-font: ‘Oswald’;
-$context-font: ‘Oswald’;
-$support-font: ‘Lato’;
+$title-font: 'Lato';
+$body-font: 'Merriweather';
+$display-font: 'Oswald';
+$context-font: 'Oswald';
+$support-font: 'Lato';
 
 @import '_default';
 `;
@@ -192,7 +192,7 @@ function main() {
                 f(links); //callback
             });
         }).catch((err) => {
-            console.log('ERR RP: ', err);
+            console.log('Error load Rss:', err);
             __request(f);
         });
     }
@@ -200,7 +200,7 @@ function main() {
     __request((links) => {
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
-        }).catch((err) => console.log('ALL: ', err));
+        });
     })
 }
 
