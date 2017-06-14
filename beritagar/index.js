@@ -1,36 +1,37 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
-const Promise = require('bluebird');
-const request = require('request');
-const rp = require('request-promise');
 const rss2json = require('rss-to-json');
-const template = require('./template');
 const url = require('url');
 
-const base_uri = 'https://beritagar.id/';
-const page_gallery = 'https://beritagar.id/spesial/foto/';
-const page_video = 'https://beritagar.id/spesial/video/';
-const rss_uri = 'https://beritagar.id/rss/';
+const BASE_URI = 'https://beritagar.id/';
+const FEED_RSS = 'https://beritagar.id/rss/';
+const PAGE_GALLERY = 'https://beritagar.id/spesial/foto/';
+const PAGE_VIDEO = 'https://beritagar.id/spesial/video/';
 
-// clean images
-const remove_attr_img = [
+// clean attributes
+const REMOVE_ATTR = [
     'class',
     'data-src',
-    'src',
-    'style'
+    'id',
+    'slide-index',
+    'style',
 ];
 
 // Remove elements (body)
-const remove_elements = [
+const REMOVE_ELEMENTS = [
+    'ol[type="1"]',
+    '.detail-article-author',
     '.article-recomended',
     '.article-sharer',
     '.article-sub-title',
+    '.fb-quote',
     '.follow-bar',
     '.gallery-list',
     '.gallery-navigation',
     '.gallery-single',
+    '.sprite icon-twitter-small',
+    '.thumbnail-info',
     '.twitter-tweet',
     '.unread',
     '#commentFBDesktop',
@@ -42,245 +43,315 @@ const remove_elements = [
     'script'
 ];
 
-const remove_elements_header = [
-    '.sponsored-socmed',
-    'iframe',
-    'script'
-];
+const CUSTOM_SCSS = `
+$primary-light-color: #E50921;
+$primary-medium-color: #001D53;
+$primary-dark-color: #00112F;
+$accent-light-color: #1F96E5;
+$accent-dark-color: #0071BC;
+$background-light-color: #F5F5F5;
+$background-dark-color: #E9E9E9;
 
-// download images
-const download_image = (hatch, that, title) => {
-    if (that.attribs.src) {
-        const image = libingester.util.download_image(that.attribs.src);
-        image.set_title(title);
-        that.attribs["data-libingester-asset-id"] = image.asset_id;
-        for (const attr of remove_attr_img) {
-            delete that.attribs[attr];
-        }
-        hatch.save_asset(image);
-        return image;
-    }
-}
+$title-font: 'Montserrat';
+$display-font: 'Dosis';
+$context-font: 'Dosis';
+$support-font: 'Dosis';
 
-// post data
-const get_post_data = (hatch, asset, $, uri) => {
-    asset.set_canonical_uri(uri);
-    const section = $('meta[property="article:section"]').attr('content');
-    asset.set_section(section);
-    const title = $('meta[property="og:title"]').attr('content');
-    asset.set_title(title);
-    const synopsis = $('meta[property="og:description"]').attr('content');
-    asset.set_synopsis(synopsis);
+@import '_default';
+`;
 
-    const modified_time = $('meta[property="article:modified_time"]').attr('content');
-    let date = new Date(Date.parse(modified_time));
-    if (!date) {
-        date = new Date();
-    }
-    asset.set_last_modified_date(date);
-
-    const $article_info = $('.article-info');
-    $article_info.find('a').removeAttr('style');
-
-    const author = $article_info.find('address').first(); // author post
-    const published = $article_info.find('time').first(); // published data
-    for (const element of remove_elements_header) {
-        author.find(element).remove();
-    }
-
-    // download image (author avatar)
-    author.find('img').map(function() {
-        download_image(hatch, this, title);
-    });
-
-    // article tags
-    let article_header = $('.article-header .breadcrumb').first();
-    if (article_header.length > 0) {
-        article_header.removeAttr('class');
-    } else {
-        article_header = $('#main .media-channel').first();
-        article_header.find('a').map(function() {
-            this.attribs.href = url.resolve(base_uri, this.attribs.href);
-        });
-        article_header = article_header.html();
-    }
-
+/** get articles metadata **/
+function _get_ingest_settings($) {
     return {
-        author: author.html(),
-        category: article_header,
-        date: date,
-        published: published.html(),
-        title: title,
-        uri: uri
-    };
-}
-
-// body post
-const get_body = (hatch, asset, $, post_data) => {
-    const body = $('section.article-content').first();
-
-    // article thumbnail
-    const thumb_url = $('meta[property="og:image"]').attr('content');
-    const thumb = libingester.util.download_image(thumb_url);
-    thumb.set_title(post_data.title);
-    hatch.save_asset(thumb);
-    asset.set_thumbnail(thumb);
-
-    // remove body tags and comments
-    for (const element of remove_elements) {
-        body.find(element).remove();
+        author: $('meta[name="author"]').attr('content') || $('a[rel="author"]').text(),
+        body: $('section.article-content').first(),
+        canonical_uri: $('link[rel="canonical"]').attr('href'),
+        copyright: $('meta[name="copyright"]').attr('content'),
+        custom_scss: CUSTOM_SCSS,
+        date_published: Date.now($('meta[property="article:modified_time"]').attr('content')),
+        modified_date: new Date(Date.parse($('meta[property="article:modified_time"]').attr('content'))),
+        section: $('meta[property="article:section"]').attr('content'),
+        synopsis: $('meta[name="description"]').attr('content'),
+        source: 'beritagar.id',
+        read_more: `Baca lebih lanjut tentang <a href="${$('link[rel="canonical"]').attr('href')}">beritagar.id</a>`,
+        title: $('meta[name="title"]').attr('content').replace(/\n/g, ' '),
+        uri_main_image: $('meta[property="og:image"]').attr('content'),
     }
-    body.contents().filter((index, node) => node.type === 'comment').remove();
-
-    // download images
-    body.find('img').map(function() {
-        download_image(hatch, this, post_data.title);
-    });
-
-    return body;
 }
 
-// render
-const render_template = (hatch, asset, template, post_data) => {
-    const content = mustache.render(template, post_data);
-    asset.set_document(content);
-    hatch.save_asset(asset);
+/** set articles metadata **/
+function _set_ingest_settings(asset, meta) {
+    if (meta.author) asset.set_authors(meta.author);
+    if (meta.body) asset.set_body(meta.body);
+    if (meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
+    if (meta.custom_scss) asset.set_custom_scss(meta.custom_scss);
+    if (meta.date_published) asset.set_date_published(meta.date_published);
+    if (meta.modified_date) asset.set_last_modified_date(meta.modified_date);
+    if (meta.lede) asset.set_lede(meta.lede);
+    if (meta.read_more) asset.set_read_more_link(meta.read_more);
+    if (meta.section) asset.set_section(meta.section);
+    if (meta.source) asset.set_source(meta.source);
+    if (meta.synopsis) asset.set_synopsis(meta.synopsis);
+    if (meta.title) asset.set_title(meta.title);
 }
 
-function ingest_article(hatch, uri) {
-    return new Promise((resolve, reject) => {
-        if (uri.includes('/media/')) { // avoid repeated links
-            resolve();
-            return;
+/** delete wrappers **/
+function _delete_body_wrappers(meta, $) {
+    // excluding body's element
+    const exclud = ['p', 'figure'];
+    const is_exclud = (name) => {
+        for (const tag of exclud) {
+            if (name.includes(tag)) return true;
         }
-        libingester.util.fetch_html(uri).then(($) => {
-            const asset = new libingester.NewsArticle();
-            let post_data = get_post_data(hatch, asset, $, uri);
+        return false;
+    }
+    // delete wrappers
+    let next = meta.body.children();
+    while (next.length == 1) {
+        if (is_exclud(next[0].name)) {
+            break;
+        } else {
+            next = next.children();
+        }
+    }
+    meta.body = next.parent();
+}
 
-            const article_subtitle = $('.article-sub-title').first();
-            const body = get_body(hatch, asset, $, post_data);
-
-            // download background image
-            let bg_img;
-            const article_bg = $('.article-background-image').first();
-            if (article_bg.length != 0) {
-                const bg = article_bg[0].attribs.style; //get url
-                const bg_img_uri = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
-                bg_img = libingester.util.download_image(bg_img_uri);
-                bg_img.set_title(post_data.title);
-                hatch.save_asset(bg_img);
+/** delete empty figcaption **/
+function _delete_empty_figcaption(meta, $) {
+    let firstFigCaption;
+    meta.body.find('figure').map((i,figure) => {
+        $(figure).find('figcaption').map((i,elem) => {
+            if ($(elem).text().trim() === '') {
+                $(elem).remove(); return;
+            } else if(firstFigCaption) {
+                firstFigCaption.append($(`</br><span>${$(elem).text()}</span>`));
+                $(elem).remove();
             }
-
-            // download instagram images
-            const instagram_promises = body.find('blockquote.instagram-media').map(function() {
-                const href = $(this).find('a').first()[0].attribs.href;
-                if (href) {
-                    return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
-                        const image_uri = $inst('meta[property="og:image"]').attr('content');
-                        const image_description = $inst('meta[property="og:description"]').attr('content');
-                        const image_title = $inst('meta[property="og:title"]').attr('content') || post_data.title;
-                        const image = libingester.util.download_image(image_uri);
-                        image.set_title(image_title);
-                        hatch.save_asset(image);
-
-                        // replace tag 'blockquote' by tag 'figure'
-                        const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
-                        const figure = $inst(`<figure></figure>`);
-                        const img = $inst(`<img data-libingester-asset-id=${image.asset_id} >`);
-                        $(figure).append(img, figcaption);
-                        $(this).replaceWith(figure);
-                    });
-                }
-            }).get();
-
-            Promise.all(instagram_promises).then(() => {
-                post_data['article_subtitle'] = article_subtitle;
-                post_data['bg_img'] = bg_img;
-                post_data['body'] = body.html();
-                render_template(hatch, asset, template.structure_template, post_data);
-                resolve();
-            });
-        })
+            if (!firstFigCaption) firstFigCaption = $(elem);
+        });
+        firstFigCaption = undefined;
     });
 }
 
+/** download images for body **/
+function _download_image($, meta, hatch, asset) {
+    let thumbnail;
+    const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
+    const download = (elem) => {
+        if (elem.attribs.src) {
+            clean_attr(elem);
+            const image = libingester.util.download_img($(elem));
+            image.set_title(meta.title);
+            hatch.save_asset(image);
+            if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+        }
+    }
+    meta.body.find('img').map((i, elem) => {
+        if ($(elem).parent()[0].name == 'figure') {
+            download(elem);
+        } else {
+            let $tag = $(elem);
+            while ($tag.parent()[0]) {
+                if ($tag.parent()[0].name != 'figure') {
+                    $tag = $tag.parent();
+                } else {
+                    $tag.replaceWith($(elem));
+                }
+            }
+            download(elem);
+        }
+    });
+    return thumbnail;
+}
+
+/** remove elements and clean tag's **/
+function _remove_and_clen($, meta) {
+    const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
+    meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+    meta.body.find('div,figure,figcaption,blockquote').map((i, elem) => clean_attr(elem));
+    meta.body.contents().filter((index, node) => node.type === 'comment').remove();
+    meta.body.find('p').filter((i, elem) => $(elem).text().trim() === '').remove();
+}
+
+/** @ Ingest News Article (article content)**/
+function ingest_article(hatch, item) {
+    return libingester.util.fetch_html(item.url).then($ => {
+        const asset = new libingester.NewsArticle();
+        let meta = _get_ingest_settings($);
+        console.log('processing', meta.title);
+
+        // first paragraph (set_lede)
+        const first_p = $('.article-sub-title p').first()[0]
+            || $('.media-sub-title').first()[0]
+            || meta.body.find('p').first()[0];
+        meta['lede'] = $(first_p).clone();
+        meta.lede.find('img').remove();
+        meta.body.find(first_p).remove();
+
+        // download background image (sometimes)
+        const article_bg = $('.article-background-image').first();
+        if (article_bg.length != 0) {
+            const bg = article_bg[0].attribs.style; //get url
+            const src = bg.substring(bg.indexOf('http'), bg.indexOf('jpg') + 3);
+            const info = $('.thumbnail-info').first().html();
+            const figure = $('<figure></figure>');
+            const img = $(`<img src="${src}" />`);
+            const figcaption = $(`<figcaption>${info}</figcaption>`);
+            figure.append(img, figcaption);
+            meta.body.prepend(figure);
+        }
+
+        // download instagram images
+        const instagram_promises = meta.body.find('blockquote.instagram-media').map(function () {
+            const href = $(this).find('a').first()[0].attribs.href;
+            if (href) {
+                return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
+                    const image_uri = $inst('meta[property="og:image"]').attr('content');
+                    const image_description = $inst('meta[property="og:description"]').attr('content');
+                    const image_title = $inst('meta[property="og:title"]').attr('content') || meta.title;
+                    if (image_uri) {
+                        // replace tag 'blockquote' by tag 'figure'
+                        const figure = $inst(`<figure></figure>`);
+                        const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
+                        const img = $inst(`<img src="${image_uri}" alt="${image_title}"/>`);
+                        figure.append(img, figcaption);
+                        $(this).replaceWith(figure);
+                    } else {
+                        $(this).remove();
+                    }
+                });
+            }
+        }).get();
+
+        return Promise.all(instagram_promises).then(() => {
+            const thumbnail = _download_image($, meta, hatch, asset);
+
+            // download videos
+            meta.body.find('iframe').map(function () {
+                const src = this.attribs.src || '';
+                if (src.includes('youtube')) {
+                    const video = libingester.util.get_embedded_video_asset($(this), src);
+                    video.set_title(meta.title);
+                    video.set_thumbnail(thumbnail);
+                    hatch.save_asset(video);
+                } else {
+                    $(this).remove();
+                }
+            });
+
+            _remove_and_clen($, meta);
+            _delete_body_wrappers(meta, $);
+            _delete_empty_figcaption(meta, $);
+            _set_ingest_settings(asset, meta);
+            asset.render();
+            hatch.save_asset(asset);
+        });
+    }).catch(err => {
+        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
+    });
+}
+
+/** @ Ingest News Article (gallery content)**/
 function ingest_gallery(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        let post_data = get_post_data(hatch, asset, $, uri);
+        let meta = _get_ingest_settings($);
+        meta['lede'] = $('.media-sub-title').first();
+        console.log('processing', meta.title);
 
-        const media_subtitle = $('.media-sub-title').first();
-        const body = get_body(hatch, asset, $, post_data);
+        // remove elements and clean tag's
+        _remove_and_clen($, meta);
+        meta.body.find('figure a').map((i, elem) => {
+            if (elem.attribs.href) $(elem).replaceWith($(elem).children());
+        });
 
-        post_data['article_subtitle'] = media_subtitle;
-        post_data['body'] = body.html();
+        // download and clean
+        _download_image($, meta, hatch, asset);
+        _delete_body_wrappers(meta);
 
-        render_template(hatch, asset, template.structure_template, post_data);
-    })
+        // fix figcation off figure
+        meta.body.find('figure').map((i,elem) => {
+            const fig = $(elem).next();
+            $(elem).append(fig.clone());
+            fig.remove();
+        });
+
+        _set_ingest_settings(asset, meta);
+        asset.render();
+        hatch.save_asset(asset);
+    }).catch(err => {
+        if (err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
+    });
 }
 
+/** @ Ingest Video Article (only video content)**/
 function ingest_video(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
-        const article_tags = $('#main .media-channel').first();
-        const copyright = $('meta[name="copyright"]').attr('content');
-        const description = $('meta[property="og:description"]').attr('content');
-        const modified_time = $('meta[property="article:modified_time"]').attr('content');
-        const date = new Date(Date.parse(modified_time));
-        const title = $('meta[name="title"]').attr('content');
+    return libingester.util.fetch_html(uri).then($ => {
+        let meta = _get_ingest_settings($);
+        console.log('processing', meta.title);
 
-        // download background video (thumbnail)
-        let bg_img_video;
-        const bg_img_video_uri = $('meta[property="og:image"]').attr('content');
-        bg_img_video = libingester.util.download_image(bg_img_video_uri);
-        bg_img_video.set_title(title);
-        hatch.save_asset(bg_img_video);
-
-        // save video asset
         const video_uri = $('.video-player iframe').first().attr('src');
         if (video_uri) {
+            // download background video (thumbnail)
+            let bg_img_video;
+            const bg_img_video_uri = $('meta[property="og:image"]').attr('content');
+            bg_img_video = libingester.util.download_image(bg_img_video_uri);
+            bg_img_video.set_title(meta.title);
+            hatch.save_asset(bg_img_video);
+
+            // save video asset
             const video = new libingester.VideoAsset();
             video.set_canonical_uri(uri);
             video.set_download_uri(video_uri);
-            video.set_last_modified_date(date);
-            video.set_license(copyright);
+            video.set_last_modified_date(meta.modified_date);
+            video.set_license(meta.copyright);
             video.set_thumbnail(bg_img_video);
-            video.set_title(title);
-            video.set_synopsis(description);
+            video.set_title(meta.title);
+            video.set_synopsis(meta.description);
             hatch.save_asset(video);
         }
-    })
+    }).catch(err => {
+        if (err.code == 'ECONNRESET') return ingest_video(hatch, uri);
+    });
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
-    const ingest = (page_uri, resolved, concurrency = Infinity) => {
-        if (page_uri.includes('rss')) {
-            rss2json.load(rss_uri, function(err, rss) {
-                Promise.map(rss.items, function(item) {
-                    return ingest_article(hatch, item.url); // post article
-                }, { concurrency: concurrency }).then(() => resolved());
-            });
-        } else {
-            libingester.util.fetch_html(page_uri).then(($) => {
-                const tags = $('#main .swifts .content a.title').get(); // more recent media links
-                Promise.map(tags, (tag) => {
-                    if (page_uri.includes('foto')) { // media gallery
-                        return ingest_gallery(hatch, url.resolve(base_uri, tag.attribs.href));
-                    } else if (page_uri.includes('video')) { // media video
-                        return ingest_video(hatch, url.resolve(base_uri, tag.attribs.href));
-                    }
-                }, { concurrency: concurrency }).then(() => resolved());
-            });
-        }
-    }
-
-    const article = new Promise((resolve, reject) => ingest(rss_uri, resolve));
-    const gallery = new Promise((resolve, reject) => ingest(page_gallery, resolve));
-    const video = new Promise((resolve, reject) => ingest(page_video, resolve));
-
-    Promise.all([article, gallery, video]).then(() => {
-        return hatch.finish();
+    const hatch = new libingester.Hatch('beritagar', {
+        argv: process.argv.slice(2)
     });
+
+    /** More recent articles posted **/
+    const article = new Promise((resolve, reject) => {
+        rss2json.load(FEED_RSS, (err, rss) => {
+            if (err) {
+                reject(err);
+            } else {
+                Promise.all(rss.items.map(item => ingest_article(hatch, item)))
+                    .then(() => resolve())
+                    .catch(err => reject(err))
+            }
+        })
+    });
+
+    /** More recent galleries posted **/
+    const gallery = libingester.util.fetch_html(PAGE_GALLERY).then($ =>
+        Promise.all($('#main .swifts .content a.title').get()
+            .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
+            .map(uri => ingest_gallery(hatch, uri))
+        )
+    );
+
+    /** More recent videos posted **/
+    const video = libingester.util.fetch_html(PAGE_VIDEO).then($ =>
+        Promise.all($('#main .swifts .content a.title').get()
+            .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
+            .map(uri => ingest_video(hatch, uri))
+        )
+    );
+
+    Promise.all([article, gallery, video])
+        .then(() => hatch.finish());
 }
 
 main();
