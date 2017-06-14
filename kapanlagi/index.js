@@ -64,44 +64,7 @@ $context-font: ‘Oswald’;
 $support-font: ‘Lato’;
 
 @import '_default';
-
-.CardDefaultFamily {
- background-color:#EDEDED;
-}
-.CardList {
- background-color:#EDEDED;
-}
-.CardDefaultFamily__title {
- font-weight: 500;
-}
-.CardList__title {
- font-weight: 500;
-}
-.ArrangementSideBySide .CardTitle__title {
-  font-family: $context-font;
- }
-.ArrangementSideBySide .CardTitle .FormattableLabel {
- -EknFormattableLabel-text-transform:'uppercase';
- }
-.BannerSet .FormattableLabel {
- -EknFormattableLabel-text-transform:'uppercase';
- }
-.ArrangementList .ContentGroupContentGroup__title{
- -EknFormattableLabel-text-transform:'uppercase';
- }
-.ArrangementThirties .CardDefaultFamily__context .FormattableLabel {
- -EknFormattableLabel-text-transform:'uppercase';
- }
-.ArrangementSquareGuys .CardDefaultFamily__context .FormattableLabel{
- -EknFormattableLabel-text-transform:'uppercase';
- }
-.ArrangementPiano .CardDefaultFamily{
- background-color: white;
-}
-.LayoutDynamicBackground{
- background-color: $primary-light-color;
- background-image: linear-gradient(white);
-}`;
+`;
 
 
 function ingest_article(hatch, uri) {
