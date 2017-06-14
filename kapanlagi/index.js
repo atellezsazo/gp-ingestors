@@ -66,7 +66,6 @@ $support-font: ‘Lato’;
 @import '_default';
 `;
 
-
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         if ($('meta[http-equiv="REFRESH"]').length == 1) throw { name: 'Article have a redirect' };
