@@ -13,20 +13,14 @@ $accent-light-color: #FFA300;
 $accent-dark-color: #E59200;
 $background-light-color: #F6F6F6;
 $background-dark-color: #F0F0F0;
-$title-font: ‘Roboto’;
-$body-font: ‘Roboto’;
-$display-font: ‘Roboto’;
-$context-font: ‘Roboto Slab’;
-$support-font: ‘Roboto’;
+$title-font: 'Roboto';
+$body-font: 'Roboto';
+$display-font: 'Roboto';
+$context-font: 'Roboto Slab';
+$support-font: 'Roboto';
 
 @import "_default";
-
-.CardDefaultFamily{
-	box-shadow: none;
-}
-.CardDefaultFamily__context, .CardList__context {
-	font-weight: normal;
-}`;
+`;
 
 // elements to remove
 const REMOVE_ELEMENTS = [
@@ -34,11 +28,11 @@ const REMOVE_ELEMENTS = [
     'iframe',
     'noscript',
     'script',
-    'video',
     '.fb-like-box',
+    '.instagram-media',
+    '.imgur-embed-pub',
     '.helpful-article',
     '.single-share',
-    '.wp-video',
 ];
 
 // attributes to remove
@@ -101,9 +95,6 @@ function ingest_article(hatch, item) {
 
         // remove and clean elements
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
-        body.find(REMOVE_ELEMENTS.join(',')).remove();
-        body.find(first_p).remove();
-        body.find('div').map((i, elem) => clean_attr(elem));
 
         //Download images
         body.find('img').map(function() {
@@ -112,7 +103,9 @@ function ingest_article(hatch, item) {
                 this.attribs['src'] = src;
                 this.attribs['alt'] = this.attribs['data-alt'];
                 clean_attr(this);
-                const image = libingester.util.download_img($(this));
+                let img = $('<figure></figure>').append($(this).clone());
+                const image = libingester.util.download_img(img.children());
+                $(this).replaceWith(img);
                 image.set_title(title);
                 hatch.save_asset(image);
             } else {
@@ -120,9 +113,29 @@ function ingest_article(hatch, item) {
             }
         });
 
+        // download video
+        body.find('iframe').map(function() {
+            const src = this.attribs.src;
+            if (src.includes("youtube")) {
+                const video = libingester.util.get_embedded_video_asset($(this), src);
+                video.set_title(title);
+                video.set_thumbnail(main_image);
+                hatch.save_asset(video);
+            }
+        });
+
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        body.find(first_p).remove();
+        body.find('div').map((i, elem) => clean_attr(elem));
+        body.find('p, h3, div').filter(function() {
+            return $(this).text().trim() === '' && $(this).children().length === 0;
+        }).remove();
+
         asset.render();
         hatch.save_asset(asset);
-    })
+    }).catch((err) => {
+        console.log(err.stack);
+    });
 }
 
 function main() {
