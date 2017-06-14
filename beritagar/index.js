@@ -21,6 +21,7 @@ const REMOVE_ATTR = [
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
     'ol[type="1"]',
+    '.detail-article-author',
     '.article-recomended',
     '.article-sharer',
     '.article-sub-title',
@@ -52,10 +53,10 @@ $accent-dark-color: #0071BC;
 $background-light-color: #F5F5F5;
 $background-dark-color: #E9E9E9;
 /*extra color: #0063C6*/
-$title-font: ‘Montserrat’;
-$display-font: ‘Dosis’;
-$context-font: ‘Dosis’;
-$support-font: ‘Dosis’;
+$title-font: 'Montserrat';
+$display-font: 'Dosis';
+$context-font: 'Dosis';
+$support-font: 'Dosis';
 
 /* Import News Template */
 @import '_default';
@@ -63,8 +64,8 @@ $support-font: ‘Dosis’;
 /* Class Overrrides */
 
 .ArrangementSideBySide .CardTitle__title {
-		font-family: $context-font;
-		font-weight: 500;
+	font-family: $context-font;
+	font-weight: 500;
 }
 
 .ArrangementSideBySide .CardTitle .FormattableLabel {
@@ -142,13 +143,6 @@ $support-font: ‘Dosis’;
 }
 `;
 
-/** delete wrappers **/
-function _delete_body_wrappers(meta, $){
-    while(meta.body.children().length == 1){
-        meta.body = meta.body.children()
-    }
-}
-
 /** get articles metadata **/
 function _get_ingest_settings($) {
     return {
@@ -163,39 +157,76 @@ function _get_ingest_settings($) {
         synopsis: $('meta[name="description"]').attr('content'),
         source: 'beritagar.id',
         read_more: `Baca lebih lanjut tentang <a href="${$('link[rel="canonical"]').attr('href')}">beritagar.id</a>`,
-        title: $('meta[name="title"]').attr('content').replace(/\n/g,' '),
+        title: $('meta[name="title"]').attr('content').replace(/\n/g, ' '),
         uri_main_image: $('meta[property="og:image"]').attr('content'),
     }
 }
 
 /** set articles metadata **/
 function _set_ingest_settings(asset, meta) {
-    if(meta.author) asset.set_authors(meta.author);
-    if(meta.body) asset.set_body(meta.body);
-    if(meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
-    if(meta.custom_scss) asset.set_custom_scss(meta.custom_scss);
-    if(meta.date_published) asset.set_date_published(meta.date_published);
-    if(meta.modified_date) asset.set_last_modified_date(meta.modified_date);
-    if(meta.lede) asset.set_lede(meta.lede);
-    if(meta.read_more) asset.set_read_more_link(meta.read_more);
-    if(meta.section) asset.set_section(meta.section);
-    if(meta.source) asset.set_source(meta.source);
-    if(meta.synopsis) asset.set_synopsis(meta.synopsis);
-    if(meta.title) asset.set_title(meta.title);
+    if (meta.author) asset.set_authors(meta.author);
+    if (meta.body) asset.set_body(meta.body);
+    if (meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
+    if (meta.custom_scss) asset.set_custom_scss(meta.custom_scss);
+    if (meta.date_published) asset.set_date_published(meta.date_published);
+    if (meta.modified_date) asset.set_last_modified_date(meta.modified_date);
+    if (meta.lede) asset.set_lede(meta.lede);
+    if (meta.read_more) asset.set_read_more_link(meta.read_more);
+    if (meta.section) asset.set_section(meta.section);
+    if (meta.source) asset.set_source(meta.source);
+    if (meta.synopsis) asset.set_synopsis(meta.synopsis);
+    if (meta.title) asset.set_title(meta.title);
+}
+
+/** delete wrappers **/
+function _delete_body_wrappers(meta, $) {
+    // excluding body's element
+    const exclud = ['p', 'figure'];
+    const is_exclud = (name) => {
+        for (const tag of exclud) {
+            if (name.includes(tag)) return true;
+        }
+        return false;
+    }
+    // delete wrappers
+    let next = meta.body.children();
+    while (next.length == 1) {
+        if (is_exclud(next[0].name))
+            break;
+        else
+            next = next.children();
+    }
+    meta.body = next.parent();
+}
+
+/** delete empty figcaption **/
+function _delete_empty_figcaption(meta, $) {
+    let firstFigCaption;
+    meta.body.find('figure').map((i,figure) => {
+        $(figure).find('figcaption').map((i,elem) => {
+            if ($(elem).text().trim() === '') {
+                $(elem).remove(); return;
+            } else if(firstFigCaption) {
+                firstFigCaption.append($(`</br><span>${$(elem).text()}</span>`));
+                $(elem).remove();
+            }
+            if (!firstFigCaption) firstFigCaption = $(elem);
+        });
+        firstFigCaption = undefined;
+    });
 }
 
 /** download images for body **/
 function _download_image($, meta, hatch, asset) {
     let thumbnail;
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
-    const images = meta.body.find('img');
     const download = (elem) => {
         if (elem.attribs.src) {
-            const image = libingester.util.download_img($(elem));
             clean_attr(elem);
+            const image = libingester.util.download_img($(elem));
             image.set_title(meta.title);
             hatch.save_asset(image);
-            if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+            if (!thumbnail) asset.set_thumbnail(thumbnail = image);
         }
     }
     meta.body.find('img').map((i, elem) => {
@@ -204,10 +235,10 @@ function _download_image($, meta, hatch, asset) {
         } else {
             let $tag = $(elem);
             while ($tag.parent()[0]) {
-                if ($tag.parent()[0].name != 'figure'){
+                if ($tag.parent()[0].name != 'figure') {
                     $tag = $tag.parent();
                 } else {
-                    $tag.replaceWith($(elem, $));
+                    $tag.replaceWith($(elem));
                 }
             }
             download(elem);
@@ -220,9 +251,9 @@ function _download_image($, meta, hatch, asset) {
 function _remove_and_clen($, meta) {
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
     meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
-    meta.body.find('div,figure,figcaption,blockquote').map((i,elem) => clean_attr(elem));
+    meta.body.find('div,figure,figcaption,blockquote').map((i, elem) => clean_attr(elem));
     meta.body.contents().filter((index, node) => node.type === 'comment').remove();
-    meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+    meta.body.find('p').filter((i, elem) => $(elem).text().trim() === '').remove();
 }
 
 /** @ Ingest News Article (article content)**/
@@ -230,10 +261,10 @@ function ingest_article(hatch, item) {
     return libingester.util.fetch_html(item.url).then($ => {
         const asset = new libingester.NewsArticle();
         let meta = _get_ingest_settings($);
-        console.log('processing',meta.title);
+        console.log('processing', meta.title);
 
         // first paragraph (set_lede)
-        const first_p = $('.article-sub-title').first()[0]
+        const first_p = $('.article-sub-title p').first()[0]
             || $('.media-sub-title').first()[0]
             || meta.body.find('p').first()[0];
         meta['lede'] = $(first_p).clone();
@@ -249,19 +280,19 @@ function ingest_article(hatch, item) {
             const figure = $('<figure></figure>');
             const img = $(`<img src="${src}" />`);
             const figcaption = $(`<figcaption>${info}</figcaption>`);
-            figure.append(img).append(figcaption);
+            figure.append(img, figcaption);
             meta.body.prepend(figure);
         }
 
         // download instagram images
-        const instagram_promises = meta.body.find('blockquote.instagram-media').map(function() {
+        const instagram_promises = meta.body.find('blockquote.instagram-media').map(function () {
             const href = $(this).find('a').first()[0].attribs.href;
             if (href) {
                 return libingester.util.fetch_html(href).then(($inst) => { // It is necessary to wait
                     const image_uri = $inst('meta[property="og:image"]').attr('content');
                     const image_description = $inst('meta[property="og:description"]').attr('content');
                     const image_title = $inst('meta[property="og:title"]').attr('content') || meta.title;
-                    if(image_uri) {
+                    if (image_uri) {
                         // replace tag 'blockquote' by tag 'figure'
                         const figure = $inst(`<figure></figure>`);
                         const figcaption = $inst(`<figcaption>${image_description}</figcaption>`);
@@ -279,24 +310,27 @@ function ingest_article(hatch, item) {
             const thumbnail = _download_image($, meta, hatch, asset);
 
             // download videos
-            meta.body.find('iframe').map(function() {
+            meta.body.find('iframe').map(function () {
                 const src = this.attribs.src || '';
                 if (src.includes('youtube')) {
                     const video = libingester.util.get_embedded_video_asset($(this), src);
                     video.set_title(meta.title);
                     video.set_thumbnail(thumbnail);
                     hatch.save_asset(video);
+                } else {
+                    $(this).remove();
                 }
             });
 
             _remove_and_clen($, meta);
-            _delete_body_wrappers(meta);
+            _delete_body_wrappers(meta, $);
+            _delete_empty_figcaption(meta, $);
             _set_ingest_settings(asset, meta);
             asset.render();
             hatch.save_asset(asset);
         });
     }).catch(err => {
-        if(err.code == 'ECONNRESET') return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
 }
 
@@ -314,14 +348,22 @@ function ingest_gallery(hatch, uri) {
             if (elem.attribs.href) $(elem).replaceWith($(elem).children());
         });
 
-        // download post images
+        // download and clean
         _download_image($, meta, hatch, asset);
         _delete_body_wrappers(meta);
+
+        // fix figcation off figure
+        meta.body.find('figure').map((i,elem) => {
+            const fig = $(elem).next();
+            $(elem).append(fig.clone());
+            fig.remove();
+        });
+
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        if(err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
+        if (err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
     });
 }
 
@@ -352,29 +394,30 @@ function ingest_video(hatch, uri) {
             hatch.save_asset(video);
         }
     }).catch(err => {
-        if(err.code == 'ECONNRESET') return ingest_video(hatch, uri);
+        if (err.code == 'ECONNRESET') return ingest_video(hatch, uri);
     });
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch('beritagar', {
+        argv: process.argv.slice(2)
+    });
 
     /** More recent articles posted **/
     const article = new Promise((resolve, reject) => {
         rss2json.load(FEED_RSS, (err, rss) => {
-            if (err) {
+            if (err)
                 reject(err);
-            } else {
+            else
                 Promise.all(rss.items.map(item => ingest_article(hatch, item)))
                     .then(() => resolve())
                     .catch(err => reject(err))
-            }
         })
     });
 
     /** More recent galleries posted **/
     const gallery = libingester.util.fetch_html(PAGE_GALLERY).then($ =>
-        Promise.all( $('#main .swifts .content a.title').get()
+        Promise.all($('#main .swifts .content a.title').get()
             .map(a => url.resolve(BASE_URI, a.attribs.href)) // more recent media links
             .map(uri => ingest_gallery(hatch, uri))
         )
