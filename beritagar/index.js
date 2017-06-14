@@ -44,7 +44,6 @@ const REMOVE_ELEMENTS = [
 ];
 
 const CUSTOM_SCSS = `
-/*Global Colors & Fonts */
 $primary-light-color: #E50921;
 $primary-medium-color: #001D53;
 $primary-dark-color: #00112F;
@@ -52,95 +51,13 @@ $accent-light-color: #1F96E5;
 $accent-dark-color: #0071BC;
 $background-light-color: #F5F5F5;
 $background-dark-color: #E9E9E9;
-/*extra color: #0063C6*/
+
 $title-font: 'Montserrat';
 $display-font: 'Dosis';
 $context-font: 'Dosis';
 $support-font: 'Dosis';
 
-/* Import News Template */
 @import '_default';
-
-/* Class Overrrides */
-
-.ArrangementSideBySide .CardTitle__title {
-	font-family: $context-font;
-	font-weight: 500;
-}
-
-.ArrangementSideBySide .CardTitle .FormattableLabel {
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-
-.BannerSet .FormattableLabel {
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-
-.ArrangementList .ContentGroupContentGroup__title{
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-
-.ArrangementThirties .CardDefaultFamily .FormattableLabel {
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-
-.ArrangementThirties .Card__context .FormattableLabel {
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-
-2.ArrangementSquareGuys .Card__context .FormattableLabel{
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-.Card__context .FormattableLabel {
-	-EknFormattableLabel-text-transform:'uppercase';
-	font-weight: 500;
-}
-
-.ArrangementThirties .CardDefaultFamily__context{
-	display:block;
-	background:$primary-light-color;
-	padding:5px 15px 5px 20px;
-	border-radius:0 20px 20px 0;
-	color:white;
-	font-family:'Dosis';
-	margin-top:10px;
-	margin-left:-20px;
-}
-
-.ArrangementSquareGuys .Card__context{
-	display:block;
-	background:$primary-light-color;
-	padding:5px 15px 5px 20px;
-	border-radius:0 20px 20px 0;
-	color:white;
-	font-family:'Dosis';
-	margin-top:10px;
-	margin-left:-20px;
-}
-
-.ArrangementSquareGuys .CardThumb{
-	padding-bottom:20px;
-}
-.ArrangementSquareGuys .CardThumb__thumbnail{
-	margin-bottom:10px;
-}
-
-/* crazy workaround to make the Dynamic BG colored*/
-
-.set-page .LayoutDynamicBackground{
-	background-color: #0063C6;
-	background-image: linear-gradient($background-light-color);
-}
-
-.home-page .LayoutDynamicBackground{
-	background-color: $background-light-color;
-}
 `;
 
 /** get articles metadata **/
@@ -191,10 +108,11 @@ function _delete_body_wrappers(meta, $) {
     // delete wrappers
     let next = meta.body.children();
     while (next.length == 1) {
-        if (is_exclud(next[0].name))
+        if (is_exclud(next[0].name)) {
             break;
-        else
+        } else {
             next = next.children();
+        }
     }
     meta.body = next.parent();
 }
@@ -406,12 +324,13 @@ function main() {
     /** More recent articles posted **/
     const article = new Promise((resolve, reject) => {
         rss2json.load(FEED_RSS, (err, rss) => {
-            if (err)
+            if (err) {
                 reject(err);
-            else
+            } else {
                 Promise.all(rss.items.map(item => ingest_article(hatch, item)))
                     .then(() => resolve())
                     .catch(err => reject(err))
+            }
         })
     });
 
