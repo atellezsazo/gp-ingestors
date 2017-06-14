@@ -1,12 +1,10 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
 const rp = require('request-promise');
 const rss2json = require('rss-to-json');
 const url = require('url');
 const xml2js = require('xml2js');
-const template = require('./template');
 
 const BASE_URI = 'https://www.kapanlagi.com/';
 const MAX_LINKS = 60;
@@ -51,71 +49,93 @@ const CLEAN_TAGS = [
     'table',
 ];
 
+const CUSTOM_CSS = `
+$primary-light-color: #EE3A81;
+$primary-medium-color: #336699;
+$primary-dark-color: #100F0F;
+$accent-light-color: #F2B328;
+$accent-dark-color: #F68B29;
+$background-light-color: #EDEDED;
+$background-dark-color: #E3E3E3;
+$title-font: 'Lato';
+$body-font: 'Merriweather';
+$display-font: 'Oswald';
+$context-font: 'Oswald';
+$support-font: 'Lato';
+
+@import '_default';
+`;
 
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        if ($profile('meta[http-equiv="REFRESH"]').length == 1) throw { name: 'Article have a redirect' };
-        if ($profile('title').text().includes('404')) throw { name: 'Not Found 404' };
+    return libingester.util.fetch_html(uri).then(($) => {
+        if ($('meta[http-equiv="REFRESH"]').length == 1) throw { name: 'Article have a redirect' };
+        if ($('title').text().includes('404')) throw { name: 'Not Found 404' };
 
         const asset = new libingester.NewsArticle();
-        const category = $profile(".newsdetail-categorylink").first().text();
-        const date = $profile('.vcard .newsdetail-schedule-new.updated').text();
-        const info_date = $profile('.newsdetail-schedule-new .value-title').attr('title');
+        const category = $(".newsdetail-categorylink").first().text();
+        const canonical_uri = $('link[rel="canonical"]').attr('href');
+        const date = $('.vcard .newsdetail-schedule-new.updated').text();
+        const info_date = $('.newsdetail-schedule-new .value-title').attr('title');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
-        const post_tags = $profile('.box-content a');
-        const reporter = $profile('.vcard .newsdetail-schedule-new a').text();
-        const subtitle = $profile("h2.entertainment-newsdetail-title-new").first().text();
-        const synopsis = $profile('meta[name="description"]').attr('content');
-        const title = $profile("#newsdetail-right-new h1").first().text();
-        const uri_main_image = $profile('meta[property="og:image"]').attr('content');
-
-        // article settings
-        asset.set_canonical_uri(uri);
-        asset.set_last_modified_date(modified_date);
-        asset.set_section(category);
-        asset.set_synopsis(synopsis);
-        asset.set_title(title);
+        const post_tags = $('.box-content a');
+        const page = 'kapanlagi';
+        const read_more = `Read more at <a href="${canonical_uri}">${page}</a>`;
+        const reporter = $('.vcard .newsdetail-schedule-new a').text();
+        const subtitle = $("h2.entertainment-newsdetail-title-new").first().text();
+        const synopsis = $('meta[name="description"]').attr('content');
+        const section = $('meta[name="adx:sections"]').attr('content');
+        const title = $("#newsdetail-right-new h1").first().text();
+        const uri_main_image = $('meta[property="og:image"]').attr('content');
 
         // Pull out the main image
         let main_image, image_credit;
         if (uri_main_image) {
             main_image = libingester.util.download_image(uri_main_image, uri);
             main_image.set_title(title);
-            image_credit = $profile('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
+            image_credit = $('.entertainment-newsdetail-headlineimg .copyright, .pg-img-warper span').text();
             hatch.save_asset(main_image);
             asset.set_thumbnail(main_image);
         }
 
-        let pages = [];
-        const ingest_body = ($profile, finish_process) => {
-            const post_body = $profile('.entertainment-detail-news');
-            const next = $profile('.link-pagging-warper a').attr('href');
-            const last_pagination = $profile('ul.pg-pagging li:last-child a').first();
+        const body_page = $('<div></div>');
+        const ingest_body = ($, finish_process) => {
+            const body = $('.entertainment-detail-news');
+            const next = $('.link-pagging-warper a').attr('href');
+            const last_pagination = $('ul.pg-pagging li:last-child a').first();
 
             // resolve links
-            post_body.find("a").map(function() {
-                if (this.attribs.href)
-                    this.attribs.href = url.resolve(BASE_URI, this.attribs.href);
+            body.find("a").map((i, elem) => {
+                if($(elem).attr('href'))
+                    $(elem).attr('href',url.resolve(BASE_URI,$(elem).attr('href')));
             });
 
+            // set first paragraph
+            const first_p = body.find('p').first();
+            const lede = first_p.clone();
+            lede.find('img').remove();
+            asset.set_lede(lede);
+            body.find(first_p).remove();
+
             // remove elements and comments
-            const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
-            post_body.contents().filter((index, node) => node.type === 'comment').remove();
-            post_body.find(REMOVE_ELEMENTS.join(',')).remove();
-            post_body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+            const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+            body.contents().filter((index, node) => node.type === 'comment').remove();
+            body.find(REMOVE_ELEMENTS.join(',')).remove();
+            body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+            body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
             // Download images
-            post_body.find("img").map(function() {
+            body.find("img").map(function() {
                 if (this.attribs.src) {
-                    const image = libingester.util.download_img($profile(this));
+                    $(this).parent()[0].name='figure';
+                    const image = libingester.util.download_img($(this));
                     image.set_title(title);
                     hatch.save_asset(image);
                 } else {
-                    $profile(this).remove();
+                    $(this).remove();
                 }
             });
 
-            pages.push(post_body.html());
+            body_page.append(body.children());
 
             if (next && last_pagination.length != 0) {
                 libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
@@ -126,33 +146,37 @@ function ingest_article(hatch, uri) {
             }
         };
 
-        return new Promise((resolve, reject) => {
-            ingest_body($profile, () => {
-                const content = mustache.render(template.structure_template, {
-                    title: title,
-                    subtitle: subtitle,
-                    author: reporter,
-                    category: category,
-                    date_published: date,
-                    main_image: main_image,
-                    image_credit: image_credit,
-                    body: pages.join(''),
-                    post_tags: post_tags,
-                });
 
-                // save document
-                asset.set_document(content);
+        return new Promise((resolve, reject) => {
+            ingest_body($, () => {
+
+                console.log('processing', title);
+                asset.set_authors([reporter]);
+                asset.set_canonical_uri(canonical_uri);
+                asset.set_canonical_uri(uri);
+                asset.set_custom_scss(CUSTOM_CSS);
+                asset.set_date_published(Date.now(modified_date));
+                asset.set_last_modified_date(modified_date);
+                asset.set_read_more_link(read_more);
+                asset.set_section(section);
+                asset.set_source(page);
+                asset.set_synopsis(synopsis);
+                asset.set_title(title);
+                asset.set_main_image(main_image,image_credit);
+                asset.set_body(body_page);
+
+                asset.render();
                 hatch.save_asset(asset);
                 resolve();
             });
         })
     }).catch((err) => {
-        console.log("Ingest error: ", err.name);
+        console.log("Ingest error: ", err);
     });
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch('kapanlagi', { argv: process.argv.slice(2) });
     const __request = (f) => {
         rp({ uri: RSS_URI, gzip: true }).then((res) => {
             var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
@@ -168,7 +192,7 @@ function main() {
                 f(links); //callback
             });
         }).catch((err) => {
-            console.log('ERR RP: ', err.name);
+            console.log('Error load Rss:', err);
             __request(f);
         });
     }
@@ -176,7 +200,7 @@ function main() {
     __request((links) => {
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
-        }).catch((err) => console.log('ALL: ', err.name));
+        });
     })
 }
 
