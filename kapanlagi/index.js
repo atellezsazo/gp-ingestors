@@ -87,6 +87,7 @@ function ingest_article(hatch, uri) {
         const title = $("#newsdetail-right-new h1").first().text();
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
+
         // Pull out the main image
         let main_image, image_credit;
         if (uri_main_image) {
@@ -177,23 +178,30 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('kapanlagi', { argv: process.argv.slice(2) });
+
+    const limit_attempts = 3;
+    let attempt = 1;
+
     const __request = (f) => {
-        rp({ uri: RSS_URI, gzip: true }).then((res) => {
+        rp({ uri: RSS_URI, gzip: true }).then(res => { throw { Msj: 'Not Found 404' };
             var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
             parser.parseString(res, (err, result) => {
                 const rss = rss2json.parser(result);
                 let links = [],
                     n = 0;
-                rss.items.map((datum) => {
-                    if (!datum.link.includes("musik.kapanlagi.com") && n++ < MAX_LINKS) { //drop musik subdomain
-                        links.push(datum.link);
+                const items=rss.items.slice(MAX_LINKS);
+                for(const item of items){
+                    if (!item.link.includes("musik.kapanlagi.com")) { //drop musik subdomain
+                        links.push(item.link);
                     }
-                });
+                }
                 f(links); //callback
             });
-        }).catch((err) => {
+        }).catch(err => {
             console.log('Error load Rss:', err);
-            __request(f);
+            if (attempt++ < limit_attempts) {
+                __request(f);
+            }
         });
     }
 
