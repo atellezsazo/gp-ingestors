@@ -80,7 +80,7 @@ function ingest_article(hatch, item) {
         let meta = _get_ingest_settings($);
         if (!meta.title) throw { code: -1, message: `Undefined title, DOM incomplete: ${item.url}` };
 
-        // article settings 
+        // article settings
         console.log('processing', meta.title);
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
         meta['body'] = $('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
@@ -93,7 +93,7 @@ function ingest_article(hatch, item) {
 
         // pull out the main image
         const main_image = libingester.util.download_image(uri_main_image);
-        const image_description = $('.caption-img-ab').children();
+        const image_description = $(`<figcaption>${$('.caption-img-ab').text()}</figcaption>`);
         main_image.set_title(meta.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
@@ -233,7 +233,7 @@ function main() {
         return Promise.all(items.map(item => ingest_gallery(hatch, item)));
     });
 
-    Promise.all([news, gallery])
+    Promise.all([gallery, news])
         .then(() => hatch.finish());
 }
 
