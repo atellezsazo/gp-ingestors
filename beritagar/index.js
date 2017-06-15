@@ -20,11 +20,13 @@ const REMOVE_ATTR = [
 
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
+    'iframe',
     'ol[type="1"]',
-    '.detail-article-author',
+    'script',
     '.article-recomended',
     '.article-sharer',
     '.article-sub-title',
+    '.detail-article-author',
     '.fb-quote',
     '.follow-bar',
     '.gallery-list',
@@ -39,8 +41,6 @@ const REMOVE_ELEMENTS = [
     '#opinibam',
     '#semar-placement',
     '#semar-placement-v2',
-    'iframe',
-    'script'
 ];
 
 const CUSTOM_SCSS = `
@@ -98,8 +98,8 @@ function _set_ingest_settings(asset, meta) {
 /** delete wrappers **/
 function _delete_body_wrappers(meta, $) {
     // excluding body's element
-    const exclud = ['p', 'figure'];
-    const is_exclud = (name) => {
+    const exclude = ['p', 'figure'];
+    const is_exclude = (name) => {
         for (const tag of exclud) {
             if (name.includes(tag)) return true;
         }
@@ -120,11 +120,11 @@ function _delete_body_wrappers(meta, $) {
 /** delete empty figcaption **/
 function _delete_empty_figcaption(meta, $) {
     let firstFigCaption;
-    meta.body.find('figure').map((i,figure) => {
-        $(figure).find('figcaption').map((i,elem) => {
+    meta.body.find('figure').map((i, figure) => {
+        $(figure).find('figcaption').map((i, elem) => {
             if ($(elem).text().trim() === '') {
                 $(elem).remove(); return;
-            } else if(firstFigCaption) {
+            } else if (firstFigCaption) {
                 firstFigCaption.append($(`</br><span>${$(elem).text()}</span>`));
                 $(elem).remove();
             }
@@ -166,7 +166,7 @@ function _download_image($, meta, hatch, asset) {
 }
 
 /** remove elements and clean tag's **/
-function _remove_and_clen($, meta) {
+function _remove_and_clean($, meta) {
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
     meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
     meta.body.find('div,figure,figcaption,blockquote').map((i, elem) => clean_attr(elem));
@@ -240,7 +240,7 @@ function ingest_article(hatch, item) {
                 }
             });
 
-            _remove_and_clen($, meta);
+            _remove_and_clean($, meta);
             _delete_body_wrappers(meta, $);
             _delete_empty_figcaption(meta, $);
             _set_ingest_settings(asset, meta);
@@ -261,7 +261,7 @@ function ingest_gallery(hatch, uri) {
         console.log('processing', meta.title);
 
         // remove elements and clean tag's
-        _remove_and_clen($, meta);
+        _remove_and_clean($, meta);
         meta.body.find('figure a').map((i, elem) => {
             if (elem.attribs.href) $(elem).replaceWith($(elem).children());
         });
@@ -271,7 +271,7 @@ function ingest_gallery(hatch, uri) {
         _delete_body_wrappers(meta);
 
         // fix figcation off figure
-        meta.body.find('figure').map((i,elem) => {
+        meta.body.find('figure').map((i, elem) => {
             const fig = $(elem).next();
             $(elem).append(fig.clone());
             fig.remove();
