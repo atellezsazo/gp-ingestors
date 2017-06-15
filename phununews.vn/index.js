@@ -1,33 +1,34 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
-const mustache = require('mustache');
 const url = require('url');
-const template = require('./template');
 
 const BASE_URI = 'http://phununews.vn/';
-const LINKS_ARTICLE = [
+const LINKS_BY_CATEGORY = [
     'http://phununews.vn/tin-tuc/', // news
     'http://phununews.vn/giai-tri/', // entertainment
     'http://phununews.vn/thi-truong/', // market
     'http://phununews.vn/bat-dong-san/', // real estate
     'http://phununews.vn/doi-song/', // life
     'http://phununews.vn/tinh-yeu-hon-nhan/', // love
-    'http://phununews.vn/me-va-be/ba-bau/', // mother
-    'http://phununews.vn/lam-dep/thoi-trang/', // beauty
-    'http://phununews.vn/suc-khoe/giam-can/', // health
-    // video links
-    'http://phununews.vn/video/giai-tri/',
-    'http://phununews.vn/video/suc-khoe/',
-    'http://phununews.vn/video/lam-dep-thoi-trang/',
-    'http://phununews.vn/video/doi-song/',
-    'http://phununews.vn/video/chuyen-la/',
-    'http://phununews.vn/video/cuoi/',
-    'http://phununews.vn/video/day-nau-an/',
-    'http://phununews.vn/video/trang-diem/',
+    'http://phununews.vn/me-va-be/', // mother and baby
+    'http://phununews.vn/lam-dep/', // beauty
+    'http://phununews.vn/suc-khoe/', // health
+    'http://phununews.vn/video/', // video links
+    'http://phununews.vn/nau-an/', // cooking
+    'http://phununews.vn/nha-dep/', // decoration
+    'http://phununews.vn/anh/', // images (gallery)
+    // 'http://phununews.vn/video/suc-khoe/',
+    // 'http://phununews.vn/video/lam-dep-thoi-trang/',
+    // 'http://phununews.vn/video/doi-song/',
+    // 'http://phununews.vn/video/chuyen-la/',
+    // 'http://phununews.vn/video/cuoi/',
+    // 'http://phununews.vn/video/day-nau-an/',
+    // 'http://phununews.vn/video/trang-diem/',
 ];
-const MAX_LINKS = 3; // max links per 'rss'
+
+// max links per page (Average per page: 17 links)
+const MAX_LINKS = 5;
 
 // cleaning elements
 const CLEAN_ELEMENTS = [
@@ -196,37 +197,46 @@ function ingest_video(hatch, uri) {
     })
 }
 
-function main() {
-    const hatch = new libingester.Hatch();
-    let links = [];
+/** _fetch_all_links (Promise)
+ * @param {Array} links The list of links
+ * @param {Number} max The max number of links per page
+ */
+function _fetch_all_links(links, max) {
+    let all_links = []; // all links retrieved from all categories
+    return Promise.all(links.map(link => libingester.util.fetch_html(link).then($ => {
+        const category = link.replace(BASE_URI,'');
+        const all_uris = []; // all uris (only by category)
+        // clean links from other categories
+        $('.txt_link').map((i,a) => {
+            const uri = url.resolve(BASE_URI, a.attribs.href);
+            if (uri.includes(category)) all_uris.push(uri);
+        });
+        // concatenate uris (only max number)
+        all_links = all_links.concat(all_uris.slice(0,max));
+    }))).then(() => all_links.unique()); // before sending, repeated links are removed
+}
 
-    function get_links(f) {
-        return Promise.all(
-            LINKS_ARTICLE.map((uri) =>
-                libingester.util.fetch_html(uri).then(($) => {
-                    let promises = [];
-                    const uris = $('.txt_link').get().map(a => url.resolve(BASE_URI, a.attribs.href));
-                    for (let i=0; i<MAX_LINKS; i++) {
-                        const link = uris[i];
-                        if (link) {
-                            links.push(link);
-                        }
-                    }
-                })
-            )
-        ).then(f);
+/** _ingest_by_category (return Promise)
+ * @param {Object} hatch The list of links
+ * @param {String} uri The max number of links per page
+ */
+function _ingest_by_category (hatch, uri) {
+    const category = uri.replace(BASE_URI,'');
+    switch (category) {
+        case 'video/': return ingest_video(hatch, uri);
+        default: return ingest_article(hatch, uri);
     }
+}
 
-    get_links(() => {
-        Promise.all(links.unique().map((uri) => {
-            if (uri.includes('/video/')) {
-                return ingest_video(hatch, uri);    // ingest video
-            } else {
-                return ingest_article(hatch, uri);  // ingest article
-            }
-        })).then(() => {
-            return hatch.finish();
-        })
+
+function main() {
+    const hatch = new libingester.Hatch('phununews', {
+        argv: process.argv.slice(2)
+    });
+
+    _fetch_all_links(LINKS_BY_CATEGORY, MAX_LINKS).then(links => {
+        Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
+            .then(() => hatch.finish());
     });
 }
 
