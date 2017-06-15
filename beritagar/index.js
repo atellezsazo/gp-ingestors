@@ -98,8 +98,8 @@ function _set_ingest_settings(asset, meta) {
 /** delete wrappers **/
 function _delete_body_wrappers(meta, $) {
     // excluding body's element
-    const exclud = ['p', 'figure'];
-    const is_exclud = (name) => {
+    const exclude = ['p', 'figure'];
+    const is_exclude = (name) => {
         for (const tag of exclud) {
             if (name.includes(tag)) return true;
         }
@@ -166,7 +166,7 @@ function _download_image($, meta, hatch, asset) {
 }
 
 /** remove elements and clean tag's **/
-function _remove_and_clen($, meta) {
+function _remove_and_clean($, meta) {
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
     meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
     meta.body.find('div,figure,figcaption,blockquote').map((i, elem) => clean_attr(elem));
@@ -240,7 +240,7 @@ function ingest_article(hatch, item) {
                 }
             });
 
-            _remove_and_clen($, meta);
+            _remove_and_clean($, meta);
             _delete_body_wrappers(meta, $);
             _delete_empty_figcaption(meta, $);
             _set_ingest_settings(asset, meta);
@@ -261,7 +261,7 @@ function ingest_gallery(hatch, uri) {
         console.log('processing', meta.title);
 
         // remove elements and clean tag's
-        _remove_and_clen($, meta);
+        _remove_and_clean($, meta);
         meta.body.find('figure a').map((i, elem) => {
             if (elem.attribs.href) $(elem).replaceWith($(elem).children());
         });
