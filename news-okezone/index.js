@@ -46,7 +46,7 @@ const REMOVE_ELEMENTS = [
 // get articles metadata
 function _get_ingest_settings($) {
     return {
-        author: $('.author .nmreporter div, .news-fr').text(),
+        author: $('.author .nmreporter div, .news-fr').text() || $('.nmreporter span').text(),
         canonical_uri: $('link[rel="canonical"]').attr('href'),
         copyright: $('meta[name="copyright"]').attr('content'),
         custom_scss: CUSTOM_SCSS,
@@ -90,6 +90,8 @@ function ingest_article(hatch, item) {
         const first_p = meta.body.find('p').first();
         const uri_main_image = $('#imgCheck').attr('src');
         _set_ingest_settings(asset, meta);
+
+        if(!meta.author) console.log(item.url);
 
         // pull out the main image
         const main_image = libingester.util.download_image(uri_main_image);
@@ -206,9 +208,7 @@ function ingest_gallery(hatch, item) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('news-okezone', {
-        argv: process.argv.slice(2)
-    });
+    const hatch = new libingester.Hatch('news-okezone', 'id');
 
     const get_item = ($, item) => {
         return {
