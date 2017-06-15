@@ -20,11 +20,13 @@ const REMOVE_ATTR = [
 
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
+    'iframe',
     'ol[type="1"]',
-    '.detail-article-author',
+    'script',
     '.article-recomended',
     '.article-sharer',
     '.article-sub-title',
+    '.detail-article-author',
     '.fb-quote',
     '.follow-bar',
     '.gallery-list',
@@ -39,8 +41,6 @@ const REMOVE_ELEMENTS = [
     '#opinibam',
     '#semar-placement',
     '#semar-placement-v2',
-    'iframe',
-    'script'
 ];
 
 const CUSTOM_SCSS = `
@@ -120,11 +120,11 @@ function _delete_body_wrappers(meta, $) {
 /** delete empty figcaption **/
 function _delete_empty_figcaption(meta, $) {
     let firstFigCaption;
-    meta.body.find('figure').map((i,figure) => {
-        $(figure).find('figcaption').map((i,elem) => {
+    meta.body.find('figure').map((i, figure) => {
+        $(figure).find('figcaption').map((i, elem) => {
             if ($(elem).text().trim() === '') {
                 $(elem).remove(); return;
-            } else if(firstFigCaption) {
+            } else if (firstFigCaption) {
                 firstFigCaption.append($(`</br><span>${$(elem).text()}</span>`));
                 $(elem).remove();
             }
@@ -271,7 +271,7 @@ function ingest_gallery(hatch, uri) {
         _delete_body_wrappers(meta);
 
         // fix figcation off figure
-        meta.body.find('figure').map((i,elem) => {
+        meta.body.find('figure').map((i, elem) => {
             const fig = $(elem).next();
             $(elem).append(fig.clone());
             fig.remove();
