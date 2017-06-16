@@ -1,6 +1,5 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 
@@ -91,15 +90,23 @@ function ingest_article(hatch, item) {
         const uri_main_image = $('#imgCheck').attr('src');
         _set_ingest_settings(asset, meta);
 
-        if(!meta.author) console.log(item.url);
-
         // pull out the main image
         const main_image = libingester.util.download_image(uri_main_image);
-        const image_description = $(`<figcaption>${$('.caption-img-ab').text()}</figcaption>`);
+        const description = $('.caption-img-ab').text();
+        let image_description;
+        if (description.trim() != '') {
+            image_description = $(`<figcaption><p>${description}</p></figcaption>`);
+        }
         main_image.set_title(meta.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
-        asset.set_main_image(main_image, image_description);
+
+        /* if image_description is 'undefined' throw a error, and according to the wiki page
+            it's possible to send 'undefined';
+            WIKI:
+            set_main_image(image: ImageAsset, caption: String or Cheerio object or undefined);
+        */
+        asset.set_main_image(main_image, image_description || '');
 
         // set first paragraph of the body
         const lede = first_p.clone();
@@ -107,20 +114,32 @@ function ingest_article(hatch, item) {
         asset.set_lede(lede);
 
         //Download images
-        const images = meta.body.find('img');
-        images.map(function() { // Put images in <figure>
-            let figure = $('<figure></figure>');
-            $(this).replaceWith(figure);
-            $(figure).append($(this));
-        });
-
-        images.map(function() {
+        meta.body.find('img').map(function() {
             if (this.attribs.src) {
-                clean_attr(this);
                 this.attribs.alt = meta.title;
+
+                // set tag 'p' as 'figure'
+                let parent = $(this).parent()[0];
+                if (parent && parent.name == 'p') parent.name = 'figure';
+
+                /** download image
+                ** for base64 images...
+                - download_img() doesn't set 'data-libingester-asset-id'
+                - download_img() doesn't create wrapper `<a ${somaDOM.Widget.Tag}="${somaDOM.Widget.ImageLink}"></a>`
+                */
                 const image = libingester.util.download_img($(this));
-                this.attribs['data-libingester-asset-id'] = image.asset_id
-                image.set_title(meta.title)
+                this.attribs['data-libingester-asset-id'] = image.asset_id;
+
+                // finding figcaptions
+                let next = $(parent).next();
+                let figcaption = $(next).find('strong').first()[0];
+                if (figcaption) {
+                    const text = $(figcaption).text();
+                    $(parent).append($(`<figcaption><p>${text}</p></figcaption>`));
+                    $(next).remove();
+                }
+
+                image.set_title(meta.title);
                 hatch.save_asset(image);
             } else {
                 $(this).remove();
@@ -150,7 +169,7 @@ function ingest_article(hatch, item) {
 
         asset.render();
         hatch.save_asset(asset);
-    }).catch((err) => {
+    }).catch(err => {
         console.log(err.message);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_article(hatch, item);
@@ -167,27 +186,24 @@ function ingest_gallery(hatch, item) {
         // arcitle settings
         console.log('processing', meta.title);
         const asset = new libingester.NewsArticle();
-        meta['body'] = cheerio('<div></div>');
-        meta['lede'] = cheerio(`<p>${meta.synopsis}</p>`);
+        meta['body'] = $('<div></div>');
+        meta['lede'] = $(`<p>${meta.synopsis}</p>`);
         meta['modified_date'] = new Date(item.pubDate);
         meta['date_published'] = Date.now(meta.modified_date);
+        meta.canonical_uri = $('meta[property="og:url"]').attr('content');
         _set_ingest_settings(asset, meta);
 
         // Create body and download images
         let thumbnail;
-        $('.thumbnails img').get().map(img => meta.body.append($(img).clone()));
-        const images = meta.body.find('img');
-        images.map(function() { // Put images in <figure>
-            let figure = $('<figure></figure>');
-            $(this).replaceWith(figure);
-            $(figure).append($(this));
+        $('.thumbnails img').get().map(img => {
+            const src = img.attribs.src.replace('small','large');
+            const image = $(`<img src="${src}" alt="${img.attribs.alt}"/>`);
+            const figure = $('<figure></figure>').append(image);
+            meta.body.append(figure);
         });
 
-        images.map(function() {
+        meta.body.find('img').map(function() {
             if (this.attribs.src) {
-                this.attribs.src = this.attribs.src.replace('small.', 'large.');
-                this.attribs.alt = meta.title;
-                REMOVE_ATTR.forEach(attr => $(this).removeAttr(attr));
                 const image = libingester.util.download_img($(this));
                 image.set_title(meta.title);
                 hatch.save_asset(image);
@@ -196,10 +212,11 @@ function ingest_gallery(hatch, item) {
                 $(this).remove();
             }
         });
+
         asset.set_body(meta.body);
         asset.render();
         hatch.save_asset(asset);
-    }).catch((err) => {
+    }).catch(err => {
         console.log(err.message);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_gallery(hatch, item);
