@@ -139,7 +139,7 @@ function _delete_empty_figcaption(meta, $) {
 }
 
 /** validate if (str) is a url **/
-function is_url(str) {
+function _is_url(str) {
     var regexp = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/
     return regexp.test(str);
  }
@@ -150,7 +150,7 @@ function _download_image($, meta, hatch, asset) {
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
     const download = (elem) => {
         const src = elem.attribs.src;
-        if (src && is_url(src) && !src.includes('INSERT_CACHEBUSTER_HERE')) {
+        if (src && _is_url(src) && !src.includes('INSERT_CACHEBUSTER_HERE')) {
             clean_attr(elem);
             const image = libingester.util.download_img($(elem));
             image.set_title(meta.title);
@@ -332,9 +332,6 @@ function ingest_video(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('beritagar', 'id');
-    // const item = {url: 'https://beritagar.id/artikel/gaya-hidup/tip-sukses-tanpa-pekerjaan-tetap'};
-    // ingest_article(hatch, item)
-    //     .then(() => hatch.finish())
 
     /** More recent articles posted **/
     const article = new Promise((resolve, reject) => {
