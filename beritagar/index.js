@@ -100,7 +100,7 @@ function _delete_body_wrappers(meta, $) {
     // excluding body's element
     const exclude = ['p', 'figure'];
     const is_exclude = (name) => {
-        for (const tag of exclud) {
+        for (const tag of exclude) {
             if (name.includes(tag)) return true;
         }
         return false;
@@ -108,7 +108,7 @@ function _delete_body_wrappers(meta, $) {
     // delete wrappers
     let next = meta.body.children();
     while (next.length == 1) {
-        if (is_exclud(next[0].name)) {
+        if (is_exclude(next[0].name)) {
             break;
         } else {
             next = next.children();
@@ -125,8 +125,12 @@ function _delete_empty_figcaption(meta, $) {
             if ($(elem).text().trim() === '') {
                 $(elem).remove(); return;
             } else if (firstFigCaption) {
-                firstFigCaption.append($(`</br><span>${$(elem).text()}</span>`));
+                firstFigCaption.append($(`<p>${$(elem).text()}</p>`));
                 $(elem).remove();
+            } else {
+                const text = $(elem).text();
+                $($(elem)[0].children[0]).remove();
+                $(elem).append(`<p>${text}</p>`);
             }
             if (!firstFigCaption) firstFigCaption = $(elem);
         });
@@ -134,17 +138,26 @@ function _delete_empty_figcaption(meta, $) {
     });
 }
 
+/** validate if (str) is a url **/
+function is_url(str) {
+    var regexp = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/
+    return regexp.test(str);
+ }
+
 /** download images for body **/
 function _download_image($, meta, hatch, asset) {
     let thumbnail;
     const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
     const download = (elem) => {
-        if (elem.attribs.src) {
+        const src = elem.attribs.src;
+        if (src && is_url(src) && !src.includes('INSERT_CACHEBUSTER_HERE')) {
             clean_attr(elem);
             const image = libingester.util.download_img($(elem));
             image.set_title(meta.title);
             hatch.save_asset(image);
             if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+        } else {
+            $(elem).remove();
         }
     }
     meta.body.find('img').map((i, elem) => {
@@ -197,7 +210,7 @@ function ingest_article(hatch, item) {
             const info = $('.thumbnail-info').first().html();
             const figure = $('<figure></figure>');
             const img = $(`<img src="${src}" />`);
-            const figcaption = $(`<figcaption>${info}</figcaption>`);
+            const figcaption = $(`<figcaption><p>${info}</p></figcaption>`);
             figure.append(img, figcaption);
             meta.body.prepend(figure);
         }
@@ -277,6 +290,7 @@ function ingest_gallery(hatch, uri) {
             fig.remove();
         });
 
+        _delete_empty_figcaption(meta, $);
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
@@ -317,9 +331,10 @@ function ingest_video(hatch, uri) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('beritagar', {
-        argv: process.argv.slice(2)
-    });
+    const hatch = new libingester.Hatch('beritagar', 'id');
+    // const item = {url: 'https://beritagar.id/artikel/gaya-hidup/tip-sukses-tanpa-pekerjaan-tetap'};
+    // ingest_article(hatch, item)
+    //     .then(() => hatch.finish())
 
     /** More recent articles posted **/
     const article = new Promise((resolve, reject) => {
