@@ -87,7 +87,6 @@ function ingest_article(hatch, uri) {
         const title = $("#newsdetail-right-new h1").first().text();
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
-
         // Pull out the main image
         let main_image, image_credit;
         if (uri_main_image) {
@@ -125,19 +124,24 @@ function ingest_article(hatch, uri) {
             body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
             // Download images
-            body.find("img").map(function() {
-                if (this.attribs.src) {
-                    $(this).parent()[0].name='figure';
-                    const image = libingester.util.download_img($(this));
-                    image.set_title(title);
-                    hatch.save_asset(image);
-                } else {
-                    $(this).remove();
-                }
+            body.find("p div").map((i, elem)=> {
+                $(elem).find("img").map(function() {
+                    if (this.attribs.src) {
+                        var figcaption = $("<figcaption><p>"+this.attribs.alt.replace('�',' - ')+"</p></figcaption>");
+                        let img = $('<figure></figure>').append($(this).clone(),figcaption);
+                        const image = libingester.util.download_img($(img.children()[0]));
+                        $(elem).replaceWith(img);
+                        image.set_title(title);
+                        hatch.save_asset(image);
+                        this.attribs["data-libingester-asset-id"] = image.asset_id;
+                    } else {
+                        $(this).remove();
+                    }
+
+                });
             });
 
             body_page.append(body.children());
-
             if (next && last_pagination.length != 0) {
                 libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
                     ingest_body($next_profile, finish_process);
@@ -146,7 +150,6 @@ function ingest_article(hatch, uri) {
                 finish_process();
             }
         };
-
 
         return new Promise((resolve, reject) => {
             ingest_body($, () => {
@@ -177,13 +180,13 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('kapanlagi', { argv: process.argv.slice(2) });
+    const hatch = new libingester.Hatch('kapanlagi', 'id');
 
     const limit_attempts = 3;
     let attempt = 1;
 
     const __request = (f) => {
-        rp({ uri: RSS_URI, gzip: true }).then(res => { throw { Msj: 'Not Found 404' };
+        rp({ uri: RSS_URI, gzip: true }).then(res => {
             var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
             parser.parseString(res, (err, result) => {
                 const rss = rss2json.parser(result);
