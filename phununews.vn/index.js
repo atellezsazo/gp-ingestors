@@ -206,7 +206,7 @@ function ingest_article(hatch, uri) {
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => { console.log(err);
+    }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
 }
@@ -251,7 +251,7 @@ function ingest_gallery(hatch, uri) {
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => { console.log(err);
+    }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
 }
@@ -287,7 +287,7 @@ function ingest_video(hatch, uri) {
         //save assets
         hatch.save_asset(thumb);
         hatch.save_asset(asset);
-    }).catch(err => { console.log(err);
+    }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
 }
