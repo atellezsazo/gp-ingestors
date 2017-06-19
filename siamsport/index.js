@@ -1,8 +1,8 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
-const template = require('./template');
+//const mustache = require('mustache');
+//const template = require('./template');
 const url = require('url');
 
 const base_uri = 'http://www.siamsport.co.th/';
@@ -11,21 +11,39 @@ const uri_gallery = 'http://www.siamsport.co.th/SiamsportPhoto/index.php';
 const uri_video = 'http://sstv.siamsport.co.th/top_hits.php';
 
 // clean images
-const remove_attr = ['class', 'style'];
+const remove_attr = [
+    'class',
+    'style'
+];
 
 // Remove elements (body)
-const remove_elements = ['#ssinread', 'iframe', 'script', 'style'];
+const remove_elements = [
+    'iframe',
+    'script',
+    'style',
+    '#ssinread'
+];
 
 // copyright warning
-const remove_copyright = ['Getty Images', 'mirror.com', 'Siamsport', '"บอ.บู๋"'];
+const remove_copyright = [
+    'Getty Images',
+    'mirror.com',
+    'Siamsport',
+    '"บอ.บู๋"'
+];
 
 // embed video
-const video_iframes = ['sstv.siamsport.co.th'];
+const video_iframes = [
+    'sstv.siamsport.co.th'
+];
 
 // render
-const render_template = (hatch, asset, template, post_data) => {
-    const content = mustache.render(template, post_data);
-    asset.set_document(content);
+const render_template = (hatch, asset, post_data) => {
+//    const content = mustache.render(template, post_data);
+    // asset.set_document(content);
+    // hatch.save_asset(asset);
+    // asset.set_custom_scss(CUSTOM_CSS);
+    asset.render();
     hatch.save_asset(asset);
 }
 
@@ -98,6 +116,14 @@ function ingest_article(hatch, uri) {
         asset.set_synopsis(description);
         asset.set_title(title);
 
+
+        // set first paragraph
+         const first_p = body.find('p').first();
+         const lede = first_p.clone();
+         lede.find('img').remove();
+         asset.set_lede(lede);
+         body.find(first_p).remove();
+
         // main image
         const main_image = libingester.util.download_image(uri_main_image);
         main_image.set_title(title);
@@ -132,69 +158,81 @@ function ingest_article(hatch, uri) {
         }
 
         // download images
-        body.find('img').get().map((img) => {
-            const image = libingester.util.download_image(img.attribs.src);
-            image.set_title(title);
-            img.attribs["data-libingester-asset-id"] = image.asset_id;
-            hatch.save_asset(image);
-            for (const attr of remove_attr) {
-                $(img).removeAttr(attr);
-            }
-        });
+     body.find('img').get().map((img) => {
+         const image = libingester.util.download_image(img.attribs.src);
+         image.set_title(title);
+         img.attribs["data-libingester-asset-id"] = image.asset_id;
+         hatch.save_asset(image);
+         for (const attr of remove_attr) {
+             $(img).removeAttr(attr);
+         }
+     });
 
-        render_template(hatch, asset, template.structure_template, {
-            body: body.html(),
-            category: keywords,
-            main_image: main_image,
-            published: modified_time,
-            title: title,
-        });
+        console.log('processing: '+uri);
+        //asset.set_custom_scss(CUSTOM_CSS);
+         asset.render();
+         hatch.save_asset(asset);
+        // render_template(hatch, asset, {
+        //     body: body.html(),
+        //     category: keywords,
+        //     main_image: main_image,
+        //     published: modified_time,
+        //     title: title,
+        // });
     }).catch((err) => {
+        console.log('Ingest article error: '+ err);
         return ingest_article(hatch, uri);
     });
 }
-
-function ingest_gallery(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
-        const asset = new libingester.NewsArticle();
-        const title = $('.font-pink18').first().text();
-
-        // Article Settings
-        asset.set_canonical_uri(uri);
-        asset.set_section('Gallery');
-        asset.set_title(title);
-
-        // set last modified Date
-        let data = $('.font-pink11').first().parent().text();
-        const regex = /[\s\S]*(\d{2,}\/\d+)\/(\d{2})[\s\S]*(\d{2,}:\d{2,})[\s\S]*/;
-        const date = data.replace(regex, "$1/20$2 $3:00");
-        asset.set_last_modified_date(get_last_modified_date(date));
-
-        // get all image links
-        let image_links = $('a[rel="exgroup"]').get().map((a) => {
-            return url.resolve(uri_gallery, a.attribs.href);
-        });
-        image_links.shift(); //remove repeat link
-
-        // download images
-        let images = [];
-        for (const src of image_links) {
-            const image = libingester.util.download_image(src);
-            image.set_title(title);
-            hatch.save_asset(image);
-            images.push({ image: image });
-        }
-        asset.set_thumbnail(images[images.length - 1].image);
-
-        render_template(hatch, asset, template.template_gallery, {
-            gallery: images,
-            published: date,
-            title: title,
-        });
-    }).catch((err) => {
-        return ingest_gallery(hatch, uri);
-    });
-}
+//
+// function ingest_gallery(hatch, uri) {
+//     return libingester.util.fetch_html(uri).then(($) => {
+//         const asset = new libingester.NewsArticle();
+//         const title = $('.font-pink18').first().text();
+//
+//         // Article Settings
+//         asset.set_canonical_uri(uri);
+//         asset.set_section('Gallery');
+//         asset.set_title(title);
+//
+//         // set last modified Date
+//         let data = $('.font-pink11').first().parent().text();
+//         const regex = /[\s\S]*(\d{2,}\/\d+)\/(\d{2})[\s\S]*(\d{2,}:\d{2,})[\s\S]*/;
+//         const date = data.replace(regex, "$1/20$2 $3:00");
+//         asset.set_last_modified_date(get_last_modified_date(date));
+//
+//         // get all image links
+//         let image_links = $('a[rel="exgroup"]').get().map((a) => {
+//             return url.resolve(uri_gallery, a.attribs.href);
+//         });
+//         image_links.shift(); //remove repeat link
+//
+//         // download images
+//             let images = [];
+//             for (const src of image_links) {
+//                 const image = libingester.util.download_image(src);
+//
+//                 image.set_title(title);
+//                 hatch.save_asset(image);
+//                 images.push({ image: image });
+//             }
+//             asset.set_thumbnail(images[images.length - 1].image);
+//
+//
+//         // asset.set_custom_scss(CUSTOM_CSS);
+//         // asset.render();
+//         // hatch.save_asset(asset);
+//
+//         render_template(hatch, asset, {
+//             gallery: images,
+//             published: date,
+//             title: title,
+//         });
+//     }).catch((err) => {
+//         console.log('Ingest gallery error: '+err);
+//         return ingest_gallery(hatch, uri);
+//     });
+// }
 
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
@@ -222,12 +260,13 @@ function ingest_video(hatch, uri) {
             }
         }
     }).catch((err) => {
+        console.log('Ingest video error: '+err);
         return ingest_video(hatch, uri);
     });
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch('siamsport', 'th');
 
     const article = libingester.util.fetch_html(uri_article).then(($) =>
         Promise.all(
@@ -242,17 +281,18 @@ function main() {
         )
     );
 
-    const gallery = libingester.util.fetch_html(uri_gallery).then(($) => {
-        const links = $('.pink18-link').get().map((a) => url.resolve(uri_gallery, a.attribs.href));
-        return Promise.all(links.map((uri) => ingest_gallery(hatch, uri)));
-    });
+    // const gallery = libingester.util.fetch_html(uri_gallery).then(($) => {
+    //     const links = $('.pink18-link').get().map((a) => url.resolve(uri_gallery, a.attribs.href));
+    //     return Promise.all(links.map((uri) => ingest_gallery(hatch, uri)));
+    // });
 
     const video = libingester.util.fetch_html(uri_video).then(($) => {
         const links = $('.top-pic a').get().map((a) => url.resolve(uri_video, a.attribs.href));
         return Promise.all(links.map((uri) => ingest_video(hatch, uri)));
     });
 
-    Promise.all([article, gallery, video]).then(() => {
+    // Promise.all([article, gallery, video]).then(() => {
+    Promise.all([article, video]).then(() => {
         return hatch.finish();
     });
 }
