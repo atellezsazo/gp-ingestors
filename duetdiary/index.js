@@ -84,7 +84,7 @@ function ingest_article(hatch, uri) {
 
         // Pull out the main image
         if (!main_img) { //problem with incomplete $
-            throw { code: -1 , message: 'Undefined title, DOM'};
+            throw { code: -1 , message: 'Incomplete DOM'};
         }
 
         const main_image = libingester.util.download_image(main_img, BASE_URI);
