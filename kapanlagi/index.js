@@ -183,7 +183,7 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('kapanlagi', 'id');
 
-    const limit_attempts = 3;
+    const MAX_ATTEMPTS  = 3;
     let attempt = 1;
 
     const __request = (f) => {
@@ -203,7 +203,7 @@ function main() {
             });
         }).catch(err => {
             console.log('Error load Rss:', err);
-            if (attempt++ < limit_attempts) {
+            if (attempt++ < MAX_ATTEMPTS) {
                 __request(f);
             }
         });
