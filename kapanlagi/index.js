@@ -12,6 +12,7 @@ const RSS_URI = 'https://www.kapanlagi.com/feed/';
 
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
+    'b',
     'iframe',
     'noscript',
     'script',
