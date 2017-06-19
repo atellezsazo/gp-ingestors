@@ -99,7 +99,7 @@ function _get_ingest_settings($) {
 /** set articles metadata **/
 function _set_ingest_settings(asset, meta) {
     if (meta.author) asset.set_authors(meta.author);
-    if (meta.body) asset.set_body(meta.body)
+    if (meta.body) asset.set_body(meta.body);
     if (meta.canonical_uri) asset.set_canonical_uri(meta.canonical_uri);
     if (meta.custom_scss) asset.set_custom_scss(meta.custom_scss);
     if (meta.date_published) asset.set_date_published(meta.date_published);
