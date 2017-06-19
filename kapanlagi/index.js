@@ -7,6 +7,7 @@ const url = require('url');
 const xml2js = require('xml2js');
 
 const BASE_URI = 'https://www.kapanlagi.com/';
+const MAX_ATTEMPTS  = 3;
 const MAX_LINKS = 60;
 const RSS_URI = 'https://www.kapanlagi.com/feed/';
 
@@ -183,7 +184,7 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('kapanlagi', 'id');
 
-    const MAX_ATTEMPTS  = 3;
+
     let attempt = 1;
 
     const __request = (f) => {
