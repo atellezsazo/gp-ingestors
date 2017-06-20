@@ -7,20 +7,23 @@ const url = require('url');
 const xml2js = require('xml2js');
 
 const BASE_URI = 'https://www.kapanlagi.com/';
+const MAX_ATTEMPTS  = 3;
 const MAX_LINKS = 60;
 const RSS_URI = 'https://www.kapanlagi.com/feed/';
 
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
+    'b',
     'iframe',
+    'h2',
+    'h6',
     'noscript',
     'script',
     'style',
-    '.box-share-img-detail',
     '.lifestyle-in-content',
     '.link-pagging-warper',
     '.paging-related',
-    '.video-wrapper',
+    '.video-wrapper'
 ];
 
 // clean attr (tag)
@@ -87,7 +90,6 @@ function ingest_article(hatch, uri) {
         const title = $("#newsdetail-right-new h1").first().text();
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
-
         // Pull out the main image
         let main_image, image_credit;
         if (uri_main_image) {
@@ -123,21 +125,39 @@ function ingest_article(hatch, uri) {
             body.find(REMOVE_ELEMENTS.join(',')).remove();
             body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
             body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+            let editor = body.find('span').last();
+
+            if(editor.text().includes('Editor:')){
+                editor.parent().remove()
+            }
 
             // Download images
-            body.find("img").map(function() {
-                if (this.attribs.src) {
-                    $(this).parent()[0].name='figure';
-                    const image = libingester.util.download_img($(this));
+            body.find("p img").map((i, elem)=> {
+                const parent=$(elem).parent();
+                if (elem.attribs.src) {
+                    if(elem.attribs.alt){
+                        var figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
+                        let img = $('<figure></figure>').append($(elem).clone(),figcaption);
+                    }
+                    else {
+                        let img = $('<figure></figure>').append($(elem).clone());
+                    }
+                    const image = libingester.util.download_img($(img.children()[0]));
+                    if(parent[0].name == 'div'){
+                        parent.replaceWith(img);
+                    }
+                    else{
+                        $(elem).replaceWith(img);
+                    }
                     image.set_title(title);
                     hatch.save_asset(image);
+                    elem.attribs["data-libingester-asset-id"] = image.asset_id;
                 } else {
-                    $(this).remove();
+                    $(elem).remove();
                 }
             });
 
             body_page.append(body.children());
-
             if (next && last_pagination.length != 0) {
                 libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
                     ingest_body($next_profile, finish_process);
@@ -146,7 +166,6 @@ function ingest_article(hatch, uri) {
                 finish_process();
             }
         };
-
 
         return new Promise((resolve, reject) => {
             ingest_body($, () => {
@@ -177,13 +196,12 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('kapanlagi', { argv: process.argv.slice(2) });
+    const hatch = new libingester.Hatch('kapanlagi', 'id');
 
-    const limit_attempts = 3;
     let attempt = 1;
 
     const __request = (f) => {
-        rp({ uri: RSS_URI, gzip: true }).then(res => { throw { Msj: 'Not Found 404' };
+        rp({ uri: RSS_URI, gzip: true }).then(res => {
             var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
             parser.parseString(res, (err, result) => {
                 const rss = rss2json.parser(result);
@@ -199,13 +217,15 @@ function main() {
             });
         }).catch(err => {
             console.log('Error load Rss:', err);
-            if (attempt++ < limit_attempts) {
+            if (attempt++ < MAX_ATTEMPTS) {
                 __request(f);
             }
         });
     }
 
     __request((links) => {
+        console.log(links);
+
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
         });
