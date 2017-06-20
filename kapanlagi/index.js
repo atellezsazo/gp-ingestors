@@ -15,14 +15,15 @@ const RSS_URI = 'https://www.kapanlagi.com/feed/';
 const REMOVE_ELEMENTS = [
     'b',
     'iframe',
+    'h2',
+    'h6',
     'noscript',
     'script',
     'style',
-    '.box-share-img-detail',
     '.lifestyle-in-content',
     '.link-pagging-warper',
     '.paging-related',
-    '.video-wrapper',
+    '.video-wrapper'
 ];
 
 // clean attr (tag)
@@ -124,23 +125,36 @@ function ingest_article(hatch, uri) {
             body.find(REMOVE_ELEMENTS.join(',')).remove();
             body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
             body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+            let editor = body.find('span').last();
+
+            if(editor.text().includes('Editor:')){
+                editor.parent().remove()
+            }
 
             // Download images
-            body.find("p div").map((i, elem)=> {
-                $(elem).find("img").map(function() {
-                    if (this.attribs.src) {
-                        var figcaption = $("<figcaption><p>"+this.attribs.alt.replace('�',' - ')+"</p></figcaption>");
-                        let img = $('<figure></figure>').append($(this).clone(),figcaption);
-                        const image = libingester.util.download_img($(img.children()[0]));
-                        $(elem).replaceWith(img);
-                        image.set_title(title);
-                        hatch.save_asset(image);
-                        this.attribs["data-libingester-asset-id"] = image.asset_id;
-                    } else {
-                        $(this).remove();
+            body.find("p img").map((i, elem)=> {
+                const parent=$(elem).parent();
+                if (elem.attribs.src) {
+                    if(elem.attribs.alt){
+                        var figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
+                        let img = $('<figure></figure>').append($(elem).clone(),figcaption);
                     }
-
-                });
+                    else {
+                        let img = $('<figure></figure>').append($(elem).clone());
+                    }
+                    const image = libingester.util.download_img($(img.children()[0]));
+                    if(parent[0].name == 'div'){
+                        parent.replaceWith(img);
+                    }
+                    else{
+                        $(elem).replaceWith(img);
+                    }
+                    image.set_title(title);
+                    hatch.save_asset(image);
+                    elem.attribs["data-libingester-asset-id"] = image.asset_id;
+                } else {
+                    $(elem).remove();
+                }
             });
 
             body_page.append(body.children());
@@ -184,7 +198,6 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('kapanlagi', 'id');
 
-
     let attempt = 1;
 
     const __request = (f) => {
@@ -211,6 +224,8 @@ function main() {
     }
 
     __request((links) => {
+        console.log(links);
+
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
         });
