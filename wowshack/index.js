@@ -152,7 +152,7 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('wowshack', { argv: process.argv.slice(2) });
+    const hatch = new libingester.Hatch('wowshack', 'en');
     libingester.util.fetch_html(BASE_URI).then($ => {
         const links = $('#page a.project:nth-child(-n + 30)').map(function() {
             return url.resolve(BASE_URI, $(this).attr('href'));
