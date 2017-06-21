@@ -69,6 +69,14 @@ $support-font: 'Lato';
 @import '_default';
 `;
 
+// embed video
+const VIDEO_IFRAMES = [
+    'a.kapanlagi',
+    'skrin.id',
+    'streamable',
+    'youtube'
+];
+
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         if ($('meta[http-equiv="REFRESH"]').length == 1) throw { name: 'Article have a redirect' };
@@ -119,17 +127,81 @@ function ingest_article(hatch, uri) {
             asset.set_lede(lede);
             body.find(first_p).remove();
 
+            const save_video_asset = (video_tag,video_url) => {
+                if (video_url) {
+                    // video_tag = $('<div></div>');
+                    // body.append(video_tag);
+                    const video = libingester.util.get_embedded_video_asset(video_tag, video_url);
+                    video.set_title(title);
+                    video.set_thumbnail(main_image);
+                    hatch.save_asset(video);
+
+                }
+            }
+
+            // save video asset
+            let video_promise;
+            let video_tag = $('.videoWrapper').first();
+            const video_url = video_tag.attr('data-url');
+            video_tag.attr('id', 'video_tag');
+            body.append(video_tag.clone());
+            video_tag = body.find('#video_tag').first();
+            if (video_url) {
+                for (const domain of VIDEO_IFRAMES) {
+                   if (video_url.includes(domain)) {
+                       switch (domain) {
+                           case 'a.kapanlagi':
+                               {
+                                   video_promise = libingester.util.fetch_html(video_url).then($vid => {
+                                       const video_url = $vid('title').text();
+                                       save_video_asset(video_tag, video_url);
+                                   });
+                                   break; // exit 'a.kapanlagi'
+                               }
+                           case 'skrin.id':
+                               {
+                                   const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
+                                   const video_width = '480p.mp4';
+                                   let video_uri;
+                                   video_promise = libingester.util.fetch_html(video_url).then($vid => {
+                                       const source = $vid('script')[2].children[0].data; //script data
+                                       let s = source.substring(source.indexOf('JSON.parse(\'') + 12);
+                                       s = s.substring(0,s.indexOf("')"));
+
+                                       let json = JSON.parse(s);
+                                       const video_uris = json.map(data => url.resolve(base_video_uri, data.url));
+
+                                       for (const uri of video_uris) {
+                                           if (uri.includes(video_width)) {
+                                               video_uri = uri;
+                                               break;
+                                           }
+                                       }
+
+                                       if (!video_uri) video_uri = video_uris[video_uris.length - 1];
+                                       save_video_asset(video_tag, video_url);
+                                   }).catch(err => console.log('ERR VID:',err));
+                                   break; // exit 'skrin.id'
+                               }
+                           default:
+                               {
+                                   save_video_asset(video_tag, video_url);
+                               }
+                       }
+                   }
+                }
+            }
+
             // remove elements and comments
             const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
             body.contents().filter((index, node) => node.type === 'comment').remove();
             body.find(REMOVE_ELEMENTS.join(',')).remove();
             body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-            body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
             let editor = body.find('span').last();
-
             if(editor.text().includes('Editor:')){
                 editor.parent().remove()
             }
+            body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
             // Download images
             body.find("p img").map((i, elem)=> {
@@ -137,11 +209,9 @@ function ingest_article(hatch, uri) {
                 if (elem.attribs.src) {
                     if(elem.attribs.alt){
                         var figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
-                        let img = $('<figure></figure>').append($(elem).clone(),figcaption);
                     }
-                    else {
-                        let img = $('<figure></figure>').append($(elem).clone());
-                    }
+
+                    let img = $('<figure></figure>').append($(elem).clone(),figcaption);
                     const image = libingester.util.download_img($(img.children()[0]));
                     if(parent[0].name == 'div'){
                         parent.replaceWith(img);
@@ -157,13 +227,21 @@ function ingest_article(hatch, uri) {
                 }
             });
 
-            body_page.append(body.children());
-            if (next && last_pagination.length != 0) {
-                libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
-                    ingest_body($next_profile, finish_process);
-                });
+            const end_function = () => {
+                body_page.append(body.children());
+                if (next && last_pagination.length != 0) {
+                    libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
+                        ingest_body($next_profile, finish_process);
+                    });
+                } else {
+                    finish_process();
+                }
+            }
+
+            if (video_promise) {
+                video_promise.then(end_function);
             } else {
-                finish_process();
+                end_function();
             }
         };
 
@@ -222,10 +300,18 @@ function main() {
             }
         });
     }
-
+//     //-
+//    let links = [];
+//     links=['https://www.kapanlagi.com/showbiz/selebriti/video-permintaan-terakhir-julia-perez-syahrini-ketemu-kim-k-e45113.html'];
+//
+//         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
+//             console.log('FINISH ');
+//             return hatch.finish();
+//         }).catch((err) => {
+//             console.log(err);
+//         });
+// //-
     __request((links) => {
-        console.log(links);
-
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
         });
