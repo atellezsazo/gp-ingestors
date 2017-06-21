@@ -133,9 +133,12 @@ function main() {
                 tags: contents[11].children[0].data.replace('[CDATA[','').replace(']]',''),
             }
         }).get();
-        
+
         Promise.all(items.map(item => ingest_article(hatch, item)))
             .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
