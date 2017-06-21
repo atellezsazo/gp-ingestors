@@ -299,18 +299,7 @@ function main() {
                 __request(f);
             }
         });
-    }
-//     //-
-//    let links = [];
-//     links=['https://www.kapanlagi.com/showbiz/selebriti/video-permintaan-terakhir-julia-perez-syahrini-ketemu-kim-k-e45113.html'];
-//
-//         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
-//             console.log('FINISH ');
-//             return hatch.finish();
-//         }).catch((err) => {
-//             console.log(err);
-//         });
-// //-
+    }     
     __request((links) => {
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
