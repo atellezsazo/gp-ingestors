@@ -103,7 +103,11 @@ function ingest_article(hatch, item) {
                 this.attribs['src'] = src;
                 this.attribs['alt'] = this.attribs['data-alt'];
                 clean_attr(this);
-                let img = $('<figure></figure>').append($(this).clone());
+                let figcaption = "";
+                if ($(this).next('p').attr('class') == 'wp-caption-text') {
+                    figcaption = $("<figcaption><p>" + $(this).next('p') + "</p></figcaption>");
+                }
+                let img = $('<figure></figure>').append($(this).clone(), figcaption);
                 const image = libingester.util.download_img(img.children());
                 $(this).replaceWith(img);
                 image.set_title(title);
@@ -139,7 +143,7 @@ function ingest_article(hatch, item) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('hipwee', { argv: process.argv.slice(2) });
+    const hatch = new libingester.Hatch('hipwee', 'id');
     rss2json.load(FEED_RSS, (err, rss) =>
         Promise.all(rss.items.map(item => ingest_article(hatch, item)))
         .then(() => hatch.finish())
