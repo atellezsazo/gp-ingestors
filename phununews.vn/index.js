@@ -227,26 +227,46 @@ function ingest_gallery(hatch, uri) {
         meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
 
-        // download images
+        // download images on tables
         let thumbnail;
-        meta.body.find('img').map((i,elem) => {
-            let p = $(elem).parent();
-            while (p[0]) {
-                if (p[0].name != 'p') {
-                    p = p.parent();
-                } else {
-                    break;
+        meta.body.find('table').map((i,table) => {
+            const trs = $(table).find('tr');
+            const img = $(trs[0]).find('img').first()[0];
+            const txt = $(trs[1]).text() || '';
+            let figure;
+            if (img) {
+                figure = $(`<figure><img src="${img.attribs.src}" alt="${img.attribs.alt}"/></figure>`);
+                if (txt.trim() != '') {
+                    figure.append($(`<figcaption>${txt}</figcaption>`));
                 }
+                const image = libingester.util.download_img($(figure.children()[0]));
+                image.set_title(meta.title);
+                hatch.save_asset(image);
+                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+                $(table).replaceWith(figure);
             }
-            const img = $(`<img src="${elem.attribs.src}" alt="${elem.attribs.alt}"/>`);
-            const caption = $(`<figcaption><p>${elem.attribs.title}</p></figcaption>`);
-            const figure = $(`<figure></figure>`).append(img, caption);
-            const image = libingester.util.download_img($(figure.children()[0]));
-            image.set_title(meta.title);
-            hatch.save_asset(image);
-            if(!thumbnail) asset.set_thumbnail(thumbnail = image);
-            p.replaceWith(figure);
         });
+
+        // download images (normal body)
+        if (!thumbnail) {
+            meta.body.find('img').map((i,elem) => {
+                let p = $(elem).parent();
+                while (p[0]) {
+                    if (p[0].name != 'p') {
+                        p = p.parent();
+                    } else {
+                        break;
+                    }
+                }
+                const img = $(`<img src="${elem.attribs.src}" alt="${elem.attribs.alt}"/>`);
+                const figure = $(`<figure></figure>`).append(img);
+                const image = libingester.util.download_img($(figure.children()[0]));
+                image.set_title(meta.title);
+                hatch.save_asset(image);
+                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
+                p.replaceWith(figure);
+            });
+        }
 
         _set_ingest_settings(asset, meta);
         asset.render();
