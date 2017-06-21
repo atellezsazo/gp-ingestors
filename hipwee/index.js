@@ -106,6 +106,7 @@ function ingest_article(hatch, item) {
                 let figcaption = "";
                 if ($(this).next('p').attr('class') == 'wp-caption-text') {
                     figcaption = $("<figcaption><p>" + $(this).next('p') + "</p></figcaption>");
+                    $(this).next('p').remove();
                 }
                 let img = $('<figure></figure>').append($(this).clone(), figcaption);
                 const image = libingester.util.download_img(img.children());
