@@ -39,7 +39,7 @@ $support-font: 'FreeSans', 'Helvetica', 'Arial', sans-serif;
 `;
 
 /** max links per page (Average per page: 17 links) **/
-const MAX_LINKS = 1;
+const MAX_LINKS = 3;
 
 /** cleaning elements **/
 const CLEAN_ELEMENTS = [
@@ -285,28 +285,31 @@ function ingest_video(hatch, uri) {
         const asset = new libingester.VideoAsset();
         const description = $('meta[name="description"]').attr('content');
         const dwn = $('.videogular-container').first().parent().attr('data-ng-init');
-        const download_uri = dwn.substring(dwn.indexOf('http'), dwn.indexOf('mp4')+3);
+        const download_uri = dwn.substring(dwn.indexOf('http'), dwn.indexOf('mp4')+3) || '';
         const published = $('.block_timer').first().text().replace(/[\s]{2,}/g,'').replace('|',' | ').replace('G',' G');
         const modified_time = $('meta[property="article:modified_time"]').attr('content')+published.split('|')[1];
         const title = $('meta[property="og:title"]').attr('content');
         const uri_thumb = $('meta[property="og:image"]').attr('content');
-        console.log('processing',title);
 
-        // download thumbnail
-        const thumb = libingester.util.download_image(uri_thumb);
-        thumb.set_title(title);
+        // videos are rendered with 'angular.js' and sometimes the property 'data-ng-init' is empty
+        if (download_uri.includes('http') && uri_thumb.includes('http')) {
+            // download thumbnail
+            const thumb = libingester.util.download_image(uri_thumb);
+            thumb.set_title(title);
 
-        // video settings
-        asset.set_canonical_uri(uri);
-        asset.set_download_uri(download_uri);
-        asset.set_last_modified_date(new Date(Date.parse(modified_time)));
-        asset.set_synopsis(description);
-        asset.set_thumbnail(thumb);
-        asset.set_title(title);
+            // video settings
+            console.log('processing',title);
+            asset.set_canonical_uri(uri);
+            asset.set_download_uri(download_uri);
+            asset.set_last_modified_date(new Date(Date.parse(modified_time)));
+            asset.set_synopsis(description);
+            asset.set_thumbnail(thumb);
+            asset.set_title(title);
 
-        //save assets
-        hatch.save_asset(thumb);
-        hatch.save_asset(asset);
+            //save assets
+            hatch.save_asset(thumb);
+            hatch.save_asset(asset);
+        }
     }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
