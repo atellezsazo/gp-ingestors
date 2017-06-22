@@ -109,7 +109,7 @@ function ingest_article(hatch, uri) {
         }
 
         const body_page = $('<div></div>');
-        const ingest_body = ($, finish_process) => {
+        const ingest_body = ($, reject, finish_process) => {
             const body = $('.entertainment-detail-news');
             const next = $('.link-pagging-warper a').attr('href');
             const last_pagination = $('ul.pg-pagging li:last-child a').first();
@@ -164,23 +164,28 @@ function ingest_article(hatch, uri) {
                                    const video_width = '480p.mp4';
                                    let video_uri;
                                    video_promise = libingester.util.fetch_html(video_url).then($vid => {
-                                       const source = $vid('script')[2].children[0].data; //script data
+                                       // En la pagina solo hay videos embebidos, por eso buscamos con el filtro "script"
+                                       //  en la 3ra etiqueta script ese encuentran links de los videos,
+                                       const source = $vid('script')[2].children[0].data;
+                                       // de los links, se busca la cadena que contiene el JSON para poder limpiar y construir un nuevo JSON
                                        let s = source.substring(source.indexOf('JSON.parse(\'') + 12);
                                        s = s.substring(0,s.indexOf("')"));
 
+                                       //JSON que contiene las url de los videos
                                        let json = JSON.parse(s);
                                        const video_uris = json.map(data => url.resolve(base_video_uri, data.url));
 
+                                       //Se buscan las url que contengan '480.mp4'
                                        for (const uri of video_uris) {
                                            if (uri.includes(video_width)) {
                                                video_uri = uri;
                                                break;
                                            }
                                        }
-
+                                       // Si el video no se encuentra, se toma el último link
                                        if (!video_uri) video_uri = video_uris[video_uris.length - 1];
                                        save_video_asset(video_tag, video_url);
-                                   }).catch(err => console.log('ERR VID:',err));
+                                   });
                                    break; // exit 'skrin.id'
                                }
                            default:
@@ -206,17 +211,17 @@ function ingest_article(hatch, uri) {
             // Download images
             body.find("p img").map((i, elem)=> {
                 const parent=$(elem).parent();
+                let figcaption = '';
                 if (elem.attribs.src) {
                     if(elem.attribs.alt){
-                        var figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
+                        figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
                     }
 
                     let img = $('<figure></figure>').append($(elem).clone(),figcaption);
                     const image = libingester.util.download_img($(img.children()[0]));
                     if(parent[0].name == 'div'){
                         parent.replaceWith(img);
-                    }
-                    else{
+                    } else {
                         $(elem).replaceWith(img);
                     }
                     image.set_title(title);
@@ -231,22 +236,22 @@ function ingest_article(hatch, uri) {
                 body_page.append(body.children());
                 if (next && last_pagination.length != 0) {
                     libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
-                        ingest_body($next_profile, finish_process);
-                    });
+                        ingest_body($next_profile, reject, finish_process);
+                    }).catch(() => reject());
                 } else {
                     finish_process();
                 }
             }
 
             if (video_promise) {
-                video_promise.then(end_function);
+                video_promise.then(end_function).catch(() => reject());
             } else {
                 end_function();
             }
         };
 
         return new Promise((resolve, reject) => {
-            ingest_body($, () => {
+            ingest_body($, reject, () => {
 
                 console.log('processing', title);
                 asset.set_authors([reporter]);
@@ -268,9 +273,7 @@ function ingest_article(hatch, uri) {
                 resolve();
             });
         })
-    }).catch((err) => {
-        console.log("Ingest error: ", err);
-    });
+    }).catch(err => console.log(err));
 }
 
 function main() {
@@ -280,17 +283,24 @@ function main() {
 
     const __request = (f) => {
         rp({ uri: RSS_URI, gzip: true }).then(res => {
-            var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
+            const parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
+            console.log(parser);
             parser.parseString(res, (err, result) => {
+                if (err) throw err;
                 const rss = rss2json.parser(result);
-                let links = [],
-                    n = 0;
-                const items=rss.items.slice(MAX_LINKS);
-                for(const item of items){
-                    if (!item.link.includes("musik.kapanlagi.com")) { //drop musik subdomain
+                let links = [];
+                // const items=rss.items.slice(0,MAX_LINKS);
+                rss.items.slice(0,MAX_LINKS).map(item => {
+                    if (url.parse(item.link).hostname !== 'musik.kapanlagi.com') { //drop musik subdomain
                         links.push(item.link);
                     }
-                }
+                });
+                // for(const item of items){
+                //     console.log(url.parse(item.link));
+                //     if (url.parse(item.link).hostname !== 'musik.kapanlagi.com') { //drop musik subdomain
+                //         links.push(item.link);
+                //     }
+                // }
                 f(links); //callback
             });
         }).catch(err => {
