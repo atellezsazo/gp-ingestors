@@ -267,7 +267,6 @@ function ingest_article(hatch, uri) {
                 asset.set_title(title);
                 asset.set_main_image(main_image,image_credit);
                 asset.set_body(body_page);
-
                 asset.render();
                 hatch.save_asset(asset);
                 resolve();
@@ -289,18 +288,11 @@ function main() {
                 if (err) throw err;
                 const rss = rss2json.parser(result);
                 let links = [];
-                // const items=rss.items.slice(0,MAX_LINKS);
                 rss.items.slice(0,MAX_LINKS).map(item => {
                     if (url.parse(item.link).hostname !== 'musik.kapanlagi.com') { //drop musik subdomain
                         links.push(item.link);
                     }
                 });
-                // for(const item of items){
-                //     console.log(url.parse(item.link));
-                //     if (url.parse(item.link).hostname !== 'musik.kapanlagi.com') { //drop musik subdomain
-                //         links.push(item.link);
-                //     }
-                // }
                 f(links); //callback
             });
         }).catch(err => {
