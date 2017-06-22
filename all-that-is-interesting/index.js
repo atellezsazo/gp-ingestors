@@ -6,7 +6,7 @@ const rss2json = require('rss-to-json');
 const RSS_URI = "http://all-that-is-interesting.com/feed";
 
 //Remove elements (body)
-const REMOVE_ELEMENTS = [
+const REMOVE_ELEMENTS = [ 
     'br + br',
     'hr + p',
     'iframe',
