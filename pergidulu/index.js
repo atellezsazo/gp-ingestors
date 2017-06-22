@@ -50,8 +50,8 @@ $display-font-composite: 'Roboto';
 @import "_default";
 `;
 
-function ingest_article(hatch, obj) {
-    return libingester.util.fetch_html(obj.uri).then($ => {
+function ingest_article(hatch, item) {
+    return libingester.util.fetch_html(item.uri).then($ => {
         const asset = new libingester.BlogArticle();
         const info_article = $('div#single-below-header').first();
         const author = $(info_article).find('a[rel="author"]').text();
@@ -61,9 +61,9 @@ function ingest_article(hatch, obj) {
         const modified_date = $('meta[property="article:published_time"]').attr('content');
         const date = new Date(Date.parse(modified_date));
         const section =$('meta[property="article:section"]').attr('content');
-        const read_more = 'Original Article at www.pergidulu.com';
+        const read_more = 'Baca lebih lanjut di www.pergidulu.com';
         const title = $('.entry-title').text() || $('meta[property="og:title"]').attr('content');
-        const tags  = obj.tags.split(' ');
+        const tags  = item.tag.split(' ');
         const thumb_url = $('meta[property="og:image"]').attr('content');
 
         // Pull out the main image
@@ -125,15 +125,30 @@ function ingest_article(hatch, obj) {
 function main() {
     const hatch = new libingester.Hatch('pergidulu', 'id');
 
-    libingester.util.fetch_html(RSS_FEED).then($ => {
-        const items = $('item').map((i,item) => {
-            const contents = $(item).contents().get();
+    libingester.util.fetch_html('https://www.pergidulu.com/posts/').then($ => {
+        const items = $('article').map((i,item) => {
+            let data = item.attribs.class;
+            let category = '';
+            let tag = '';
+
+            data = data.substring(data.indexOf('category')) + ' ';
+            if (data.includes('category-')) {
+                category = data.substring(data.indexOf('category'), data.indexOf(' '));
+                category = category.replace('category-', '');
+            }
+            if (data.includes('tag-')) {
+                tag = data.substring(data.indexOf('tag'));
+                tag = tag.replace(/tag-/g,'');
+            }
+
+            // not all blogs have tags
             return {
-                uri: contents[4].data.replace(/[\n\t]/g,''),
-                tags: contents[11].children[0].data.replace('[CDATA[','').replace(']]',''),
+                uri: $(item).find('a').attr('href'),
+                category: category.trim(),
+                tag: tag.trim(),
             }
         }).get();
-        
+
         Promise.all(items.map(item => ingest_article(hatch, item)))
             .then(() => hatch.finish());
     });
