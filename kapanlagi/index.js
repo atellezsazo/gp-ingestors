@@ -90,7 +90,7 @@ function ingest_article(hatch, uri) {
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
         const post_tags = $('.box-content a');
         const page = 'kapanlagi';
-        const read_more = `Read more at <a href="${canonical_uri}">${page}</a>`;
+        const read_more = `Baca lebih lanjut di <a href="${canonical_uri}">${page}</a>`;
         const reporter = $('.vcard .newsdetail-schedule-new a').text();
         const subtitle = $("h2.entertainment-newsdetail-title-new").first().text();
         const synopsis = $('meta[name="description"]').attr('content');
@@ -299,7 +299,7 @@ function main() {
                 __request(f);
             }
         });
-    }     
+    }
     __request((links) => {
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
