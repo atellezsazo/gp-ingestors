@@ -4,7 +4,7 @@ const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 const url = require('url');
 
-const BASE_URI = 'https://www.duetdiary.com/';
+const BASE_URI = 'http://www.duetdiary.com/';
 const RSS_FEED = "http://www.duetdiary.com/feed/";
 
 // Remove elements (body)
@@ -77,7 +77,7 @@ function ingest_article(hatch, uri) {
         const date = $('.post-date').first().text();
         const modified_date = new Date(Date.parse(date));
         const section ='Article';
-        const read_more = 'Original Article at www.duetdiary.com';
+        const read_more = 'บทความต้นฉบับที่ www.duetdiary.com';
         const title = $('meta[property="og:title"]').attr('content');
         const main_img = $('meta[property="og:image"]').attr('content');
         const tags = $('span.tags a').map((i, elem) => $(elem).text()).get();
@@ -135,14 +135,39 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
+
+    let MAX_DAYS_OLD = 1;
+    if (process.env.MAX_DAYS_OLD)
+        MAX_DAYS_OLD = parseInt(process.env.MAX_DAYS_OLD);
+
+console.log(RSS_FEED);
+
+        // wordpress pagination
+    const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
+
     const hatch = new libingester.Hatch('duetdiary', 'th');
 
-    rss2json.load(RSS_FEED, (err, rss) => {
-        if (err) throw { code: -1, message: 'Error to load rss' }
-        const links = rss.items.map(item => item.url);
-        Promise.all(links.map(uri => ingest_article(hatch, uri)))
-            .then(() => hatch.finish());
-    });
+    libingester.util.fetch_rss_entries(feed, 100, MAX_DAYS_OLD).then(rss => {
+            console.log(`Ingesting ${rss.length} articles...`);
+
+            return Promise.all(rss.map(entry =>
+
+                ingest_article(hatch, entry)));
+        })
+        .then(() => hatch.finish())
+        .catch(err => {
+            console.log(err);
+            // Exit without cutting off pending operations
+            process.exitCode = 1;
+        });
+
+
+    // rss2json.load(RSS_FEED, (err, rss) => {
+    //     if (err) throw { code: -1, message: 'Error to load rss' }
+    //     const links = rss.items.map(item => item.url);
+    //     Promise.all(links.map(uri => ingest_article(hatch, uri)))
+    //         .then(() => hatch.finish());
+    // });
 }
 
 main();
