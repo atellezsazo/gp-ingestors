@@ -3,7 +3,7 @@
 const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 
-const RSS_URI = "http://all-that-is-interesting.com/feed/";
+const RSS_URI = "http://all-that-is-interesting.com/feed";
 
 //Remove elements (body)
 const REMOVE_ELEMENTS = [
@@ -14,6 +14,7 @@ const REMOVE_ELEMENTS = [
     'script',
     '.gallery-descriptions-wrap',
     '.gallery-preview',
+    'hr',
     '.hidden-md-up',
     '.related-posts',
     '.social-callout',
@@ -66,12 +67,13 @@ function ingest_post(hatch, uri) {
         const author = by_line.find('.author').first().text();
         const published = by_line.find('.date').first().text();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
-        const read_more = 'Original Article at www.all-that-is-interesting.com/';
+        const read_more = 'Original Article at www.all-that-is-interesting.com';
         const title = $('meta[property="og:title"]').attr('content');
         const modified_date = $('meta[property="article:modified_time"]').attr('content');
         const description = $('meta[property="og:description"]').attr('content');
         const tags = $('meta[property="article:tag"]').map((i, elem) => $(elem).attr('content')).get();
         const date = new Date(Date.parse(modified_date));
+
         //main-image
         const main_image = $('meta[property="og:image"]').attr('content');
         const main_img = libingester.util.download_image(main_image, base_uri);
