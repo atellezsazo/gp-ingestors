@@ -1,7 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 
 const FEED_RSS = 'http://www.hipwee.com/feed/'; // recent articles
 
@@ -49,41 +48,37 @@ const REMOVE_ATTR = [
 ];
 
 function ingest_article(hatch, item) {
-    return libingester.util.fetch_html(item.url).then($ => {
+    return libingester.util.fetch_html(item.link).then($ => {
         const asset = new libingester.NewsArticle();
-        const author = $('meta[name="author"]').attr('content');
         const body = $('.post-content').first();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const copyright = $('.copyright').first().text();
         const description = $('meta[name="description"]').attr('content');
         const first_p = body.find('p').first();
-        const modified_date = new Date(item.created);
         const page = 'hipwee';
-        const read_more = `Baca lebih lanjut tentang <a href="${canonical_uri}">${page}</a>`;
+        const read_more = `Baca lebih lanjut di <a href="${canonical_uri}">${page}</a>`;
         const section = $('meta[property="article:section"]').attr('content');
-        const title = $('meta[name="title"]').attr('content');
         const main_img = $('.post-image').first();
 
         // article settings
-        console.log('processing', title);
-        asset.set_authors([author]);
+        asset.set_authors([item.author]);
         asset.set_body(body);
         asset.set_canonical_uri(canonical_uri);
-        asset.set_date_published(item.created);
-        asset.set_last_modified_date(modified_date);
+        asset.set_date_published(item.pubDate);
+        asset.set_last_modified_date(item.pubDate);
         asset.set_license(copyright);
         asset.set_read_more_link(read_more);
         asset.set_section(section);
         asset.set_source(page);
         asset.set_synopsis(description);
-        asset.set_title(title);
+        asset.set_title(item.title);
         asset.set_custom_scss(CUSTOM_CSS);
 
         // pull out the main image
         const uri_main_image = main_img.find('img').first().attr('data-src');
         const image_credit = main_img.find('.image-credit').first().children();
         const main_image = libingester.util.download_image(uri_main_image);
-        main_image.set_title(title);
+        main_image.set_title(item.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
         asset.set_main_image(main_image, image_credit);
@@ -111,7 +106,7 @@ function ingest_article(hatch, item) {
                 let img = $('<figure></figure>').append($(this).clone(), figcaption);
                 const image = libingester.util.download_img(img.children());
                 $(this).replaceWith(img);
-                image.set_title(title);
+                image.set_title(item.title);
                 hatch.save_asset(image);
             } else {
                 $(this).remove();
@@ -123,7 +118,7 @@ function ingest_article(hatch, item) {
             const src = this.attribs.src;
             if (src.includes("youtube")) {
                 const video = libingester.util.get_embedded_video_asset($(this), src);
-                video.set_title(title);
+                video.set_title(item.title);
                 video.set_thumbnail(main_image);
                 hatch.save_asset(video);
             }
@@ -144,11 +139,26 @@ function ingest_article(hatch, item) {
 }
 
 function main() {
+    // Generally, we only want the last 24 hours worth of content, but allow
+    // this to be modified
+    let MAX_DAYS_OLD = 1;
+    if (process.env.MAX_DAYS_OLD)
+        MAX_DAYS_OLD = parseInt(process.env.MAX_DAYS_OLD);
+
+    // wordpress pagination
+    const feed = libingester.util.create_wordpress_paginator(FEED_RSS);
+
     const hatch = new libingester.Hatch('hipwee', 'id');
-    rss2json.load(FEED_RSS, (err, rss) =>
-        Promise.all(rss.items.map(item => ingest_article(hatch, item)))
+    libingester.util.fetch_rss_entries(feed, 100, MAX_DAYS_OLD).then(rss => {
+            console.log(`Ingesting ${rss.length} articles...`);
+            return Promise.all(rss.map(entry => ingest_article(hatch, entry)));
+        })
         .then(() => hatch.finish())
-    );
+        .catch(err => {
+            console.log(err);
+            // Exit without cutting off pending operations
+            process.exitCode = 1;
+        });
 }
 
 main();
