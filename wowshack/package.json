@@ -6,6 +6,6 @@
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "https://github.com/endlessm/libingester.git"
+        "libingester": "^2.0.1"
     }
 }
