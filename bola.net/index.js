@@ -7,6 +7,7 @@ const url = require('url');
 const BASE_URI = 'https://www.bola.net/';
 const GALLERY_URI = 'https://www.bola.net/galeri/';
 const RSS_URI = 'https://www.bola.net/feed/';
+const MAX_GALLERIES = 2;
 
 const CUSTOM_SCSS = `
 $primary-light-color: #6DB30A;
@@ -62,25 +63,26 @@ const VIDEO_IFRAMES = [
 /** get articles metadata **/
 function _get_ingest_settings($, item) {
     const canonical_uri = $('meta[property="og:url"]').attr('content');
+    let date;
     if (item.pubDate) {
-        var date = new Date(Date.parse(item.pubDate));
+        date = new Date(Date.parse(item.pubDate));
     } else {
-        var date = $('meta[property="article:modified_time"]').attr('content')
+        date = $('meta[property="article:modified_time"]').attr('content')
                 || $('div.photonewsdatetime').text();
         date = date.replace(/[A-Za-z]+,/,'');
-        date = new Date(Date.parse(moment(date,'DD-MM-YYYY hh:mm').format()));
+        date = moment(date,'DD-MM-YYYY hh:mm').toDate();
     }
 
     return {
         author: item.author,
         body: $('.ncont').first(),
         canonical_uri: canonical_uri,
-        date_published: Date.now(date),
+        date_published: date,
         modified_date: date,
         custom_scss: CUSTOM_SCSS,
         read_more: `Baca lebih lanjut tentang <a href="${canonical_uri}">bola.net</a>`,
         section: item.category || $('div.nav').first().text(),
-        main_image_uri: $('meta[property="og:image"]').attr('content'),
+        image_uri: $('meta[property="og:image"]').attr('content'),
         synopsis: $('meta[name="description"]').attr('content') || $('.photonews_desc').text(),
         source: 'bola.net',
         title: item.title || $('.photonews_title').first().text(),
@@ -103,12 +105,6 @@ function _set_ingest_settings(asset, meta) {
     if (meta.title) asset.set_title(meta.title);
 }
 
-// add zeros to left
-function pad(n, width, z = '0') {
-    n = n + '';
-    return n.length >= width ? n : new Array(width - n.length + 1).join(z) + n;
-}
-
 /**
  * ingest_article
  *
@@ -122,21 +118,25 @@ function ingest_article(hatch, item) {
         console.log('processing',meta.title);
 
         // main image
-        const main_image = libingester.util.download_image(meta.main_image_uri);
-        main_image.set_title(meta.title);
-        asset.set_thumbnail(main_image);
-        hatch.save_asset(main_image);
-        asset.set_main_image(main_image, '');
+        const image = libingester.util.download_image(meta.image_uri);
+        image.set_title(meta.title);
+        asset.set_thumbnail(image);
+        hatch.save_asset(image);
+        asset.set_main_image(image, '');
 
-        // labeling all the text in the body
+        // the content body does not have tags 'p', then add the tag wrapper,
+        // a paragraph ends when a tag 'br' is found
         let content = $('<div></div>');
-        let last_p;
+        let last_p; // reference to the paragraph we are constructing
         meta.body.contents().map((i,elem) => {
+            // We start by validating if the 'elem' is text, or any other label that is not 'br'
             if ((elem.type == 'text' && elem.data.trim() != '') || elem.name != 'br') {
-                if (!last_p) {
+                if (!last_p) { // constructing a new paragraph
                     content.append($('<p></p>'));
                     last_p = content.find('p').last();
                 }
+                // if element is a 'div', check if the children are pictures
+                // and if true, we create the corresponding tags (figure, figcaption)
                 if (elem.name == 'div') {
                     const first = $(elem).children()[0] || '';
                     const second = $(elem).children()[1] || '';
@@ -151,6 +151,7 @@ function ingest_article(hatch, item) {
                 }
                 last_p.append($(elem).clone());
             } else if (elem.name == 'br') {
+                // when we find a 'br', it's time to start with another paragraph
                 last_p = undefined;
                 $(elem).remove();
             }
@@ -193,43 +194,48 @@ function ingest_article(hatch, item) {
  * @param {Object} hatch The Hatch object of the Ingester library
  * @param {String} uri The The URI of the post to ingest
  */
-function ingest_gallery(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
+function ingest_gallery(hatch, uri, meta) {
+    return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.NewsArticle();
-        let meta = _get_ingest_settings($, {});
-        meta.body = $('<div><div>');
-        meta.lede = $('.photonews_desc').first();
-        meta.author = 'Bolanet'; // the galleries have no author
-        console.log('processing',meta.title);
+        if (!meta) {
+            meta = _get_ingest_settings($, {});
+            meta.body = $('<div><div>');
+            meta.lede = $('.photonews_desc').first();
+            meta.author = 'Bolanet'; // the galleries have no author
+        }
 
-        // main image
-        const main_image_uri = $('.photonews_image img').first().attr('data-src');
-        const main_image = libingester.util.download_image(main_image_uri);
-        main_image.set_title(meta.title);
-        asset.set_thumbnail(main_image);
-        asset.set_main_image(main_image, '');
-        hatch.save_asset(main_image);
-
-        // max number of images for generate links
-        let max_num = $('.photonews_top').first().text().split('\n')[2];
-        // example: of string "1 dari 10 foto" extract the string "10"
-        max_num = max_num.trim().replace(/\d+[A-Za-z\s]+(\d+)[A-Za-z\s]+/,'$1');
-        max_num = parseInt(max_num);
-
-        /* generating image links why the image links are not on the page
-        the format of image link is "https://cdns...20170507-001-bola.net.jpg",
-        "https://cdns...20170507-002-bola.net.jpg", "https://cdns...20170507-003-bola.net.jpg", etc */
-        for (var i = 2; i <= max_num; i++) {
-            const image_uri = main_image_uri.replace('001-bola', pad(i, 3) + '-bola');
+        const image_uri = $('.photonews_image img').first().attr('data-src');
+        if (image_uri) {
             const image = libingester.util.download_image(image_uri);
             image.set_title(meta.title);
             hatch.save_asset(image);
-            meta.body.append($(`<figure><img data-libingester-asset-id="${image.asset_id}"/><figure>`));
+            if (!meta.main_image) {
+                meta.main_image = image;
+            } else {
+                meta.body.append($(`<figure><img data-libingester-asset-id="${image.asset_id}"/><figure>`));
+            }
         }
 
-        _set_ingest_settings(asset, meta);
-        asset.render();
-        hatch.save_asset(asset);
+        // next page
+        const tag_a = $('#photonews_nav a')[1] || {attribs: undefined};
+        let next_uri;
+        if (tag_a.attribs) next_uri = tag_a.attribs.href;
+
+        // the next image is on the next page
+        if (next_uri) {
+            next_uri = url.resolve(uri, next_uri);
+            return ingest_gallery(hatch, next_uri, meta);
+        } else {
+            console.log('processing',meta.title);
+            meta.body.contents().filter((index, node) => node.type === 'comment').remove();
+            meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+            meta.body.find('div, p').filter((i,elem) => $(elem).text().trim() === '').remove();
+            _set_ingest_settings(asset, meta);
+            asset.set_main_image(meta.main_image, '');
+            asset.set_thumbnail(meta.main_image);
+            asset.render();
+            hatch.save_asset(asset);
+        }
     }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
     });
@@ -287,13 +293,17 @@ function ingest_video(hatch, obj) {
                                 const video_width = '480p.mp4';
                                 let video_uri;
                                 return libingester.util.fetch_html(video_page).then($vid => {
-                                    const source = $vid('script')[2].children[0].data; //script data
-                                    let s = source.substring(source.indexOf('JSON.parse(\'') + 12);
-                                    s = s.substring(0,s.indexOf("')"));
+                                    // the page content is only tags 'script'
+                                    // the video links are inside a tag 'script'
+                                    const source = $vid('script')[2].children[0].data; //script content
+                                    // cleaning the contents of the tag...
+                                    let string_data = source.substring(source.indexOf('JSON.parse(\'') + 12);
+                                    string_data = string_data.substring(0, string_data.indexOf("')"));
 
-                                    let json = JSON.parse(s);
+                                    const json = JSON.parse(string_data);
                                     const video_uris = json.map(data => url.resolve(base_video_uri, data.url));
 
+                                    // looking for the link that contains '480p.mp4'
                                     for (const uri of video_uris) {
                                         if (uri.includes(video_width)) {
                                             video_uri = uri;
@@ -301,9 +311,10 @@ function ingest_video(hatch, obj) {
                                         }
                                     }
 
+                                    // if we do not find the desired link, we use the last one
                                     if (!video_uri) video_uri = video_uris[video_uris.length - 1];
                                     return save_video_asset(video_uri);
-                                }).catch(err => console.log('ERR VID:',err));
+                                })
                                 break; // exit 'skrin.id'
                             }
                         default:
@@ -349,7 +360,7 @@ function main() {
 
     // all ingestor for gallery posts
     const gallery = libingester.util.fetch_html(GALLERY_URI).then($ =>
-        Promise.all($('.photonews_preview .title').get().map(item =>
+        Promise.all($('.photonews_preview .title').get().slice(0, MAX_GALLERIES).map(item =>
             ingest_gallery(hatch, url.resolve(GALLERY_URI, item.attribs.href))
         ))
     );
