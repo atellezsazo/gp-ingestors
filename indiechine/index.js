@@ -2,12 +2,28 @@
 
 const cheerio = require('cheerio');
 const libingester = require('libingester');
-const mustache = require('mustache');
-const rss2json = require('rss-to-json');
-const template = require('./template');
 
 const BASE_URI = 'http://bk.asia-city.com/';
 const RSS_URI = 'http://www.indiechine.com/?feed=rss2';
+
+const CUSTOM_SCSS = `
+$primary-light-color: #A4B3C3;
+$primary-medium-color: #666666;
+$primary-dark-color: #102F4E;
+$accent-light-color: #569D13;
+$accent-dark-color: #2E5609;
+$background-light-color: #F9F9F9;
+$background-dark-color: #E5E9EA;
+  
+$title-font: 'Lora';
+$body-font: 'Lora';
+$display-font: 'Lato';
+$logo-font: 'Lora';
+$context-font: 'Lora';
+$support-font: 'Lato';
+ 
+@import '_default';
+`;
 
 /**
  * utilities
@@ -23,7 +39,8 @@ function utilities($, item) {
         '.jp-relatedposts',
         '.ssba',
         '[data-pin-do="buttonBookmark"]',
-        'iframe',
+        'span[data-pin-log="button_pinit_bookmarklet"]',
+        'br',
         'script',
     ];
 
@@ -50,8 +67,8 @@ function utilities($, item) {
         'figure',
         'h1, h2, h3, h4, h5, h6',
         'img',
-        'ol',
         'p',
+        'ol',
         'span',
         'strong',
         'u',
@@ -90,25 +107,13 @@ function utilities($, item) {
     return {
         /** object with the processed metadata of a post  */
         post_metadata: () => {
-            let $synopsis = cheerio.load(item.description);
-            $synopsis('a').remove();
             return {
-                author: $('.author a').first().text(),
                 body: _cleaning_body($('article .entry-content').first()),
                 category: _extract_text($('.cat-links a')),
                 date: new Date(Date.parse($('.published').attr('datetime'))),
-                synopsis: $synopsis.text(),
-                tags: _extract_text($('.tags-links a')),
-                title: item.title
+                tags: _extract_text($('.tags-links a[rel="tag"]')),
             }
         },
-
-        /** render and save the content */
-        render_template: (hatch, asset, template, post_data) => {
-            const content = mustache.render(template, post_data);
-            asset.set_document(content);
-            hatch.save_asset(asset);
-        }
     }
 }
 
@@ -119,62 +124,105 @@ function utilities($, item) {
  * @param {Object} item The object with the metadata of post
  */
 function ingest_article(hatch, item) {
-    return libingester.util.fetch_html(item.url).then(($) => {
+    const {
+        author,
+        link,
+        pubDate,
+        summary,
+        title,
+    } = item;
+
+    return libingester.util.fetch_html(link).then(($) => {
         const util = utilities($, item);
-        const asset = new libingester.NewsArticle();
+        const asset = new libingester.BlogArticle();
         const post = util.post_metadata();
 
-        // article settings
-        asset.set_canonical_uri(item.url);
-        asset.set_last_modified_date(post.date);
-        asset.set_section(post.tags);
-        asset.set_synopsis(post.synopsis);
-        asset.set_title(post.title);
-
         // download images
-        post.body.find('img').map((id, img) => {
+        post.body.find('img').map((num, img) => {
             if (img.attribs.src) {
-                const image = libingester.util.download_img($(img), BASE_URI);
+                let image;
+                if ($(img).parent()[0].name != "figure") {
+                    const parent = $(img).parent();
+                    const figimg = $('<figure></figure>').append($(img).clone());
+                    image = libingester.util.download_img(figimg.children());
+                    $(img).remove();
+                    $(figimg).insertAfter(parent);
+                } else {
+                    image = libingester.util.download_img($(img));
+                }
                 image.set_title(post.title);
                 hatch.save_asset(image);
-                if (id === 0) {
-                    post.cover = image;
+                if (num === 0) {
                     asset.set_thumbnail(image);
                 }
             }
         });
 
-        util.render_template(hatch, asset, template.structure_template, {
-            author: post.author,
-            category: post.category,
-            body: post.body.html(),
-            post_tags: post.tags,
-            published: post.date.toLocaleDateString(),
-            title: post.title
+        //add p to figcatpions
+        post.body.find('figcaption').map((num, figcaption) => {
+            const image_description = $('<figcaption><p>' + $(figcaption).html() + '</p></figcaption>');
+            $(figcaption).replaceWith(image_description);
         });
+
+        // download video
+        post.body.find('iframe').map(function() {
+            const src = this.attribs.src;
+            if (src.includes("youtube")) {
+                const video = libingester.util.get_embedded_video_asset($(this), src);
+                video.set_title(title);
+                hatch.save_asset(video);
+            }
+        });
+        post.body.find('iframe').remove();
+
+        //Delete empty tags
+        post.body.find('span, figcaption, p').filter(function() {
+            return $(this).text().trim() === '' && $(this).children().length === 0;
+        }).remove();
+
+        // article settings
+        asset.set_canonical_uri(link);
+        asset.set_last_modified_date(post.date);
+        asset.set_title(title);
+        asset.set_synopsis(summary);
+        asset.set_author(author);
+        asset.set_date_published(pubDate);
+        asset.set_license('Proprietary');
+        asset.set_body(post.body);
+        asset.set_tags(post.tags.split(','));
+        asset.set_read_more_text('Read more at www.indiechine.com');
+        asset.set_custom_scss(CUSTOM_SCSS);
+
+        asset.render();
+        hatch.save_asset(asset);
     }).catch((err) => {
         console.log(err);
-        return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET') {
+            return ingest_article(hatch, item);
+        }
     });
 }
 
-/**
- * main method
- *
- * The main method to initialize the ingestion of the given site
- *
- * @return {Promise}
- */
 function main() {
-    const hatch = new libingester.Hatch();
-    rss2json.load(RSS_URI, (err, rss) => {
-        console.log("aca");
-        Promise.all(
-            rss.items.map(item => ingest_article(hatch, item))
-        ).then(() => {
-            return hatch.finish();
+    // Generally, we only want the last 24 hours worth of content, but this blog doesn´t have a lot activity
+    let MAX_DAYS_OLD = 365;
+    if (process.env.MAX_DAYS_OLD)
+        MAX_DAYS_OLD = parseInt(process.env.MAX_DAYS_OLD);
+
+    // wordpress pagination
+    const feed = n => `${RSS_URI}&paged=${n}`;
+    const hatch = new libingester.Hatch('indiechine', 'id');
+    libingester.util.fetch_rss_entries(feed, 100, MAX_DAYS_OLD).then(rss => {
+            console.log(`Ingesting ${rss.length} articles...`);
+            return Promise.all(rss.map(entry => ingest_article(hatch, entry)));
+        })
+        .then(() => hatch.finish())
+        .catch(err => {
+            console.log(err);
+            // Exit without cutting off pending operations
+            process.exitCode = 1;
         });
-    });
+
 }
 
 main();
