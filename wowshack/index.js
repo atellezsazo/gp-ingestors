@@ -14,14 +14,14 @@ $accent-dark-color: #670000;
 $background-light-color: #F6F6F6;
 $background-dark-color: #F6F6F6;
 
-$title-font: ‘Roboto’;
-$body-font: ‘Roboto Slab’;
-$display-font: ‘Roboto’;
-$logo-font: ‘Roboto’;
-$context-font: ‘Roboto Slab’;
-$support-font: ‘Roboto’;
-$title-font-composite: ‘Roboto’;
-$display-font-composite: ‘Roboto’;
+$title-font: 'Roboto';
+$body-font: 'Roboto Slab';
+$display-font: 'Roboto';
+$logo-font: 'Roboto';
+$context-font: 'Roboto Slab';
+$support-font: 'Roboto';
+$title-font-composite: 'Roboto';
+$display-font-composite: 'Roboto';
 
 @import "_default";
 `;
@@ -114,10 +114,13 @@ function ingest_article(hatch, uri) {
             if (src.includes('http') && !src.includes('visualegacy.org')) {
                 this.attribs['src'] = src;
                 clean_attr(this);
+
+                // add figure
                 const figure = $('<figure></figure>').append($(this).clone());
                 const image = libingester.util.download_img(figure.children());
                 image.set_title(title);
                 hatch.save_asset(image);
+
                 // delete wrappers
                 let wrapp = $(this);
                 let parent;
@@ -151,6 +154,7 @@ function ingest_article(hatch, uri) {
                     const video = libingester.util.get_embedded_video_asset(wrapp, src);
                     const uri_thumb = get_url_thumb_youtube(src);
                     const video_thumb = libingester.util.download_image(uri_thumb);
+                    
                     // download video thumbnail
                     video_thumb.set_title(title);
                     video.set_title(title);
@@ -205,7 +209,7 @@ function main() {
     libingester.util.fetch_html(BASE_URI).then($ => {
         Promise.all($('#page a.project:nth-child(-n + 30)').get()
             .map(elem => {
-                const uri = url.resolve(BASE_URI, $(elem).attr('href'));// console.log(uri);
+                const uri = url.resolve(BASE_URI, $(elem).attr('href'));
                 return ingest_article(hatch, uri);
             })
         ).then(() => hatch.finish());
