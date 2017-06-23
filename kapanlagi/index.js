@@ -164,25 +164,25 @@ function ingest_article(hatch, uri) {
                                    const video_width = '480p.mp4';
                                    let video_uri;
                                    video_promise = libingester.util.fetch_html(video_url).then($vid => {
-                                       // En la pagina solo hay videos embebidos, por eso buscamos con el filtro "script"
-                                       //  en la 3ra etiqueta script ese encuentran links de los videos,
+                                       // In the page only there are embedded videos, that is why I search with the filter "script"
+                                       //  In the 3rd label script that find links of the videos,
                                        const source = $vid('script')[2].children[0].data;
-                                       // de los links, se busca la cadena que contiene el JSON para poder limpiar y construir un nuevo JSON
+                                       // Of the links, it looks for the chain that contains the JSON to clean and to construct a new JSON
                                        let s = source.substring(source.indexOf('JSON.parse(\'') + 12);
                                        s = s.substring(0,s.indexOf("')"));
 
-                                       //JSON que contiene las url de los videos
+                                       //JSON containing url videos
                                        let json = JSON.parse(s);
                                        const video_uris = json.map(data => url.resolve(base_video_uri, data.url));
 
-                                       //Se buscan las url que contengan '480.mp4'
+                                       //We are looking for url that contain '480.mp4'
                                        for (const uri of video_uris) {
                                            if (uri.includes(video_width)) {
                                                video_uri = uri;
                                                break;
                                            }
                                        }
-                                       // Si el video no se encuentra, se toma el último link
+                                       // If the video is not found, the last link is taken
                                        if (!video_uri) video_uri = video_uris[video_uris.length - 1];
                                        save_video_asset(video_tag, video_url);
                                    });
@@ -267,6 +267,7 @@ function ingest_article(hatch, uri) {
                 asset.set_title(title);
                 asset.set_main_image(main_image,image_credit);
                 asset.set_body(body_page);
+
                 asset.render();
                 hatch.save_asset(asset);
                 resolve();
@@ -282,8 +283,7 @@ function main() {
 
     const __request = (f) => {
         rp({ uri: RSS_URI, gzip: true }).then(res => {
-            const parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
-            console.log(parser);
+            const parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });    
             parser.parseString(res, (err, result) => {
                 if (err) throw err;
                 const rss = rss2json.parser(result);
