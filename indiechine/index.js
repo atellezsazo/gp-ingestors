@@ -138,7 +138,7 @@ function ingest_article(hatch, item) {
         const post = util.post_metadata();
 
         // download images
-        post.body.find('img').map((num, img) => {
+        post.body.find('img').map((id, img) => {
             if (img.attribs.src) {
                 let image;
                 if ($(img).parent()[0].name != "figure") {
@@ -150,16 +150,16 @@ function ingest_article(hatch, item) {
                 } else {
                     image = libingester.util.download_img($(img));
                 }
-                image.set_title(post.title);
+                image.set_title(title);
                 hatch.save_asset(image);
-                if (num === 0) {
+                if (id === 0) {
                     asset.set_thumbnail(image);
                 }
             }
         });
 
         //add p to figcatpions
-        post.body.find('figcaption').map((num, figcaption) => {
+        post.body.find('figcaption').map((id, figcaption) => {
             const image_description = $('<figcaption><p>' + $(figcaption).html() + '</p></figcaption>');
             $(figcaption).replaceWith(image_description);
         });
@@ -189,7 +189,7 @@ function ingest_article(hatch, item) {
         asset.set_date_published(pubDate);
         asset.set_license('Proprietary');
         asset.set_body(post.body);
-        asset.set_tags(post.tags.split(','));
+        asset.set_tags(post.category.concat(post.tags).split(','));
         asset.set_read_more_text('Read more at www.indiechine.com');
         asset.set_custom_scss(CUSTOM_SCSS);
 
