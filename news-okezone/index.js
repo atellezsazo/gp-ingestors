@@ -1,10 +1,8 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 
-const FEED_RSS = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
+const FEED_RSS_TEMPLATE = "http://sindikasi.okezone.com/index.php/rss/{page}/RSS2.0"; //News RSS
 const PAGE_GALLERY = 'http://news.okezone.com/foto'; // Galleries home section
 
 const CUSTOM_SCSS = `
@@ -20,7 +18,6 @@ const CUSTOM_SCSS = `
     $display-font: 'Poppins';
     $context-font: 'Roboto Condensed';
     $support-font: 'Roboto Condensed';
-
     @import "_default";
 `;
 
@@ -46,14 +43,14 @@ const REMOVE_ELEMENTS = [
 // get articles metadata
 function _get_ingest_settings($) {
     return {
-        author: $('.author .nmreporter div, .news-fr').text() || $('.nmreporter span').text(),
+        author: $('.author .nmreporter div, .news-fr').text(),
         canonical_uri: $('link[rel="canonical"]').attr('href'),
         copyright: $('meta[name="copyright"]').attr('content'),
         custom_scss: CUSTOM_SCSS,
         section: $('.bractive').first().text() || 'Gallery',
         synopsis: $('meta[name="description"]').attr('content'),
         source: 'news.okezone',
-        read_more: `Baca lebih lanjut tentang <a href="${$('link[rel="canonical"]').attr('href')}">news.okezone</a>`,
+        read_more: `Baca lebih lanjut di <a href="${$('link[rel="canonical"]').attr('href')}">news.okezone</a>`,
         title: $('h1').first().text(),
     }
 }
@@ -76,30 +73,32 @@ function _set_ingest_settings(asset, meta) {
 
 /** Ingest Articles **/
 function ingest_article(hatch, item) {
-    return libingester.util.fetch_html(item.url).then($ => {
+    return libingester.util.fetch_html(item.link).then($ => {
         let meta = _get_ingest_settings($);
-        if (!meta.title) throw { code: -1, message: `Undefined title, DOM incomplete: ${item.url}` };
+        if (!meta.title) throw { code: -1, message: `Undefined title, DOM incomplete: ${item.link}` };
 
         // article settings
         console.log('processing', meta.title);
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
         meta['body'] = $('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
-        meta['modified_date'] = new Date(item.created);
-        meta['date_published'] = item.created;
+        meta['modified_date'] = new Date(item.pubDate);
+        meta['date_published'] = item.pubDate;
         const asset = new libingester.NewsArticle();
         const first_p = meta.body.find('p').first();
         const uri_main_image = $('#imgCheck').attr('src');
         _set_ingest_settings(asset, meta);
 
-        if(!meta.author) console.log(item.url);
-
         // pull out the main image
         const main_image = libingester.util.download_image(uri_main_image);
-        const image_description = $(`<figcaption>${$('.caption-img-ab').text()}</figcaption>`);
+        const image_description = $('.caption-img-ab').children();
         main_image.set_title(meta.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
         asset.set_main_image(main_image, image_description);
+
+        // remove elements
+        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+        meta.body.contents().filter((index, node) => node.type === 'comment').remove();
 
         // set first paragraph of the body
         const lede = first_p.clone();
@@ -138,14 +137,12 @@ function ingest_article(hatch, item) {
             }
         });
 
-        //remove and clean elements
-        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+        // clean elements
         meta.body.find('p').filter(function() {
             return $(this).text().trim() === '' && $(this).children().length === 0;
         }).remove();
 
         meta.body.find(first_p).remove();
-        meta.body.contents().filter((index, node) => node.type === 'comment').remove();
         meta.body.find('span').map((i, elem) => clean_attr(elem));
 
         asset.render();
@@ -167,8 +164,8 @@ function ingest_gallery(hatch, item) {
         // arcitle settings
         console.log('processing', meta.title);
         const asset = new libingester.NewsArticle();
-        meta['body'] = cheerio('<div></div>');
-        meta['lede'] = cheerio(`<p>${meta.synopsis}</p>`);
+        meta['body'] = $('<div></div>');
+        meta['lede'] = $(`<p>${meta.synopsis}</p>`);
         meta['modified_date'] = new Date(item.pubDate);
         meta['date_published'] = Date.now(meta.modified_date);
         _set_ingest_settings(asset, meta);
@@ -214,17 +211,14 @@ function main() {
         return {
             url: $(item).find('h3 a').attr('href'),
             pubDate: $(item).find('time').text().replace(/[\t\n\r]/g, ''),
-        }
-    }
+        };
+    };
+
+    const feed = (page) => FEED_RSS_TEMPLATE.replace('{page}', page);
 
     // news articles
-    const news = new Promise((resolve, reject) => {
-        rss2json.load(FEED_RSS, (err, rss) => {
-            if (err) reject();
-            Promise.all(rss.items.map(item => ingest_article(hatch, item)))
-                .then(() => resolve())
-                .catch(err => reject(err))
-        });
+    const news = libingester.util.fetch_rss_entries(feed).then(items => {
+        return Promise.all(items.map(item => ingest_article(hatch, item)));
     });
 
     // gallery articles
@@ -233,7 +227,7 @@ function main() {
         return Promise.all(items.map(item => ingest_gallery(hatch, item)));
     });
 
-    Promise.all([gallery, news])
+    Promise.all([news, gallery])
         .then(() => hatch.finish());
 }
 
