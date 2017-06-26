@@ -84,13 +84,16 @@ function _set_ingest_settings(asset, meta) {
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        let meta = _get_ingest_settings($);
         const uri_main_image = $('meta[property="og:image"]').attr('content');
-
-        if (!meta.title) return; // Some links return "File Not Found !"
         console.log('processing: '+uri);
-        console.log(meta.modified_date);
 
+
+        if ($('.newsdetail, .txtdetails, .newsde-text').length<1) throw {code: -1, message: 'Empty body'};
+
+        let meta = _get_ingest_settings($);
+        if (!meta.title) throw {code: -1, message: 'File not Found!'}; // Some links return "File Not Found !"
+
+        console.log(meta.modified_date);
         // set first paragraph
         const divs = meta.body.contents().filter((i,elem) => {
             if (elem.attribs) return elem.attribs.style;
@@ -154,7 +157,7 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(asset);
     }).catch((err) => {
         console.log('Ingest article error: ', err);
-        return ingest_article(hatch, uri);
+        if (err.code==-1) { return ingest_article(hatch, uri); }
     });
 }
 //
