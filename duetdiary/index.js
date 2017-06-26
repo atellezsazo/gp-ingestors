@@ -136,38 +136,22 @@ function ingest_article(hatch, uri) {
 
 function main() {
 
-    let MAX_DAYS_OLD = 1;
+    let MAX_DAYS_OLD =500;
     if (process.env.MAX_DAYS_OLD)
         MAX_DAYS_OLD = parseInt(process.env.MAX_DAYS_OLD);
 
-console.log(RSS_FEED);
-
-        // wordpress pagination
+    // wordpress pagination
     const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
-
     const hatch = new libingester.Hatch('duetdiary', 'th');
 
     libingester.util.fetch_rss_entries(feed, 100, MAX_DAYS_OLD).then(rss => {
-            console.log(`Ingesting ${rss.length} articles...`);
-
-            return Promise.all(rss.map(entry =>
-
-                ingest_article(hatch, entry)));
-        })
-        .then(() => hatch.finish())
-        .catch(err => {
-            console.log(err);
-            // Exit without cutting off pending operations
-            process.exitCode = 1;
+         console.log(`Ingesting ${rss.length} articles...`);
+             const links = rss.map(item => item.link);
+             Promise.all(links.map(uri => ingest_article(hatch, uri)))
+                     .then(() => hatch.finish());
+        }).catch((err) => {
+            console.log('Error '+err);
         });
-
-
-    // rss2json.load(RSS_FEED, (err, rss) => {
-    //     if (err) throw { code: -1, message: 'Error to load rss' }
-    //     const links = rss.items.map(item => item.url);
-    //     Promise.all(links.map(uri => ingest_article(hatch, uri)))
-    //         .then(() => hatch.finish());
-    // });
 }
 
 main();
