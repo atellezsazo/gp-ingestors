@@ -1,9 +1,8 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 
-const FEED_RSS = "http://sindikasi.okezone.com/index.php/rss/1/RSS2.0"; //News RSS
+const FEED_RSS_TEMPLATE = "http://sindikasi.okezone.com/index.php/rss/{page}/RSS2.0"; //News RSS
 const PAGE_GALLERY = 'http://news.okezone.com/foto'; // Galleries home section
 
 const CUSTOM_SCSS = `
@@ -19,7 +18,6 @@ const CUSTOM_SCSS = `
     $display-font: 'Poppins';
     $context-font: 'Roboto Condensed';
     $support-font: 'Roboto Condensed';
-
     @import "_default";
 `;
 
@@ -45,14 +43,14 @@ const REMOVE_ELEMENTS = [
 // get articles metadata
 function _get_ingest_settings($) {
     return {
-        author: $('.author .nmreporter div, .news-fr').text() || $('.nmreporter span').text(),
+        author: $('.author .nmreporter div, .news-fr').text(),
         canonical_uri: $('link[rel="canonical"]').attr('href'),
         copyright: $('meta[name="copyright"]').attr('content'),
         custom_scss: CUSTOM_SCSS,
         section: $('.bractive').first().text() || 'Gallery',
         synopsis: $('meta[name="description"]').attr('content'),
         source: 'news.okezone',
-        read_more: `Baca lebih lanjut tentang <a href="${$('link[rel="canonical"]').attr('href')}">news.okezone</a>`,
+        read_more: `Baca lebih lanjut di <a href="${$('link[rel="canonical"]').attr('href')}">news.okezone</a>`,
         title: $('h1').first().text(),
     }
 }
@@ -75,16 +73,16 @@ function _set_ingest_settings(asset, meta) {
 
 /** Ingest Articles **/
 function ingest_article(hatch, item) {
-    return libingester.util.fetch_html(item.url).then($ => {
+    return libingester.util.fetch_html(item.link).then($ => {
         let meta = _get_ingest_settings($);
-        if (!meta.title) throw { code: -1, message: `Undefined title, DOM incomplete: ${item.url}` };
+        if (!meta.title) throw { code: -1, message: `Undefined title, DOM incomplete: ${item.link}` };
 
         // article settings
         console.log('processing', meta.title);
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
         meta['body'] = $('#contentx, .bg-euro-body-news-hnews-content-textisi').first();
-        meta['modified_date'] = new Date(item.created);
-        meta['date_published'] = item.created;
+        meta['modified_date'] = new Date(item.pubDate);
+        meta['date_published'] = item.pubDate;
         const asset = new libingester.NewsArticle();
         const first_p = meta.body.find('p').first();
         const uri_main_image = $('#imgCheck').attr('src');
@@ -92,21 +90,15 @@ function ingest_article(hatch, item) {
 
         // pull out the main image
         const main_image = libingester.util.download_image(uri_main_image);
-        const description = $('.caption-img-ab').text();
-        let image_description;
-        if (description.trim() != '') {
-            image_description = $(`<figcaption><p>${description}</p></figcaption>`);
-        }
+        const image_description = $('.caption-img-ab').children();
         main_image.set_title(meta.title);
         hatch.save_asset(main_image);
         asset.set_thumbnail(main_image);
+        asset.set_main_image(main_image, image_description);
 
-        /* if image_description is 'undefined' throw a error, and according to the wiki page
-            it's possible to send 'undefined';
-            WIKI:
-            set_main_image(image: ImageAsset, caption: String or Cheerio object or undefined);
-        */
-        asset.set_main_image(main_image, image_description || '');
+        // remove elements
+        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+        meta.body.contents().filter((index, node) => node.type === 'comment').remove();
 
         // set first paragraph of the body
         const lede = first_p.clone();
@@ -114,32 +106,20 @@ function ingest_article(hatch, item) {
         asset.set_lede(lede);
 
         //Download images
-        meta.body.find('img').map(function() {
+        const images = meta.body.find('img');
+        images.map(function() { // Put images in <figure>
+            let figure = $('<figure></figure>');
+            $(this).replaceWith(figure);
+            $(figure).append($(this));
+        });
+
+        images.map(function() {
             if (this.attribs.src) {
+                clean_attr(this);
                 this.attribs.alt = meta.title;
-
-                // set tag 'p' as 'figure'
-                let parent = $(this).parent()[0];
-                if (parent && parent.name == 'p') parent.name = 'figure';
-
-                /** download image
-                ** for base64 images...
-                - download_img() doesn't set 'data-libingester-asset-id'
-                - download_img() doesn't create wrapper `<a ${somaDOM.Widget.Tag}="${somaDOM.Widget.ImageLink}"></a>`
-                */
                 const image = libingester.util.download_img($(this));
-                this.attribs['data-libingester-asset-id'] = image.asset_id;
-
-                // finding figcaptions
-                let next = $(parent).next();
-                let figcaption = $(next).find('strong').first()[0];
-                if (figcaption) {
-                    const text = $(figcaption).text();
-                    $(parent).append($(`<figcaption><p>${text}</p></figcaption>`));
-                    $(next).remove();
-                }
-
-                image.set_title(meta.title);
+                this.attribs['data-libingester-asset-id'] = image.asset_id
+                image.set_title(meta.title)
                 hatch.save_asset(image);
             } else {
                 $(this).remove();
@@ -157,19 +137,17 @@ function ingest_article(hatch, item) {
             }
         });
 
-        //remove and clean elements
-        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+        // clean elements
         meta.body.find('p').filter(function() {
             return $(this).text().trim() === '' && $(this).children().length === 0;
         }).remove();
 
         meta.body.find(first_p).remove();
-        meta.body.contents().filter((index, node) => node.type === 'comment').remove();
         meta.body.find('span').map((i, elem) => clean_attr(elem));
 
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
+    }).catch((err) => {
         console.log(err.message);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_article(hatch, item);
@@ -190,20 +168,23 @@ function ingest_gallery(hatch, item) {
         meta['lede'] = $(`<p>${meta.synopsis}</p>`);
         meta['modified_date'] = new Date(item.pubDate);
         meta['date_published'] = Date.now(meta.modified_date);
-        meta.canonical_uri = $('meta[property="og:url"]').attr('content');
         _set_ingest_settings(asset, meta);
 
         // Create body and download images
         let thumbnail;
-        $('.thumbnails img').get().map(img => {
-            const src = img.attribs.src.replace('small','large');
-            const image = $(`<img src="${src}" alt="${img.attribs.alt}"/>`);
-            const figure = $('<figure></figure>').append(image);
-            meta.body.append(figure);
+        $('.thumbnails img').get().map(img => meta.body.append($(img).clone()));
+        const images = meta.body.find('img');
+        images.map(function() { // Put images in <figure>
+            let figure = $('<figure></figure>');
+            $(this).replaceWith(figure);
+            $(figure).append($(this));
         });
 
-        meta.body.find('img').map(function() {
+        images.map(function() {
             if (this.attribs.src) {
+                this.attribs.src = this.attribs.src.replace('small.', 'large.');
+                this.attribs.alt = meta.title;
+                REMOVE_ATTR.forEach(attr => $(this).removeAttr(attr));
                 const image = libingester.util.download_img($(this));
                 image.set_title(meta.title);
                 hatch.save_asset(image);
@@ -212,11 +193,10 @@ function ingest_gallery(hatch, item) {
                 $(this).remove();
             }
         });
-
         asset.set_body(meta.body);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
+    }).catch((err) => {
         console.log(err.message);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_gallery(hatch, item);
@@ -231,17 +211,14 @@ function main() {
         return {
             url: $(item).find('h3 a').attr('href'),
             pubDate: $(item).find('time').text().replace(/[\t\n\r]/g, ''),
-        }
-    }
+        };
+    };
+
+    const feed = (page) => FEED_RSS_TEMPLATE.replace('{page}', page);
 
     // news articles
-    const news = new Promise((resolve, reject) => {
-        rss2json.load(FEED_RSS, (err, rss) => {
-            if (err) reject();
-            Promise.all(rss.items.map(item => ingest_article(hatch, item)))
-                .then(() => resolve())
-                .catch(err => reject(err))
-        });
+    const news = libingester.util.fetch_rss_entries(feed).then(items => {
+        return Promise.all(items.map(item => ingest_article(hatch, item)));
     });
 
     // gallery articles
@@ -250,7 +227,7 @@ function main() {
         return Promise.all(items.map(item => ingest_gallery(hatch, item)));
     });
 
-    Promise.all([gallery, news])
+    Promise.all([news, gallery])
         .then(() => hatch.finish());
 }
 
