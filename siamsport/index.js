@@ -39,12 +39,19 @@ const VIDEO_IFRAMES = [
     'sstv.siamsport.co.th'
 ];
 
+
 /** get articles metadata **/
 function _get_ingest_settings($) {
     const canonical_uri = $('meta[property="og:url"]').attr('content');
     const d = $(`.titlenews .black13, .newsde-title .black11,
                  .toptitle2 .black13t, .date-time, .font-gray`).text();
-    const date = new Date(Date.parse(moment(d,'DD-MM-YYYY hh:mm').format()));
+    let date='';
+    if(d.length>0)
+        date = new Date(Date.parse(moment(d,'DD-MM-YYYY hh:mm').format()));
+    else
+        date = moment().format('DD-MM-YYY hh:mm');
+    
+console.log(d.length);
     const desc = $(`meta[property="og:description"], meta[name="description"],
                     meta[name="Description"]`).attr('content') || '';
     const title = $('meta[property="og:title"]').attr('content') ||
@@ -93,7 +100,6 @@ function ingest_article(hatch, uri) {
         let meta = _get_ingest_settings($);
         if (!meta.title) throw {code: -1, message: 'File not Found!'}; // Some links return "File Not Found !"
 
-        console.log(meta.modified_date);
         // set first paragraph
         const divs = meta.body.contents().filter((i,elem) => {
             if (elem.attribs) return elem.attribs.style;
