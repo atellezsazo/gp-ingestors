@@ -1,13 +1,22 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
 const url = require('url');
-const template = require('./template');
 
-const BASE_URI = "http://dianarikasari.blogspot.com";
+const BASE_URI = 'http://dianarikasari.blogspot.com/search?max-results=';
+const CATEGORY_LINKS = [
+    'http://dianarikasari.blogspot.com/search/label/%2388lovelife?max-results=', //love life
+    'http://dianarikasari.blogspot.com/search/label/Fashion%20Diary?max-results=', //fashion diary
+    'http://dianarikasari.blogspot.com/search/label/Bidi%20Bidi%20Bong%20Bong?max-results=', //bidi bidi bong
+    'http://dianarikasari.blogspot.com/search/label/My%20Personal%20Life?max-results=', //my personal life
+    'http://dianarikasari.blogspot.com/search/label/Thoughts?max-results=', //thoughts
+    'http://dianarikasari.blogspot.com/search/label/%23DianaRikasariYoutube?max-results=', //Diana Rikasari Youtube
+];
 
-// Remove elements (body)
+// max number of links per category
+const MAX_LINKS = 10;
+
+// remove elements (body)
 const REMOVE_ELEMENTS = [
     'iframe',
     'noscript',
@@ -47,100 +56,130 @@ const CLEAN_TAGS = [
     'table',
 ];
 
+/** delete duplicated elements in array **/
+Array.prototype.unique=function(a){
+    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+});
+
+/**
+ * ingest_article
+ * @param {Object} hatch The Hatch object of the Ingester library
+ * @param {String} uri The string url
+ */
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        $profile('.date-outer').map(function() {
-            const date_published = new Date(Date.parse($profile(this).find('.date-header span').text()));
-            const title = $profile(this).find('.post-title').text();
+    return libingester.util.fetch_html(uri).then($ => {
+        const _body = $('.post-body div'); // messy body
+        const body = $('<div id="mybody"></div>');
+        const date_published = new Date(Date.parse($('.date-header span').text()));
+        const title = $('.post-title').text().replace(/\n/g,'');
 
-            // Ingest video post
-            const videos = $profile(this).find('.post-body iframe').first()[0] || $profile(this).find('.post-body script').first()[0];
-            if (videos) {
-                for (const video_iframe of video_iframes) {
-                    const video_url = videos.attribs.src;
-                    if (video_url.includes(video_iframe)) {
-                        const full_uri = url.format(video_url, { search: false })
-                        const video_asset = new libingester.VideoAsset();
-                        video_asset.set_canonical_uri(full_uri);
-                        video_asset.set_last_modified_date(date_published);
-                        video_asset.set_title(title);
-                        video_asset.set_download_uri(full_uri);
-                        hatch.save_asset(video_asset);
-                        return;
-                    }
-                }
+        // Ingest video post
+        const iframe = $('.post-body iframe, .post-body script').first()[0];
+        if (iframe) {
+            const video_url = $(iframe).attr('src') || '';
+            if (video_url.includes('youtube')) {
+                const video_asset = new libingester.VideoAsset();
+                const thumb_url = $('meta[property=\'og:image\']').attr('content');
+                const full_uri = url.format(video_url, { search: false })
+                // thumbnail
+                const thumbnail = libingester.util.download_image(thumb_url);
+                thumbnail.set_title(title);
+                hatch.save_asset(thumbnail);
+                // save video
+                video_asset.set_canonical_uri(full_uri);
+                video_asset.set_last_modified_date(date_published);
+                video_asset.set_title(title);
+                video_asset.set_download_uri(full_uri);
+                hatch.save_asset(video_asset);
+            }
+            return;
+        }
+
+        // Ingest Blog Post
+        const asset = new libingester.BlogArticle();
+        const author = $('.post-author a span').first().text();
+        const tags = $('.post-labels a').map((i,elem) => $(elem).text()).get();
+        const synopsis = $('meta[property=\'og:description\']').attr('content');
+        const read_more = 'Read more at www.dianarikasari.blogspot.com';
+
+        // creating new body
+        let last_p;
+        _body.contents().map((i,elem) => {
+            if (elem.name == 'br') {
+                last_p = undefined;
+                $(elem).remove();
+            } else if (elem.name == 'div') {
+                body.append($(elem));
+                last_p = undefined;
+            } else if (elem.name == 'img') {
+                body.append($('<figure></figure>').append(elem));
+                last_p = undefined;
             } else {
-                const asset = new libingester.NewsArticle();
-                const author = $profile(this).find('.post-author a').first();
-                const category = $profile(this).find('.post-labels a').map(function() {
-                    return $profile(this);
-                }).get();
-
-                const section = $profile(this).find('.post-labels').text().replace('Labels:', '');
-
-                // Set title section
-                asset.set_title(title);
-                asset.set_canonical_uri(uri);
-                asset.set_last_modified_date(date_published);
-                asset.set_section(section);
-
-                // Download images
-                let isFirst = true;
-                $profile(this).find('.post-body img').map(function() {
-                    if (this.attribs.src) {
-                        const image = libingester.util.download_img(this, BASE_URI);
-                        image.set_title(title);
-                        hatch.save_asset(image);
-
-                        if (isFirst) {
-                            asset.set_thumbnail(image);
-                            isFirst = false;
-                        }
-                        this.attribs['data-libingester-asset-id'] = image.asset_id;
-                    }
-                });
-
-                const body = $profile(this).find('.post-body').first();
-                asset.set_synopsis(body.text().substring(0, 140));
-
-                // remove elements and comments
-                body.contents().filter((index, node) => node.type === 'comment').remove();
-                body.find(REMOVE_ELEMENTS.join(',')).remove();
-
-                //clean tags
-                const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $profile(tag).removeAttr(attr));
-                body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-
-                const content = mustache.render(template.structure_template, {
-                    category: category,
-                    author: author,
-                    date_published: date_published,
-                    title: title,
-                    body: body.html(),
-                });
-
-                // save document
-                asset.set_document(content);
-                hatch.save_asset(asset);
+                if (!last_p) {
+                    body.append($('<p></p>'));
+                    last_p = body.find('p').last();
+                    last_p.append($(elem));
+                } else {
+                    last_p.append($(elem));
+                }
             }
         });
-    }).catch((err) => {
-        console.log("Ingestor: ", err);
-    });
+
+        // download images
+        let thumbnail;
+        body.find('img').map((i,elem) => {
+            if (elem.attribs.src) {
+                const image = libingester.util.download_img($(elem));
+                image.set_title(title);
+                hatch.save_asset(image);
+                if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            } else {
+                $(elem).remove();
+            }
+        });
+
+        // remove elements and comments
+        body.contents().filter((index, node) => node.type === 'comment').remove();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+
+        // clean tags
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+        body.find('p,div').filter((i,elem) => $(elem).text().trim() === '').remove();
+
+
+        // save document
+        console.log('processing',title);
+        asset.set_author(author);
+        asset.set_body(body);
+        asset.set_canonical_uri(uri);
+        asset.set_date_published(date_published);
+        asset.set_last_modified_date(date_published);
+        asset.set_read_more_text(read_more);
+        asset.set_synopsis(synopsis);
+        asset.set_tags(tags);
+        asset.set_title(title);
+        asset.render();
+        hatch.save_asset(asset);
+    })
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
-    new Promise((resolve, reject) => {
-        libingester.util.fetch_html(BASE_URI).then(($posts) => {
-            const posts_links = $posts('.post-title a').map(function() {
-                const uri = $posts(this).attr('href');
-                return url.resolve(BASE_URI, uri);
-            }).get();
-            Promise.all(posts_links.map((uri) => ingest_article(hatch, uri))).then(() => {
-                return hatch.finish();
-            }).catch((err) => console.log(err));
-        });
+    const hatch = new libingester.Hatch('dianarikasari', 'en');
+
+    const get_all_links = () => {
+        let all_links = [];
+        return Promise.all(
+            CATEGORY_LINKS.map(link => libingester.util.fetch_html(link + MAX_LINKS).then($ => {
+                const links = $('.post-title a').map((i,elem) => elem.attribs.href).get();
+                all_links = all_links.concat(links);
+            })
+        )).then(() => all_links.unique());
+    }
+
+    get_all_links().then(links => {
+        Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
     });
 }
 
