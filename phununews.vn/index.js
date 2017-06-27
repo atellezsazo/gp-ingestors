@@ -86,7 +86,7 @@ function _get_ingest_settings($) {
         lede: $(`<p>${$('.short_intro').text()}</p>`),
         modified_date: new Date(Date.parse(date)),
         custom_scss: CUSTOM_SCSS,
-        read_more: `Bài báo nguyên bản tại <a href="${canonical_uri}">phununews.vn</a>`,
+        read_more: `Bài gốc tại <a href="${canonical_uri}">phununews.vn</a>`,
         section: $('meta[property="article:section"]').attr('content') || $('.color1').text(),
         synopsis: $('meta[name="description"]').attr('content'),
         source: 'phununews.vn',
@@ -217,7 +217,7 @@ function ingest_article(hatch, uri) {
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
+    }).catch(err => {console.log(err);
         if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
@@ -291,7 +291,7 @@ function ingest_gallery(hatch, uri) {
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
+    }).catch(err => { console.log(err);
         if (err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
     });
 }
@@ -318,7 +318,6 @@ function ingest_video(hatch, uri) {
             thumb.set_title(title);
 
             // video settings
-            console.log('processing',title);
             asset.set_canonical_uri(uri);
             asset.set_download_uri(download_uri);
             asset.set_last_modified_date(new Date(Date.parse(modified_time)));
