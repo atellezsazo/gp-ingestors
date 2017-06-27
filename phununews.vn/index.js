@@ -211,13 +211,15 @@ function ingest_article(hatch, uri) {
             const author = $(last_p).text().replace('Theo ','');
             meta.author = author;
             $(last_p).parent().remove();
+        } else {
+            meta.author = 'Phụ Nữ News';
         }
         meta.body.find('p,figcation').filter((i,elem) => $(elem).text().trim() === '').remove();
 
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {console.log(err);
+    }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
@@ -285,13 +287,15 @@ function ingest_gallery(hatch, uri) {
             const author = $(last_p).text().replace('Theo ','');
             meta.author = author;
             $(last_p).parent().remove();
+        } else {
+            meta.author = 'Phụ Nữ News';
         }
         meta.body.find('p,figcation').filter((i,elem) => $(elem).text().trim() === '').remove();
 
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => { console.log(err);
+    }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
     });
 }
