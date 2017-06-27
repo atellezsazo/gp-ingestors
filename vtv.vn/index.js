@@ -1,6 +1,5 @@
 'use strict';
 
-
 const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 const url = require('url');
@@ -17,7 +16,7 @@ const rss_feed = [
     'http://vtv.vn/suc-khoe.rss', //Health
     'http://vtv.vn/giao-duc.rss', // education
     'http://vtv.vn/cong-nghe.rss', // tecnology
-    'http://vtv.vn/goc-doanh-nghiep.rss' //Enterpreurship
+    'http://vtv.vn/goc-doanh-nghiep.rss' //Enterpreunshi
 ];
 
 // cleaning elements
@@ -135,6 +134,7 @@ function ingest_article(hatch, uri) {
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find('.tinlienquan').removeAttr('class');
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
         body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
@@ -181,19 +181,23 @@ function ingest_article(hatch, uri) {
 
         asset.render();
         hatch.save_asset(asset);
+    }).catch((err) => {
+        console.log(err);
+        if (err.code == -1 || err.statusCode == 403) {
+            console.log('Ingest error:' + err);
+        }
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch('vtv', 'vi');
-
     const ingest = (uri_rss) => {
         return new Promise((resolve, reject) => {
             rss2json.load(uri_rss, (err, rss) => {
                 let promises = [];
                 for (let i = 0; i < max_links; i++) {
                     const item = rss.items[i];
-                    promises.push(ingest_article(hatch, item.url)); // ingest article
+                        promises.push(ingest_article(hatch, item.url)); // ingest article
                 }
                 Promise.all(promises).then(() => resolve())
                     .catch((err) => reject());
