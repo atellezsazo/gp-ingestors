@@ -108,7 +108,7 @@ function ingest_article(hatch, uri) {
         const info_date = $('meta[property="article:modified_time"]').attr('content');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
         const page = 'Vtv';
-        const read_more = `Đọc thêm tại <a href="${canonical_uri}">${page}</a>`;
+        const read_more = `Bài gốc tại <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
         const section = $('meta[property="article:section"]').attr('content') || 'Article';
         const title = $('meta[property="og:title"]').attr('content');
