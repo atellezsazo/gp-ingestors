@@ -80,14 +80,13 @@ function _get_ingest_settings($) {
     const canonical_uri = $('meta[property="og:url"]').attr('content');
     const date = $('meta[property="article:modified_time"]').attr('content');
     return {
-        author: $('meta[property="og:site_name"]').attr('content'), // no authors
         body: $('#content-subject-detail, .fck_detail').first(),
         canonical_uri: canonical_uri,
         date_published: Date.now(date),
         lede: $(`<p>${$('.short_intro').text()}</p>`),
         modified_date: new Date(Date.parse(date)),
         custom_scss: CUSTOM_SCSS,
-        read_more: `Baca lebih lanjut tentang <a href="${canonical_uri}">phununews.vn</a>`,
+        read_more: `Bài gốc tại <a href="${canonical_uri}">phununews.vn</a>`,
         section: $('meta[property="article:section"]').attr('content') || $('.color1').text(),
         synopsis: $('meta[name="description"]').attr('content'),
         source: 'phununews.vn',
@@ -131,6 +130,11 @@ function _download_image($, meta, hatch, asset) {
                 if (parent[0].name == 'p' || parent[0].name == 'table') {
                     name = parent[0].name;
                     parent[0].name = 'figure';
+
+                    // remove any character
+                    $(parent).contents().map((i,elem) => {
+                        if (elem.type === 'text') $(elem).remove();
+                    });
 
                     delete parent[0].attribs;
                     if (name == 'table') description = parent.find('tr').last().text();
@@ -201,13 +205,22 @@ function ingest_article(hatch, uri) {
             hatch.save_asset(image);
         }
 
+        // finding author
+        const last_p = meta.body.find('p strong').last()[0];
+        if (last_p) {
+            const author = $(last_p).text().replace('Theo ','');
+            meta.author = author;
+            $(last_p).parent().remove();
+        } else {
+            meta.author = 'Phụ Nữ News';
+        }
         meta.body.find('p,figcation').filter((i,elem) => $(elem).text().trim() === '').remove();
 
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
 
@@ -268,11 +281,22 @@ function ingest_gallery(hatch, uri) {
             });
         }
 
+        // finding author
+        const last_p = meta.body.find('p strong').last()[0];
+        if (last_p) {
+            const author = $(last_p).text().replace('Theo ','');
+            meta.author = author;
+            $(last_p).parent().remove();
+        } else {
+            meta.author = 'Phụ Nữ News';
+        }
+        meta.body.find('p,figcation').filter((i,elem) => $(elem).text().trim() === '').remove();
+
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET') return ingest_gallery(hatch, uri);
     });
 }
 
@@ -298,7 +322,6 @@ function ingest_video(hatch, uri) {
             thumb.set_title(title);
 
             // video settings
-            console.log('processing',title);
             asset.set_canonical_uri(uri);
             asset.set_download_uri(download_uri);
             asset.set_last_modified_date(new Date(Date.parse(modified_time)));
@@ -311,7 +334,7 @@ function ingest_video(hatch, uri) {
             hatch.save_asset(asset);
         }
     }).catch(err => {
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET') return ingest_video(hatch, uri);
     });
 }
 
@@ -353,8 +376,11 @@ function main() {
     const hatch = new libingester.Hatch('phununews', 'vi');
 
     _fetch_all_links(LINKS_BY_CATEGORY, MAX_LINKS).then(links => {
-        Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
+        return Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
             .then(() => hatch.finish());
+    })catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
