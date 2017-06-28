@@ -72,7 +72,6 @@ const REMOVE_ELEMENTS = [
     '.w824',
     '.tinmoi_st',
     '.VCObjectBoxRelatedNewsContentWrapper',
-    'b',
     'h1',
     'div[type="RelatedOneNews"]',
     'div[type="VideoStream"]',
@@ -135,7 +134,6 @@ function ingest_article(hatch, uri) {
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find('.tinlienquan').removeAttr('class');
         body.find(REMOVE_ELEMENTS.join(',')).remove();
-        body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
         body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
         //Remove empty figure
@@ -163,6 +161,8 @@ function ingest_article(hatch, uri) {
                 $(this).remove();
             }
         });
+        const last_p = body.find('p').last();
+        if(last_p.text().includes('TV Online')) last_p.remove();
 
         // Article Settings
         console.log('processing', title);
