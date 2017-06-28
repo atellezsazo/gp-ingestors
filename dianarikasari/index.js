@@ -3,7 +3,6 @@
 const libingester = require('libingester');
 const url = require('url');
 
-const BASE_URI = 'http://dianarikasari.blogspot.com/search?max-results=';
 const CATEGORY_LINKS = [
     'http://dianarikasari.blogspot.com/search/label/%2388lovelife?max-results=', //love life
     'http://dianarikasari.blogspot.com/search/label/Fashion%20Diary?max-results=', //fashion diary
@@ -55,6 +54,25 @@ const CLEAN_TAGS = [
     'span',
     'table',
 ];
+
+const CUSTOM_SCSS = `
+$primary-light-color: #5e7790;
+$primary-medium-color: #2d3e4e;
+$primary-dark-color: #1b242e;
+$accent-light-color: #F00EA5;
+$accent-dark-color: #C70A62;
+$background-light-color: #F0F4F7;
+$background-dark-color: #DADFE3;
+
+$title-font: 'Oswald';
+$body-font: 'Raleway';
+$display-font: 'Oswald';
+$logo-font: 'Oswald';
+$context-font: 'Oswald';
+$support-font: 'Raleway';
+
+@import '_default';
+`;
 
 /** delete duplicated elements in array **/
 Array.prototype.unique=function(a){
@@ -147,11 +165,11 @@ function ingest_article(hatch, uri) {
         body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
         body.find('p,div').filter((i,elem) => $(elem).text().trim() === '').remove();
 
-
         // save document
         console.log('processing',title);
         asset.set_author(author);
         asset.set_body(body);
+        asset.set_custom_scss(CUSTOM_SCSS);
         asset.set_canonical_uri(uri);
         asset.set_date_published(date_published);
         asset.set_last_modified_date(date_published);
