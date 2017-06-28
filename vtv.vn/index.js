@@ -90,7 +90,7 @@ $accent-dark-color: #006A9F;
 $background-light-color: #F5F6F7;
 $background-dark-color: #EFF1F2;
 $title-font: 'Arial';
-$body-font: 'Merriweather';
+$body-font: 'Noto serif';
 $display-font: 'Oswald';
 $context-font: 'Roboto Condensed';
 $support-font: 'Arial';
