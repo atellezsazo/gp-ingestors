@@ -1,9 +1,8 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 
-const RSS_FEED = 'https://www.pergidulu.com/feed/';
+const BASE_URI = 'https://www.pergidulu.com/posts/';
 
 //Remove attributes (images)
 const REMOVE_ATTR = [
@@ -125,7 +124,7 @@ function ingest_article(hatch, item) {
 function main() {
     const hatch = new libingester.Hatch('pergidulu', 'id');
 
-    libingester.util.fetch_html('https://www.pergidulu.com/posts/').then($ => {
+    libingester.util.fetch_html(BASE_URI).then($ => {
         const items = $('article').map((i,item) => {
             let data = item.attribs.class;
             let category = '';
@@ -149,7 +148,7 @@ function main() {
             }
         }).get();
 
-        Promise.all(items.map(item => ingest_article(hatch, item)))
+        return Promise.all(items.map(item => ingest_article(hatch, item)))
             .then(() => hatch.finish());
     }).catch(err => {
         console.log(err);
