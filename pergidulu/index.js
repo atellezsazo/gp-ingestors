@@ -150,6 +150,9 @@ function main() {
 
         return Promise.all(items.map(item => ingest_article(hatch, item)))
             .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
