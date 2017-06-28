@@ -376,8 +376,11 @@ function main() {
     const hatch = new libingester.Hatch('phununews', 'vi');
 
     _fetch_all_links(LINKS_BY_CATEGORY, MAX_LINKS).then(links => {
-        Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
+        return Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
             .then(() => hatch.finish());
+    })catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
