@@ -1,7 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 
 const RSS_FEED = 'https://www.pergidulu.com/feed/';
 
@@ -149,7 +148,7 @@ function main() {
             }
         }).get();
 
-        Promise.all(items.map(item => ingest_article(hatch, item)))
+        return Promise.all(items.map(item => ingest_article(hatch, item)))
             .then(() => hatch.finish());
     });
 }
