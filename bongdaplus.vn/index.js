@@ -234,7 +234,6 @@ function ingest_article(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        console.log(err);
         if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
