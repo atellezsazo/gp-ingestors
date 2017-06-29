@@ -1,7 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-// const thenifyAll = require('thenify-all');
 const rss2json = require('rss-to-json');
 const url = require('url');
 
@@ -25,7 +24,7 @@ const RSS_FEED = [
 ];
 
 // max links per category
-const MAX_LINKS = 5;
+const MAX_LINKS = 3;
 
 // cleaning elements
 const CLEAN_ELEMENTS = [
@@ -36,6 +35,7 @@ const CLEAN_ELEMENTS = [
     'i',
     'p',
     'span',
+    'strong',
     'table',
     'td',
     'tr',
@@ -107,6 +107,9 @@ Array.prototype.unique=function(a){
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
+        // excludes live stream pages
+        if ($('.livstrm').first()[0]) return;
+
         const asset = new libingester.BlogArticle();
         const author = $('.auth b').text();
         const category = $('.breakcrum').first().clone();
@@ -122,60 +125,35 @@ function ingest_article(hatch, uri) {
         const thumb_div = $('.thumbox').first();
         const thumb_src = thumb_div.find('img').attr('src');
         const thumb_caption = $('.summ').first()[0];
-        let body = $('.content').first().attr('id','mybody');
+        const body = $('.content').first().attr('id','mybody');
 
-        if (body.find('table').first()[0]) console.log(uri);
+        // fixing different variations of image tags
+        body.find('.thumins').map((i,elem) => {
+            const span_img = $(elem).find('span img').first();
+            const img = $(elem).find('img').first();
+            const caption = $(elem).find('.thumcap').text();
+            const figure = $('<figure></figure>');
 
-
-        const download_thumins = () => {
-            body.find('.thumins').map((i,elem) => {
-                const img = $(elem).find('img').first();
-                const caption = $(elem).find('.thumcap').text();
-                if (img[0]) {
-                    const figure = $('<figure></figure>').append(img.clone());
-                    if (caption) figure.append($(`<figcaption><p>${caption}</p></figcaption>`));
+            if (caption) figure.append($(`<figcaption><p>${caption}</p></figcaption>`));
+            if (span_img[0]) {
+                figure.prepend(span_img.clone());
+                $(elem).replaceWith(figure);
+            } else if (img[0]) {
+                const thumins = $(elem).find('.thumins').first()[0];
+                if (!thumins) {
+                    figure.prepend(img.clone());
                     $(elem).replaceWith(figure);
                 }
-            });
-        }
-        // fixed algunos body's
-        // console.log(body[0].attribs);
-        // const live_stream = body.find('#LiveStreamr').first();
-        // if (live_stream)
-        // if (live_stream[0]) {
-        //     console.log('replace');
-        //     live_stream.find('.livmsg').insertAfter(live_stream);
-        //     live_stream.remove();
-        // }
-        if ($('.livstrm').first()[0]) { return;
-            // body = $('.livstrm').first();
-            // body.find('.livmsg').map((i,elem) => {
-            //     const tag = $(elem).find('.livcont').first()[0];
-            //     if (tag) {
-            //         const span = $(elem).find('span').first()[0];
-            //         if (span) $(span).replaceWith($(`<p><strong>${$(span).text()}</strong><p>`));
-            //         $(elem).find('div').map((i,elem) => elem.name = 'p');
-            //         const period = $(elem).find('.period').first()[0];
-            //         if (period) $(period).insertAfter($(period).parent());
-            //         const thumins = $(elem).find('.thumins').first()[0];
-            //         if (thumins) $(thumins).parent().replaceWith(thumins);
-            //         $(elem).replaceWith($(tag));
-            //         download_thumins();
-            //         return;
-            //     }
-            // });
-        }
-
-        // console.log(body.html());
-
-        // fixed images on div's
-        download_thumins();
+            }
+        });
 
         // convert div's in paragraphs
         body.contents().map((i,elem) => {
-            const attr = elem.attribs || {class: ''};
-            if (elem.name == 'div' && !attr.class.includes('livmsg')) elem.name = 'p'
+            if (elem.name == 'div') elem.name = 'p'
         });
+
+        // convert tag with font weight bold in tag strong
+        body.find('span[style="font-weight: bold;"]').map((i,elem) => elem.name = 'strong');
 
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
@@ -220,7 +198,7 @@ function ingest_article(hatch, uri) {
             if (!thumb) asset.set_thumbnail(thumb = image);
         });
 
-        // embed tags
+        // embed videos
         body.find('.embedbox').map((i,elem) => {
             const parent = $(elem).parent()[0] || {};
             const text = $('.embcapt').first().text();
@@ -233,15 +211,10 @@ function ingest_article(hatch, uri) {
             }
         });
 
-        //
-        body.find('p table').map((i,elem) => {
-            if ($(elem).parent()[0].name == 'p') $(elem).insertAfter($(elem).parent());
-        });
-
-        // console.log(body.html());
         // clean empty tags
-        body.find('div').map((i,elem) => {
-
+        body.find('p').map((i,elem) => {
+            const tag = $(elem).find('p, figure').first()[0];
+            if (tag) elem.name = 'div';
         });
         body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
@@ -262,9 +235,11 @@ function ingest_article(hatch, uri) {
         hatch.save_asset(asset);
     }).catch(err => {
         console.log(err);
+        if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
 
+// return the items for one link
 function _load_rss(rss_uri) {
     return new Promise((resolve, reject) => {
         rss2json.load(rss_uri, (err, rss) => {
@@ -274,6 +249,7 @@ function _load_rss(rss_uri) {
     });
 }
 
+// return all links found in rss
 function _load_all_rss_links(rss_list) {
     let all_links = [];
     return Promise.all(rss_list.map(rss => _load_rss(rss).then(items => {
@@ -284,24 +260,13 @@ function _load_all_rss_links(rss_list) {
 function main() {
     const hatch = new libingester.Hatch('bongdaplus-vn', 'vi');
 
-    // _load_all_rss_links(RSS_FEED).then(links =>
-    //     Promise.all(links.map(link => ingest_article(hatch, link)))
-    //         .then(() => hatch.finish())
-    // ).catch(err => {
-    //     console.log(err);
-    //     process.exitCode = 1;
-    // });
-
-    const uris = [
-        // 'http://bongdaplus.vn/tin-tuc/biem-hoa/anh-che-thi-cu-qua-lang-kinh-bong-da-1901351706.html',
-        // 'http://bongdaplus.vn/tin-tuc/the-thao/tennis/kvitova-rut-khoi-giai-o-eastbourne-1904551706.html',
-        // 'http://bongdaplus.vn/tin-tuc/phap/ligue-1/tuong-lai-cua-ben-arfa-tai-psg-di-khong-duoc-o-khong-xong-1905951706.html',
-        'http://bongdaplus.vn/tin-tuc/diem-tin/tin-nong-toi-29-6-van-persie-tren-duong-tro-lai-giai-ngoai-hang-anh-1906651706.html',
-        // 'http://bongdaplus.vn/tin-tuc/the-thao/tennis/big-four-du-mat-trong-top-4-hat-giong-o-wimbledon-1906161706.html',
-    ];
-
-    Promise.all(uris.map(uri => ingest_article(hatch, uri)))
-        .then(() => hatch.finish());
+    _load_all_rss_links(RSS_FEED).then(links =>
+        Promise.all(links.map(link => ingest_article(hatch, link)))
+            .then(() => hatch.finish())
+    ).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
+    });
 }
 
 main();

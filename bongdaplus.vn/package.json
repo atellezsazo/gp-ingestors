@@ -7,7 +7,6 @@
     },
     "dependencies": {
         "libingester": "^2.2.0",
-        "rss-to-json": "^1.0.2",
-        "thenify-all": "^1.6.0"
+        "rss-to-json": "^1.0.2"
     }
 }
