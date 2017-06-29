@@ -378,7 +378,7 @@ function main() {
     _fetch_all_links(LINKS_BY_CATEGORY, MAX_LINKS).then(links => {
         return Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
             .then(() => hatch.finish());
-    })catch(err => {
+    }).catch(err => {
         console.log(err);
         process.exitCode = 1;
     });
