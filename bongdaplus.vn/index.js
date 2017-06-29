@@ -1,11 +1,9 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
-const mustache = require('mustache');
+// const thenifyAll = require('thenify-all');
 const rss2json = require('rss-to-json');
 const url = require('url');
-const template = require('./template');
 
 const BASE_URI = 'http://bongdaplus.vn/';
 const RSS_FEED = [
@@ -25,6 +23,9 @@ const RSS_FEED = [
     'http://bongdaplus.vn/rss/europa-league/132.rss', // europa league
     'http://bongdaplus.vn/rss/biem-hoa/137.rss', // carton
 ];
+
+// max links per category
+const MAX_LINKS = 5;
 
 // cleaning elements
 const CLEAN_ELEMENTS = [
@@ -62,53 +63,43 @@ const REMOVE_ATTR = [
     'type',
     'w',
     'width',
-
 ];
 
 // remove elements (body)
 const REMOVE_ELEMENTS = [
-    '.adtxt',
-    '.auth',
-    '.cl10',
-    '.clr',
-    '.cref',
-    '.embedbox',
-    '.fbshr',
-    '.goosip',
-    '.moreref',
-    '.nsrc',
-    '.taglst',
-    '.tit',
-    '#AbdVideoInPagePlayerWrapper',
     'br',
     'iframe',
     'noscript',
     'script',
     'style',
+    '.fbshr',
+    '.cl10',
+    '.thumbox',
 ];
 
-// delete duplicated elements in array
-Array.prototype.unique = function(a) {
-    return function() { return this.filter(a) }
-}((a, b, c) => {
-    return c.indexOf(a, b + 1) < 0
-});
+const CUSTOM_SCSS = `
+$primary-light-color: #E31314;
+$primary-medium-color: #222222;
+$primary-dark-color: #555555;
+$accent-light-color: #FF0002;
+$accent-dark-color: #DE0E10;
+$background-light-color: #EEEEEE;
+$background-dark-color: #E8E8E8;
 
-// remove empty paragraphs
-function remove_empty_tag($, elem, tag = 'p') {
-    $(elem).find(tag).get().map((t) => {
-        const text = $(t).text(),
-            child = $(t).children();
-        if (child.length == 0) {
-            $(t).remove();
-        } else if (child.length == 1) {
-            const ch = $(child[0]).children();
-            if (text.length <= 1 && ch.length == 0) {
-                $(t).remove();
-            }
-        }
-    });
-}
+$title-font: 'Arimo';
+$body-font: 'Merriweather';
+$display-font: 'Arimo';
+$logo-font: 'Fira Sans';
+$context-font: 'Arimo';
+$support-font: 'Arimo';
+
+@import "_default";
+`;
+
+// delete duplicated elements in array
+Array.prototype.unique=function(a){
+    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+});
 
 /**   ingest_article()
  * @param {Object} hatch The Hatch object of the Ingester library
@@ -116,109 +107,201 @@ function remove_empty_tag($, elem, tag = 'p') {
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
-        const asset = new libingester.NewsArticle();
+        const asset = new libingester.BlogArticle();
         const author = $('.auth b').text();
-        const body = $($('.ncont').first()[0] || $('.nlive').first()[0]);
         const category = $('.breakcrum').first().clone();
         const copyright = $('.copybar b font').text();
-        const description = $('meta[property="og:description"]').attr('content');
-        const published = body.find('.period').first().text().replace(' ', ''); // for template
+        const synopsis = $('meta[property="og:description"]').attr('content');
         const modified_date = $('meta[itemprop="dateModified"]').attr('content') // for asset
         const modified_time = modified_date.replace(' ', 'T').replace(/\s/g, '');
-        const keywords = $('.taglst').first().clone();
+        const published = new Date(Date.parse(modified_time));
+        const read_more = 'Xem thêm tại www.bongdaplus.vn';
+        const tags = $('.taglst a').map((i,elem) => $(elem).text()).get();
         const section = $('meta[name="keywords"]').attr('content');
-        const title = body.find('.tit').text() || $('meta[property="og:title"]').attr('content');
+        const title = $('meta[property="og:title"]').attr('content').replace(' - Bongdaplus.vn','');
+        const thumb_div = $('.thumbox').first();
+        const thumb_src = thumb_div.find('img').attr('src');
+        const thumb_caption = $('.summ').first()[0];
+        let body = $('.content').first().attr('id','mybody');
 
-        // article settings
-        asset.set_canonical_uri(uri);
-        asset.set_last_modified_date(new Date(Date.parse(modified_time)));
-        asset.set_license(copyright);
-        asset.set_section(section);
-        asset.set_synopsis(description);
-        asset.set_title(title);
+        if (body.find('table').first()[0]) console.log(uri);
+
+
+        const download_thumins = () => {
+            body.find('.thumins').map((i,elem) => {
+                const img = $(elem).find('img').first();
+                const caption = $(elem).find('.thumcap').text();
+                if (img[0]) {
+                    const figure = $('<figure></figure>').append(img.clone());
+                    if (caption) figure.append($(`<figcaption><p>${caption}</p></figcaption>`));
+                    $(elem).replaceWith(figure);
+                }
+            });
+        }
+        // fixed algunos body's
+        // console.log(body[0].attribs);
+        // const live_stream = body.find('#LiveStreamr').first();
+        // if (live_stream)
+        // if (live_stream[0]) {
+        //     console.log('replace');
+        //     live_stream.find('.livmsg').insertAfter(live_stream);
+        //     live_stream.remove();
+        // }
+        if ($('.livstrm').first()[0]) { return;
+            // body = $('.livstrm').first();
+            // body.find('.livmsg').map((i,elem) => {
+            //     const tag = $(elem).find('.livcont').first()[0];
+            //     if (tag) {
+            //         const span = $(elem).find('span').first()[0];
+            //         if (span) $(span).replaceWith($(`<p><strong>${$(span).text()}</strong><p>`));
+            //         $(elem).find('div').map((i,elem) => elem.name = 'p');
+            //         const period = $(elem).find('.period').first()[0];
+            //         if (period) $(period).insertAfter($(period).parent());
+            //         const thumins = $(elem).find('.thumins').first()[0];
+            //         if (thumins) $(thumins).parent().replaceWith(thumins);
+            //         $(elem).replaceWith($(tag));
+            //         download_thumins();
+            //         return;
+            //     }
+            // });
+        }
+
+        // console.log(body.html());
+
+        // fixed images on div's
+        download_thumins();
+
+        // convert div's in paragraphs
+        body.contents().map((i,elem) => {
+            const attr = elem.attribs || {class: ''};
+            if (elem.name == 'div' && !attr.class.includes('livmsg')) elem.name = 'p'
+        });
 
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         body.find(REMOVE_ELEMENTS.join(',')).remove();
         clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
-        clean_tags(category.find(CLEAN_ELEMENTS.join(',')));
         body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
-        remove_empty_tag($, body);
-        body.find('span').get().map((span) => {
-            const text = $(span).text().substring(0, 8);
-            if (text.includes('VIDEO:')) {
-                $(span).remove();
-            }
-        });
 
-        // generating tags
-        const categories = cheerio('<div></div>');
-        category.find('a').get().map((a) => {
-            categories.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${$(a).text()}</a>`));
-        });
-        const tags = cheerio('<div></div>');
-        keywords.find('a').get().map((a) => {
-            tags.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${$(a).text()}</a>`));
-        });
+        // download main image
+        let thumb;
+        if (thumb_src) {
+            const image = libingester.util.download_image(thumb_src);
+            image.set_title(title);
+            hatch.save_asset(image);
+            asset.set_main_image(thumb = image);
+            asset.set_thumbnail(thumb);
+            thumb_div.remove();
+            if (thumb_caption) {
+                $(thumb_caption).find('div').remove();
+                asset.set_main_image_caption($(thumb_caption).text());
+            }
+        }
 
         // download images
-        let thumb;
-        body.find('img').get().map((img) => {
-            if (img.attribs.src) {
-                clean_attr(img);
-                const src = img.attribs.src;
-                img.attribs.src = src.substring(src.lastIndexOf('http'));
-                const image = libingester.util.download_img(img);
-                image.set_title(title);
-                hatch.save_asset(image);
-                if (!thumb) {
-                    asset.set_thumbnail(thumb = image);
+        body.find('img').map((i,elem) => {
+            const src = elem.attribs.src;
+            let parent = $(elem).parent();
+            let image;
+            if (parent[0].name == 'figure') {
+                parent = parent.parent();
+                if (parent[0].name == 'p') {
+                    $(elem).parent().insertAfter(parent);
                 }
+                image = libingester.util.download_img(body.find(`img[src="${src}"]`).first());
             } else {
-                $(img).remove();
+                const figure = $('<figure></figure>').append($(elem).clone());
+                image = libingester.util.download_img(figure.children());
+                $(elem).replaceWith(figure);
+            }
+            image.set_title(title);
+            hatch.save_asset(image);
+            if (!thumb) asset.set_thumbnail(thumb = image);
+        });
+
+        // embed tags
+        body.find('.embedbox').map((i,elem) => {
+            const parent = $(elem).parent()[0] || {};
+            const text = $('.embcapt').first().text();
+            const src = $('.embitem iframe').first().attr('src');
+            if (src && text && parent.name == 'p') {
+                $(`<p><strong>${text}</strong></p>`).insertBefore(parent);
+                const video = libingester.util.get_embedded_video_asset($(elem), src);
+            } else {
+                $(elem).remove();
             }
         });
 
-        const content = mustache.render(template.structure_template, {
-            author: author,
-            body: body.html(),
-            category: categories.html(),
-            published_date: published,
-            tags: tags.html(),
-            title: title,
+        //
+        body.find('p table').map((i,elem) => {
+            if ($(elem).parent()[0].name == 'p') $(elem).insertAfter($(elem).parent());
         });
 
-        asset.set_document(content);
+        // console.log(body.html());
+        // clean empty tags
+        body.find('div').map((i,elem) => {
+
+        });
+        body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+
+        // article settings
+        console.log('processing',title);
+        asset.set_author(author);
+        asset.set_body(body);
+        asset.set_canonical_uri(uri);
+        asset.set_custom_scss(CUSTOM_SCSS);
+        asset.set_last_modified_date(published);
+        asset.set_date_published(published);
+        asset.set_license(copyright);
+        asset.set_read_more_text(read_more);
+        asset.set_synopsis(synopsis);
+        asset.set_tags(tags);
+        asset.set_title(title);
+        asset.render();
         hatch.save_asset(asset);
-    })
+    }).catch(err => {
+        console.log(err);
+    });
+}
+
+function _load_rss(rss_uri) {
+    return new Promise((resolve, reject) => {
+        rss2json.load(rss_uri, (err, rss) => {
+            if (err) reject(err);
+            else resolve(rss.items.slice(0,MAX_LINKS));
+        });
+    });
+}
+
+function _load_all_rss_links(rss_list) {
+    let all_links = [];
+    return Promise.all(rss_list.map(rss => _load_rss(rss).then(items => {
+        items.map(item => all_links.push(item.link));
+    }))).then(() => all_links.unique());
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
-    let links = [];
-    const get_links = (f) => {
-        return Promise.all(RSS_FEED.map((uri_rss) => {
-            return new Promise((resolve, reject) => {
-                rss2json.load(uri_rss, (err, rss) => {
-                    if (err) {
-                        reject(err);
-                    }
-                    for (let i = 0; i < 5; i++) {
-                        const item = rss.items[i]
-                        links.push(item.url);
-                    }
-                    resolve();
-                })
-            })
-        })).then(f);
-    };
+    const hatch = new libingester.Hatch('bongdaplus-vn', 'vi');
 
-    get_links(() => Promise.all(
-        links.unique().map((uri) => ingest_article(hatch, uri))
-    ).then(() => {
-        return hatch.finish();
-    }));
+    // _load_all_rss_links(RSS_FEED).then(links =>
+    //     Promise.all(links.map(link => ingest_article(hatch, link)))
+    //         .then(() => hatch.finish())
+    // ).catch(err => {
+    //     console.log(err);
+    //     process.exitCode = 1;
+    // });
+
+    const uris = [
+        // 'http://bongdaplus.vn/tin-tuc/biem-hoa/anh-che-thi-cu-qua-lang-kinh-bong-da-1901351706.html',
+        // 'http://bongdaplus.vn/tin-tuc/the-thao/tennis/kvitova-rut-khoi-giai-o-eastbourne-1904551706.html',
+        // 'http://bongdaplus.vn/tin-tuc/phap/ligue-1/tuong-lai-cua-ben-arfa-tai-psg-di-khong-duoc-o-khong-xong-1905951706.html',
+        'http://bongdaplus.vn/tin-tuc/diem-tin/tin-nong-toi-29-6-van-persie-tren-duong-tro-lai-giai-ngoai-hang-anh-1906651706.html',
+        // 'http://bongdaplus.vn/tin-tuc/the-thao/tennis/big-four-du-mat-trong-top-4-hat-giong-o-wimbledon-1906161706.html',
+    ];
+
+    Promise.all(uris.map(uri => ingest_article(hatch, uri)))
+        .then(() => hatch.finish());
 }
 
 main();

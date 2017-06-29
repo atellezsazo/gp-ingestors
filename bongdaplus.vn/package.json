@@ -1,12 +1,13 @@
 {
-    "name": "libingester-bongdaplus",
-    "version": "0.0.1",
+    "name": "libingester-bongdaplus-vn",
+    "version": "0.0.2",
     "license": "UNLICENSED",
+    "scripts": {
+        "start": "node --harmony_default_parameters index.js"
+    },
     "dependencies": {
-        "libingester": "^1.0.0",
-        "mustache": "^2.3.0",
-        "request": "^2.80.0",
-        "request-promise": "^4.1.1",
-        "rss-to-json": "^1.0.2"
+        "libingester": "^2.2.0",
+        "rss-to-json": "^1.0.2",
+        "thenify-all": "^1.6.0"
     }
 }
