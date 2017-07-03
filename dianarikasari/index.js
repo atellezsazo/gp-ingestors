@@ -179,7 +179,9 @@ function ingest_article(hatch, uri) {
         asset.set_title(title);
         asset.render();
         hatch.save_asset(asset);
-    })
+    }).catch(err => {
+        if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
+    });
 }
 
 function main() {
@@ -196,8 +198,11 @@ function main() {
     }
 
     get_all_links().then(links => {
-        Promise.all(links.map(uri => ingest_article(hatch, uri)))
+        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
             .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
