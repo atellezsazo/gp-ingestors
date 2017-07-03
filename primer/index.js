@@ -1,10 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const rp = require('request-promise');
-const rss2json = require('rss-to-json');
-const url = require('url');
-const xml2js = require('xml2js');
 
 const BASE_URI = 'http://primer.com.ph/blog/2017/';
 const RSS_URI = 'http://primer.com.ph/blog/feed/';
@@ -51,6 +47,7 @@ const CLEAN_TAGS = [
     'i',
     'img',
     'span',
+    'style',
     'table',
 ];
 
@@ -96,15 +93,6 @@ function ingest_article(hatch, item) {
             asset.set_thumbnail(main_img);
         }
 
-        body.find('p img').map(function(){
-            const span=$(this).next()[0] || {};
-            if(span.name=='span'){
-                $(span).insertAfter($(this).parent());
-            }
-            $(this).insertAfter($(this).parent());
-
-        });
-
         // download video
         body.find('iframe').map(function() {
             const src = this.attribs.src;
@@ -125,8 +113,6 @@ function ingest_article(hatch, item) {
         //clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find(REMOVE_ELEMENTS.join(',')).remove();
-        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-        body.find('p').filter((i,elem) => $(elem).is(':empty')).remove(); //Cleaning empty paragraph
 
         let author = $('meta[name="author"]').attr('content');
         let info_trash = body.find('p').last()[0];
@@ -140,17 +126,35 @@ function ingest_article(hatch, item) {
 
        // download images
        body.find('img').map(function() {
-           let img = $('<figure></figure>').append($(this).clone());
-           let figcaption = $(this).next()[0] || {};
-           if (figcaption.name == 'span') {
-               img.append($(`<figcaption><p>${$(figcaption).text()}</p></figcaption>`));
-               $(figcaption).remove();
-           }
-           const image = libingester.util.download_img($(img.children()[0]));
-           $(this).replaceWith(img);
-           image.set_title(title);
-           hatch.save_asset(image);
+            let img = $('<figure></figure>').append($(this).clone());
+            let figcaption = $(this).next()[0] || {};
+            if (figcaption.name=='span' || figcaption.name=='em') {
+                img.append($(`<figcaption><p>${$(figcaption).text()}</p></figcaption>`));
+                $(figcaption).remove();
+            }
+            else {
+                const parent = $(this).parent().next();
+                const span = parent.find('span').first()[0] || {attribs: {}};
+                if (span.attribs.style=='font-size: 10pt') {
+                    img.append($(`<figcaption><p>${$(span).text()}</p></figcaption>`));
+                    parent.remove();
+                }
+            }
+            const image = libingester.util.download_img($(img.children()[0]));
+            $(this).replaceWith(img);
+            image.set_title(title);
+            hatch.save_asset(image);
        });
+       //Replace p with figure
+       body.find('p figure').map(function(){
+           const parent = $(this).parent();
+           if (parent[0].name=='p') {
+               parent.replaceWith($(this));
+           }
+       });
+
+       body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+       body.find('p').filter((i,elem) => $(elem).is(':empty')).remove(); //Cleaning empty paragraph
 
         // Article Settings
         console.log('processing', title);
@@ -168,14 +172,14 @@ function ingest_article(hatch, item) {
         asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
+        console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_article(hatch, uri);
         }
     });
-    }
+}
 
 function main() {
-
     // wordpress pagination
     const feed = libingester.util.create_wordpress_paginator(RSS_URI);
     const hatch = new libingester.Hatch('primer', 'en');
@@ -183,7 +187,7 @@ function main() {
              Promise.all(rss.map(item => ingest_article(hatch, item)))
                      .then(() => hatch.finish());
         }).catch((err) => {
-            console.log('Error '+err);
+            console.log('Error ',err);
          });
 }
 
