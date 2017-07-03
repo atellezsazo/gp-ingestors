@@ -1,5 +1,6 @@
 'use strict';
 
+const Promise = require("bluebird");
 const libingester = require('libingester');
 const url = require('url');
 
@@ -75,8 +76,10 @@ $support-font: 'Raleway';
 `;
 
 /** delete duplicated elements in array **/
-Array.prototype.unique=function(a){
-    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+Array.prototype.unique = function(a) {
+    return function() { return this.filter(a) }
+}(function(a, b, c) {
+    return c.indexOf(a, b + 1) < 0
 });
 
 /**
@@ -89,7 +92,7 @@ function ingest_article(hatch, uri) {
         const _body = $('.post-body div'); // messy body
         const body = $('<div id="mybody"></div>');
         const date_published = new Date(Date.parse($('.date-header span').text()));
-        const title = $('.post-title').text().replace(/\n/g,'');
+        const title = $('.post-title').text().replace(/\n/g, '');
 
         // Ingest video post
         const iframe = $('.post-body iframe, .post-body script').first()[0];
@@ -99,7 +102,7 @@ function ingest_article(hatch, uri) {
                 const video_asset = new libingester.VideoAsset();
                 const thumb_url = $('meta[property=\'og:image\']').attr('content');
                 const full_uri = url.format(video_url, { search: false })
-                // thumbnail
+                    // thumbnail
                 const thumbnail = libingester.util.download_image(thumb_url);
                 thumbnail.set_title(title);
                 hatch.save_asset(thumbnail);
@@ -116,13 +119,13 @@ function ingest_article(hatch, uri) {
         // Ingest Blog Post
         const asset = new libingester.BlogArticle();
         const author = $('.post-author a span').first().text();
-        const tags = $('.post-labels a').map((i,elem) => $(elem).text()).get();
+        const tags = $('.post-labels a').map((i, elem) => $(elem).text()).get();
         const synopsis = $('meta[property=\'og:description\']').attr('content');
         const read_more = 'Read more at www.dianarikasari.blogspot.com';
 
         // creating new body
         let last_p;
-        _body.contents().map((i,elem) => {
+        _body.contents().map((i, elem) => {
             if (elem.name == 'br') {
                 last_p = undefined;
                 $(elem).remove();
@@ -145,7 +148,7 @@ function ingest_article(hatch, uri) {
 
         // download images
         let thumbnail;
-        body.find('img').map((i,elem) => {
+        body.find('img').map((i, elem) => {
             if (elem.attribs.src) {
                 const image = libingester.util.download_img($(elem));
                 image.set_title(title);
@@ -163,10 +166,10 @@ function ingest_article(hatch, uri) {
         // clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-        body.find('p,div').filter((i,elem) => $(elem).text().trim() === '').remove();
+        body.find('p,div').filter((i, elem) => $(elem).text().trim() === '').remove();
 
         // save document
-        console.log('processing',title);
+        console.log('processing', title);
         asset.set_author(author);
         asset.set_body(body);
         asset.set_custom_scss(CUSTOM_SCSS);
@@ -191,15 +194,18 @@ function main() {
         let all_links = [];
         return Promise.all(
             CATEGORY_LINKS.map(link => libingester.util.fetch_html(link + MAX_LINKS).then($ => {
-                const links = $('.post-title a').map((i,elem) => elem.attribs.href).get();
+                const links = $('.post-title a').map((i, elem) => elem.attribs.href).get();
                 all_links = all_links.concat(links);
-            })
-        )).then(() => all_links.unique());
+            }))).then(() => all_links.unique());
     }
 
     get_all_links().then(links => {
-        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
-            .then(() => hatch.finish());
+        return Promise.map(links, (uri) => ingest_article(hatch, uri), { concurrency: 1 })
+            .then(() => hatch.finish())
+            .catch(err => {
+                console.log(err);
+                process.exitCode = 1;
+            });
     }).catch(err => {
         console.log(err);
         process.exitCode = 1;
