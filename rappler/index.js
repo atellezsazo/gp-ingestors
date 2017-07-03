@@ -54,6 +54,7 @@ const REMOVE_ATTR = [
     'align',
     'border',
     'class',
+    'dir',
     'onclick',
     'onmouseover',
     'style',
@@ -62,6 +63,7 @@ const REMOVE_ATTR = [
 
 /** remove elements (body) **/
 const REMOVE_ELEMENTS = [
+    'blockquote',
     'div',
     'noscript',
     'script',
@@ -76,10 +78,10 @@ Array.prototype.unique=function(a){
 /** get articles metadata **/
 function _get_ingest_settings($) {
     const canonical_uri = $('link[rel="canonical"]').attr('href');
-    const modDate = $('meta[name="bt:modDate"]').attr('content');
+    const modDate = $('meta[name="bt:modDate"], meta[name="bt:pubDate"]').attr('content');
     const date = new Date(Date.parse(modDate));
     return {
-        author: $('meta[name="bt:author"]').attr('content'), // no authors
+        author: $('meta[name="bt:author"]').attr('content'),
         body: $('.story-area .storypage-divider').first(),
         canonical_uri: canonical_uri,
         date_published: date,
@@ -87,10 +89,10 @@ function _get_ingest_settings($) {
         modified_date: date,
         custom_scss: CUSTOM_SCSS,
         read_more: `Original Article at <a href="${canonical_uri}">www.rappler.com</a>`,
-        section: $('.wrapper .label-wrapper a').first().text().trim(),
+        section: $('.wrapper .label-wrapper a, label.no-margin a b').first().text().trim(),
         synopsis: $('meta[name="description"]').attr('content'),
         source: 'rappler',
-        title: $('meta[property="og:title"]').attr('content'),
+        title: $('meta[property="og:title"], meta[name="og:title"]').attr('content'),
         uri_thumb: $('meta[property="og:image"]').attr('content'),
     }
 }
@@ -175,10 +177,14 @@ function _download_image($, meta, hatch, asset) {
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
+        // no body, rendered by script
+        if ($('div#app').first()[0]) return;
+
         const asset = new libingester.NewsArticle();
         let meta = _get_ingest_settings($);
         let thumbnail;
 
+        // function for download image
         const download_img = (elem) => {
             if (elem.attribs.src) {
                 const image = libingester.util.download_img($(elem));
@@ -190,22 +196,64 @@ function ingest_article(hatch, uri) {
             }
         };
 
+        // resolve the thumbnail from youtube
+        function get_url_thumb_youtube(embed_src) {
+            const thumb = '/maxresdefault.webp';
+            const base_uri_img = 'https://i.ytimg.com/vi_webp/';
+            const uri = url.parse(embed_src);
+            if (uri.hostname === 'www.youtube.com' && uri.pathname.includes('/embed/')) {
+                const path = uri.pathname.replace('/embed/','') + thumb;
+                return url.resolve(base_uri_img, path);
+            }
+            return undefined;
+        }
+        console.log(meta.body.html());
+        // download videos
+        meta.body.find('.blob-inline').map((i,elem) => {
+            const src = $(elem).find('iframe').attr('src') || '';
+            if (src.includes('youtube')) {
+                const thumb_uri = get_url_thumb_youtube(src);
+                const image = libingester.util.download_image(thumb_uri);
+                image.set_title(meta.title);
+                hatch.save_asset(image);
+                const video = libingester.util.get_embedded_video_asset($(elem), src);
+                video.set_title(meta.title);
+                video.set_thumbnail(image);
+                hatch.save_asset(video);
+            }
+        });
+
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
-        meta.body.find('span').filter((i,span) => $(span).text().includes('Ads by AdAsia')).remove();
-        // meta.body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
 
-        // download images
+        // remove facebook comments
+        meta.body.find('iframe').map((i,elem) => {
+            const src = elem.attribs.src || '';
+            if (src.includes('facebook')) {
+                let parent = $(elem).parent();
+                while (parent[0]) {
+                    if (parent[0].name == 'p') {
+                        parent.remove();
+                        break;
+                    } else {
+                        parent = parent.parent();
+                    }
+                }
+            }
+        });
+
+
+        // fix images, add figure, figcaption and download
         meta.body.find('img').map((i,elem) => {
             const src = elem.attribs['data-original'];
             const alt = elem.attribs.alt;
             let parent = $(elem).parent();
             while (parent[0]) {
-                if (parent[0].name == 'p') {
+                if (parent[0].name == 'p' || parent[0].name == 'h1') {
                     let figure = $(`<figure><img src="${src}" alt="${alt}"/></figure>`);
-                    let next = parent.next()[0] || parent.find('.caption').first()[0] || {attribs: {}};
+                    let next = parent.find('.caption').first()[0] || parent.next()[0] || {attribs: {}};
                     if (next.attribs.class == 'caption') {
                         if ($(next).text().trim() !== '') {
                             figure.append($('<figcaption></figcaption>').append($(next).clone()));
@@ -230,13 +278,16 @@ function ingest_article(hatch, uri) {
         }
 
         // clean tags
-        meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        meta.body.find('p, span').filter((i,elem) => $(elem).text().trim() === '').remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
 
         // clear '- Rappler.com' in the last paragraph
+        const rappler_text = ['– Rappler.com', '–Rappler.com'];
         const rappler = meta.body.find('strong').last().parent();
-        const last_text = rappler.text().replace('– Rappler.com','');
-        rappler.text(last_text);
+        const last_text = rappler.text();
+        for (const text of rappler_text) {
+            if (last_text.includes(text)) rappler.text(last_text.replace(text, ''));
+        }
 
         console.log('processing',meta.title);
         _set_ingest_settings(asset, meta);
@@ -253,9 +304,9 @@ function ingest_article(hatch, uri) {
  */
 function ingest_gallery(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
+        return;
         const asset = new libingester.NewsArticle();
         let meta = _get_ingest_settings($);
-        console.log('processing',meta.title);
 
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
@@ -304,6 +355,7 @@ function ingest_gallery(hatch, uri) {
             });
         }
 
+        console.log('processing',meta.title);
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
@@ -317,7 +369,8 @@ function ingest_gallery(hatch, uri) {
  * @param {String} uri The post uri
  */
 function ingest_video(hatch, uri) {
-    return libingester.util.fetch_html(uri).then($ => {
+    return libingester.util.fetch_html(uri).then($ => { console.log(uri);
+        return;
         const asset = new libingester.VideoAsset();
         const description = $('meta[name="description"]').attr('content');
         const dwn = $('.videogular-container').first().parent().attr('data-ng-init');
@@ -370,23 +423,23 @@ function _fetch_all_links(links, max) {
 function _ingest_by_category(hatch, uri) {
     let category = uri.replace(BASE_URI,'');
     category = category.substring(0, category.indexOf('/')+1);
-    console.log(category);
-    // switch (category) {
-    //     case 'video/': return ingest_video(hatch, uri);
-    //     case 'anh/': return ingest_gallery(hatch, uri);
-    //     default: return ingest_article(hatch, uri);
-    // }
+    switch (category) {
+        case 'video/': return ingest_video(hatch, uri);
+        case 'anh/': return ingest_gallery(hatch, uri);
+        default: return ingest_article(hatch, uri);
+    }
 }
 
 function main() {
     const hatch = new libingester.Hatch('rappler', 'en');
-    const uri = 'https://www.rappler.com/views/animated/173931-inang-bayan-battered-wife-syndrome';
+    const uri = 'http://www.rappler.com/technology/video/hands-on/153375-unboxing-psvr-sony-virtual-reality-device';
 
     ingest_article(hatch, uri).then(() => hatch.finish());
     // _fetch_all_links(LINKS_BY_CATEGORY, 5).then(links => {
-    //     links.map(uri => _ingest_by_category(undefined, uri));
-    //     // Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
-    //     //     .then(() => hatch.finish());
+    //     // console.log(links);
+    //     links.map(uri => _ingest_by_category(hatch, uri));
+    //     Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
+    //         .then(() => hatch.finish());
     // });
 }
 
