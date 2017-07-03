@@ -1,7 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 const url = require('url');
 
 const BASE_URI = 'http://www.duetdiary.com/';
@@ -144,7 +143,7 @@ function main() {
     const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
     const hatch = new libingester.Hatch('duetdiary', 'th');
 
-    libingester.util.fetch_rss_entries(feed, 100, MAX_DAYS_OLD).then(rss => {
+    libingester.util.fetch_rss_entries(feed, 10, MAX_DAYS_OLD).then(rss => {
          console.log(`Ingesting ${rss.length} articles...`);
              const links = rss.map(item => item.link);
              Promise.all(links.map(uri => ingest_article(hatch, uri)))
