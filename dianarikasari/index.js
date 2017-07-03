@@ -149,7 +149,9 @@ function ingest_article(hatch, uri) {
         // download images
         let thumbnail;
         body.find('img').map((i, elem) => {
-            if (elem.attribs.src) {
+            const src = elem.attribs.src || '';
+            // console.log(src);
+            if (src && !src.includes('photobucket.com')) {
                 const image = libingester.util.download_img($(elem));
                 image.set_title(title);
                 hatch.save_asset(image);
@@ -167,6 +169,7 @@ function ingest_article(hatch, uri) {
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
         body.find('p,div').filter((i, elem) => $(elem).text().trim() === '').remove();
+        body.find('figure').filter((i,elem) => $(elem).find('img').first()[0]).remove();
 
         // save document
         console.log('processing', title);
@@ -201,11 +204,7 @@ function main() {
 
     get_all_links().then(links => {
         return Promise.map(links, (uri) => ingest_article(hatch, uri), { concurrency: 1 })
-            .then(() => hatch.finish())
-            .catch(err => {
-                console.log(err);
-                process.exitCode = 1;
-            });
+            .then(() => hatch.finish());
     }).catch(err => {
         console.log(err);
         process.exitCode = 1;
