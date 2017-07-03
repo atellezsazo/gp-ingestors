@@ -45,6 +45,9 @@ const CLEAN_ELEMENTS = [
 // delete attr (tag)
 const REMOVE_ATTR = [
     'align',
+    'border',
+    'cellpadding',
+    'cellspacing',
     'class',
     'data-field',
     'data-original',
@@ -61,6 +64,7 @@ const REMOVE_ATTR = [
     'style',
     'title',
     'type',
+    'valign',
     'w',
     'width',
 ];
@@ -87,7 +91,7 @@ $background-light-color: #EEEEEE;
 $background-dark-color: #E8E8E8;
 
 $title-font: 'Arimo';
-$body-font: 'Merriweather';
+$body-font: 'Roboto';
 $display-font: 'Arimo';
 $logo-font: 'Fira Sans';
 $context-font: 'Arimo';
@@ -106,10 +110,11 @@ Array.prototype.unique=function(a){
  * @param {String} uri The URI of the post to ingest
  */
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
+    return libingester.util.fetch_html(uri).then($ => {
         // excludes live stream pages
         if ($('.livstrm').first()[0]) return;
 
+        const base_media = 'http://img.f50.bdpcdn.net/Assets/';
         const asset = new libingester.BlogArticle();
         const author = $('.auth b').text();
         const category = $('.breakcrum').first().clone();
@@ -148,18 +153,15 @@ function ingest_article(hatch, uri) {
         });
 
         // convert div's in paragraphs
-        body.contents().map((i,elem) => {
-            if (elem.name == 'div') elem.name = 'p'
-        });
+        body.contents().filter((i,elem) => elem.name == 'div').map((i,elem) => elem.name = 'p');
 
         // convert tag with font weight bold in tag strong
         body.find('span[style="font-weight: bold;"]').map((i,elem) => elem.name = 'strong');
 
-        // remove elements and clean tags
+        // remove elements
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
         body.find(REMOVE_ELEMENTS.join(',')).remove();
-        clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
         body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
 
         // download main image
@@ -206,17 +208,49 @@ function ingest_article(hatch, uri) {
             if (src && text && parent.name == 'p') {
                 $(`<p><strong>${text}</strong></p>`).insertBefore(parent);
                 const video = libingester.util.get_embedded_video_asset($(elem), src);
+                video.set_title(title);
+                hatch.save_asset(video);
             } else {
                 $(elem).remove();
             }
         });
 
-        // clean empty tags
+        // video on tables
+        body.find('table .mediaitem').map((i,elem) => {
+            const src = url.resolve(base_media, elem.attribs.mdasrc);
+            let parent = $(elem).parent();
+            while (parent[0]) {
+                if (parent[0].name == 'p') {
+                    const video = libingester.util.get_embedded_video_asset(parent, src);
+                    video.set_title(title);
+                    hatch.save_asset(video);
+                    break;
+                } else {
+                    parent = parent.parent();
+                }
+            }
+        });
+
+        // fixed tables, wrapp with tag 'aside'
+        body.find('table').map((i,elem) => {
+            const parent = $(elem).parent()[0] || {};
+            if (parent.name == 'p') parent.name = 'aside';
+            $(elem).find('div').filter((i,elem) => $(elem).text().trim() === '').remove();
+        });
+
+        // if any 'p' contains (p, figure, div), convert to 'div'
         body.find('p').map((i,elem) => {
-            const tag = $(elem).find('p, figure').first()[0];
+            const tag = $(elem).find('p, figure, div').first()[0];
             if (tag) elem.name = 'div';
         });
+
+        // clean attribs and remove empty tags
+        clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
         body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        body.find('table span').map((i,elem) => {
+            $(elem).contents().filter((i,elem) => elem.name == 'o:p').remove();
+            elem.attribs = {};
+        });
 
         // article settings
         console.log('processing',title);
