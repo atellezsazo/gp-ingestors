@@ -212,7 +212,6 @@ function ingest_article(hatch, uri) {
                         }
                         $(next).remove();
                     }
-                    console.log(figure.children()[0]);
                     download_img(figure.children()[0]);
                     $(parent).replaceWith(figure);
                     break;
@@ -231,10 +230,13 @@ function ingest_article(hatch, uri) {
         }
 
         // clean tags
-        // console.log(meta.body.find('p').filter((i,elem) => $(elem).is(':empty')));
-        // meta.body.find('p').filter((i,elem) => $(elem).is(':empty')).remove();
         meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
+
+        // clear '- Rappler.com' in the last paragraph
+        const rappler = meta.body.find('strong').last().parent();
+        const last_text = rappler.text().replace('– Rappler.com','');
+        rappler.text(last_text);
 
         console.log('processing',meta.title);
         _set_ingest_settings(asset, meta);
