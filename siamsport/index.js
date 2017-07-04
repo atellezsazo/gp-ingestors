@@ -20,8 +20,10 @@ const REMOVE_ATTR = [
 // Remove elements (meta.body)
 const REMOVE_ELEMENTS = [
     'br',
+    'div',
     'iframe',
     'script',
+    'hr',
     'style',
     '.othdetailnews',
     '.referbg',
@@ -30,6 +32,7 @@ const REMOVE_ELEMENTS = [
     '.social',
     '.titlenews',
     '.toptitle2',
+    '#ssinread',
     '#comment',
     '#ssinread'
 ];
@@ -64,7 +67,7 @@ function _get_ingest_settings($) {
     const section = canonical_uri.replace('http://www.siamsport.co.th/','');
     return {
         author: 'siamsport.co.th', // no authors
-        body: $('.newsdetail, .txtdetails, .newsde-text , .zone, .leftcontmain').first(), // all
+        body: $('.newsdetail, .txtdetails, .newsde-text , .zone').first(), // all
         canonical_uri: canonical_uri,
         date_published: Date.now(date),
         modified_date: date,
@@ -100,7 +103,7 @@ function ingest_article(hatch, uri) {
         console.log('processing: '+uri);
 
 
-        if ($('.newsdetail, .txtdetails, .newsde-text, .zone, .leftcontmain').length<1) throw {code: -1, message: 'Empty body'};
+        if ($('.newsdetail, .txtdetails, .newsde-text, .zone').length<1) throw {code: -1, message: 'Empty body'};
 
         let meta = _get_ingest_settings($);
         if (!meta.title) throw {code: -1, message: 'File not Found!'}; // Some links return "File Not Found !"
@@ -110,11 +113,16 @@ function ingest_article(hatch, uri) {
             if (elem.attribs) return elem.attribs.style;
         }).get();
 
-        if (divs.length == 2) {
-            meta['body'] = $(divs[1]);
-            meta['lede'] = $(`<p>${$(divs[0]).text()}</p>`);
-        }
+        // if (divs.length == 2) {
+        // //    meta['body'] = $(divs[1]);
+        // }
 
+        const first_p = meta.body.find('p').first();
+        const lede = first_p.clone();
+        lede.find('img').remove();
+        //asset.set_lede(lede);
+        meta['lede'] = lede;
+        meta.body.find(first_p).remove();
 
         // main image
         const main_image = libingester.util.download_image(uri_main_image);
@@ -123,7 +131,10 @@ function ingest_article(hatch, uri) {
         asset.set_main_image(main_image, '');
         hatch.save_asset(main_image);
 
-
+        meta.body.find('div').map(function() {
+                let p = $('<p></p>').append($(this).clone());
+                $(this).replaceWith(p);
+            });
 
         // remove elements and comments
         const clen_attr = (elem) => REMOVE_ATTR.forEach(attr => $(elem).removeAttr(attr));
