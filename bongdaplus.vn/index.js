@@ -303,8 +303,7 @@ function _load_all_rss_links(rss_list) {
 
 function main() {
     const hatch = new libingester.Hatch('bongdaplus-vn', 'vi');
-    // ingest_article(hatch, 'http://bongdaplus.vn/tin-tuc/duc/doi-tuyen-duc/kimmich-nguong-mo-lahm-nhung-muon-di-con-duong-rieng-1910111707.html')
-    //     .then(() => hatch.finish());
+    
     _load_all_rss_links(RSS_FEED).then(links =>
         Promise.all(links.map(link => ingest_article(hatch, link)))
             .then(() => hatch.finish())
