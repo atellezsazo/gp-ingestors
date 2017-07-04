@@ -77,9 +77,7 @@ $support-font: 'Raleway';
 
 /** delete duplicated elements in array **/
 Array.prototype.unique = function(a) {
-    return function() { return this.filter(a) }
-}(function(a, b, c) {
-    return c.indexOf(a, b + 1) < 0
+    return function(){return this.filter(a)}}(function(a,b,c) {return c.indexOf(a,b+1)<0
 });
 
 /**
@@ -150,7 +148,7 @@ function ingest_article(hatch, uri) {
         let thumbnail;
         body.find('img').map((i, elem) => {
             const src = elem.attribs.src || '';
-            // console.log(src);
+            // delete images of photobucket
             if (src && !src.includes('photobucket.com')) {
                 const image = libingester.util.download_img($(elem));
                 image.set_title(title);
