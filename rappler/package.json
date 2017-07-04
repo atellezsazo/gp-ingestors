@@ -3,9 +3,9 @@
     "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
-        "start": "node --harmony_default_parameters index.js"
+        "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.0.1"
+        "libingester": "^2.2.0"
     }
 }

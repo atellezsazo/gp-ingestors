@@ -36,7 +36,7 @@ $support-font: 'Roboto';
 `;
 
 /** max links per page (Average per page: 17 links) **/
-const MAX_LINKS = 2;
+const MAX_LINKS = 5;
 
 /** cleaning elements **/
 const CLEAN_ELEMENTS = [
@@ -113,64 +113,6 @@ function _set_ingest_settings(asset, meta) {
     if (meta.title) asset.set_title(meta.title);
 }
 
-/** download images for body **/
-function _download_image($, meta, hatch, asset) {
-    let thumbnail;
-    const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
-
-    meta.body.find('img').map((i, elem) => {
-        if (elem.attribs.src) {
-            // find the parent's for the replace it by tag figure
-            clean_attr(elem);
-            let parent = $(elem).parent();
-            let img = $(elem).clone();
-            let description = '',
-                name;
-
-            // delete wrappers
-            while (parent[0]) {
-                if (parent[0].name == 'p' || parent[0].name == 'table') {
-                    name = parent[0].name;
-                    parent[0].name = 'figure';
-
-                    delete parent[0].attribs;
-                    if (name == 'table') description = parent.find('tr').last().text();
-
-                    parent.children().remove();
-                    parent.append(img);
-                    break;
-                } else if (parent[0].name == 'div') {
-                    break;
-                } else {
-                    parent = parent.parent();
-                }
-            }
-
-            // download image
-            const image = libingester.util.download_img(parent.children());
-            image.set_title(meta.title);
-            hatch.save_asset(image);
-            if (!thumbnail) asset.set_thumbnail(thumbnail = image);
-
-            // find figcation for this image
-            if (description.trim() != '') {
-                parent.append($(`<figcaption><p>${description}</p></figcaption>`));
-            } else {
-                const figcaption = parent.next();
-                const em = figcaption.find('em').first()[0]; // tag 'em' is the description
-                const text = $(em).text();
-                if (text.trim() != '') {
-                    parent.append($(`<figcaption><p>${text}</p></figcaption>`));
-                    figcaption.remove();
-                }
-            }
-        } else {
-            $(elem).remove();
-        }
-    });
-    return thumbnail;
-}
-
 /** ingest_article
  * @param {Object} hatch The Hatch object of the Ingester library
  * @param {String} uri The post uri
@@ -207,21 +149,6 @@ function ingest_article(hatch, uri) {
             }
             return undefined;
         }
-        console.log(meta.body.html());
-        // download videos
-        meta.body.find('.blob-inline').map((i,elem) => {
-            const src = $(elem).find('iframe').attr('src') || '';
-            if (src.includes('youtube')) {
-                const thumb_uri = get_url_thumb_youtube(src);
-                const image = libingester.util.download_image(thumb_uri);
-                image.set_title(meta.title);
-                hatch.save_asset(image);
-                const video = libingester.util.get_embedded_video_asset($(elem), src);
-                video.set_title(meta.title);
-                video.set_thumbnail(image);
-                hatch.save_asset(video);
-            }
-        });
 
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
@@ -277,7 +204,36 @@ function ingest_article(hatch, uri) {
             hatch.save_asset(image);
         }
 
+        // download main video
+        const main_video = $('.blob-inline').first()[0];
+        if (main_video) {
+            const src = $(main_video).find('iframe').attr('src') || '';
+            if (src.includes('youtube')) {
+                const first_figure = meta.body.find('figure').first()[0];
+                // create a tag for video
+                if (first_figure) {
+                    $('<div id="main_video"></div>').insertAfter(first_figure);
+                } else {
+                    meta.body.prepend($('<div id="main_video"></div>'));
+                }
+                // download video asset
+                const video = libingester.util.get_embedded_video_asset(meta.body.find('#main_video').first(), src);
+                video.set_title(meta.title);
+                // thumbnail video
+                if (thumbnail) {
+                    video.set_thumbnail(thumbnail);
+                } else {
+                    const thumb_uri = get_url_thumb_youtube(src);
+                    const image = libingester.util.download_image(thumb_uri);
+                    image.set_title(meta.title);
+                    hatch.save_asset(image);
+                }
+                hatch.save_asset(video);
+            }
+        }
+
         // clean tags
+        meta.body.find('iframe').remove();
         meta.body.find('p, span').filter((i,elem) => $(elem).text().trim() === '').remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
 
@@ -293,112 +249,6 @@ function ingest_article(hatch, uri) {
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => { console.log(err);
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
-    });
-}
-
-/** ingest_video
- * @param {Object} hatch The Hatch object of the Ingester library
- * @param {String} uri The post uri
- */
-function ingest_gallery(hatch, uri) {
-    return libingester.util.fetch_html(uri).then($ => {
-        return;
-        const asset = new libingester.NewsArticle();
-        let meta = _get_ingest_settings($);
-
-        // remove elements and clean tags
-        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
-        const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
-        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
-        clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
-
-        // download images on tables
-        let thumbnail;
-        meta.body.find('table').map((i,table) => {
-            const trs = $(table).find('tr');
-            const img = $(trs[0]).find('img').first()[0];
-            const txt = $(trs[1]).text() || '';
-            let figure;
-            if (img) {
-                figure = $(`<figure><img src="${img.attribs.src}" alt="${img.attribs.alt}"/></figure>`);
-                if (txt.trim() != '') {
-                    figure.append($(`<figcaption>${txt}</figcaption>`));
-                }
-                const image = libingester.util.download_img($(figure.children()[0]));
-                image.set_title(meta.title);
-                hatch.save_asset(image);
-                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
-                $(table).replaceWith(figure);
-            }
-        });
-
-        // download images (normal body)
-        if (!thumbnail) {
-            meta.body.find('img').map((i,elem) => {
-                let p = $(elem).parent();
-                while (p[0]) {
-                    if (p[0].name != 'p') {
-                        p = p.parent();
-                    } else {
-                        break;
-                    }
-                }
-                const img = $(`<img src="${elem.attribs.src}" alt="${elem.attribs.alt}"/>`);
-                const figure = $(`<figure></figure>`).append(img);
-                const image = libingester.util.download_img($(figure.children()[0]));
-                image.set_title(meta.title);
-                hatch.save_asset(image);
-                if(!thumbnail) asset.set_thumbnail(thumbnail = image);
-                p.replaceWith(figure);
-            });
-        }
-
-        console.log('processing',meta.title);
-        _set_ingest_settings(asset, meta);
-        asset.render();
-        hatch.save_asset(asset);
-    }).catch(err => {
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
-    });
-}
-
-/** ingest_video
- * @param {Object} hatch The Hatch object of the Ingester library
- * @param {String} uri The post uri
- */
-function ingest_video(hatch, uri) {
-    return libingester.util.fetch_html(uri).then($ => { console.log(uri);
-        return;
-        const asset = new libingester.VideoAsset();
-        const description = $('meta[name="description"]').attr('content');
-        const dwn = $('.videogular-container').first().parent().attr('data-ng-init');
-        const download_uri = dwn.substring(dwn.indexOf('http'), dwn.indexOf('mp4')+3) || '';
-        const published = $('.block_timer').first().text().replace(/[\s]{2,}/g,'').replace('|',' | ').replace('G',' G');
-        const modified_time = $('meta[property="article:modified_time"]').attr('content')+published.split('|')[1];
-        const title = $('meta[property="og:title"]').attr('content');
-        const uri_thumb = $('meta[property="og:image"]').attr('content');
-
-        // videos are rendered with 'angular.js' and sometimes the property 'data-ng-init' is empty
-        if (download_uri.includes('http') && uri_thumb.includes('http')) {
-            // download thumbnail
-            const thumb = libingester.util.download_image(uri_thumb);
-            thumb.set_title(title);
-
-            // video settings
-            console.log('processing',title);
-            asset.set_canonical_uri(uri);
-            asset.set_download_uri(download_uri);
-            asset.set_last_modified_date(new Date(Date.parse(modified_time)));
-            asset.set_synopsis(description);
-            asset.set_thumbnail(thumb);
-            asset.set_title(title);
-
-            //save assets
-            hatch.save_asset(thumb);
-            hatch.save_asset(asset);
-        }
     }).catch(err => {
         if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
@@ -416,31 +266,16 @@ function _fetch_all_links(links, max) {
     }))).then(() => all_links.unique()); // before sending, repeated links are removed
 }
 
-/** _ingest_by_category (return Promise)
- * @param {Object} hatch The Hatch object of the Ingester library
- * @param {String} uri The max number of links per page
- */
-function _ingest_by_category(hatch, uri) {
-    let category = uri.replace(BASE_URI,'');
-    category = category.substring(0, category.indexOf('/')+1);
-    switch (category) {
-        case 'video/': return ingest_video(hatch, uri);
-        case 'anh/': return ingest_gallery(hatch, uri);
-        default: return ingest_article(hatch, uri);
-    }
-}
-
 function main() {
     const hatch = new libingester.Hatch('rappler', 'en');
-    const uri = 'http://www.rappler.com/technology/video/hands-on/153375-unboxing-psvr-sony-virtual-reality-device';
 
-    ingest_article(hatch, uri).then(() => hatch.finish());
-    // _fetch_all_links(LINKS_BY_CATEGORY, 5).then(links => {
-    //     // console.log(links);
-    //     links.map(uri => _ingest_by_category(hatch, uri));
-    //     Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
-    //         .then(() => hatch.finish());
-    // });
+    _fetch_all_links(LINKS_BY_CATEGORY, MAX_LINKS).then(links => {
+        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
+    });
 }
 
 main();
