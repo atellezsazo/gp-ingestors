@@ -237,6 +237,15 @@ function ingest_article(hatch, uri) {
         meta.body.find('p, span').filter((i,elem) => $(elem).text().trim() === '').remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
 
+        // convert 'p strong' to 'h2'
+        meta.body.find('p strong').map((i,elem) => {
+            const text = $(elem).text();
+            const p_text = $(elem).parent().text();
+            if (text == p_text) {
+                $(elem).parent().replaceWith($(`<h2>${text}</h2>`));
+            }
+        });
+
         // clear '- Rappler.com' in the last paragraph
         const rappler_text = ['– Rappler.com', '–Rappler.com'];
         const rappler = meta.body.find('strong').last().parent();
