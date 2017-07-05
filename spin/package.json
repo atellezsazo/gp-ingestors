@@ -6,6 +6,7 @@
         "start": "node index.js"
     },
     "dependencies": {
+        "bluebird": "^3.5.0",
         "libingester": "^2.2.0"
     }
 }
