@@ -76,7 +76,7 @@ function ingest_article(hatch, uri) {
         const page = 'Spin';
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $('meta[name="title"]').attr('content');
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
         // Pull out the main image
@@ -126,6 +126,15 @@ function ingest_article(hatch, uri) {
             }
             else {
                 $(this).remove();
+            }
+        });
+
+        // Set h2 on p > strong
+        body.find('p').map((i,elem)=>{
+            const strong = $(elem).find('strong').first();
+            if (strong[0]) {
+                const h2 = $(`<h2>${strong.text()}</h2>`);                
+                $(elem).replaceWith(h2);
             }
         });
 
@@ -191,7 +200,7 @@ function ingest_gallery(hatch, uri){
         const asset = new libingester.NewsArticle();
         const author = $('meta[name="author"]').attr('content');
         let body = $('#gallery-thumbs');
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $('meta[name="title"]').attr('content');
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         let date = $('meta[name="pub_date"]').attr('content');
         date=new Date(Date.parse(date));
