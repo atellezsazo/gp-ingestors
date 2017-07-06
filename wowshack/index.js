@@ -30,7 +30,6 @@ $display-font-composite: 'Roboto';
 const REMOVE_ELEMENTS = [
     'header',
     'hr',
-    'iframe',
     'img[alt="Reactions"]',
     'img[alt="Thumbnail"]',
     'ins',
@@ -66,29 +65,38 @@ const REMOVE_ATTR = [
     'data-updated-on',
     'dir',
     'href',
+    'id',
+    'rel',
+    'sizes',
     'style',
 ];
+
+const EMBED_VIDEO = [
+    'brightcove',
+    'youtube',
+];
+
+/* delete duplicated elements in array */
+Array.prototype.unique = function(a) {
+    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+});
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.BlogArticle();
         const author = 'wowshack';
-        const body_main = $('.entry-content');
+        const body = $('.theiaPostSlider_preloadedSlide').first();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('.entry-content .sqs-block-content').first().text();
-        const date = $('time.published').attr('datetime');
+        const date = $('time.published, time.updated').attr('datetime');
         const modified_date = new Date(Date.parse(date));
         const page = 'wowshack';
         const read_more = `Original Article at www.wowshack.com`;
         const section = 'Article'; //the blog doesn´t have section
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $('meta[property="og:title"]').attr('content') || $('#mvp-post-head h1').text();
         const tags = ['Article']; //the blog doesn´t have tags
-        const uri_thumb_alt = $('img[alt="Thumbnail"]').first().attr('src');
+        const uri_thumb_alt = $('img[alt="Thumbnail"]').attr('src') || $('meta[property="og:image"]').attr('content');
         let thumbnail;
-
-        // generating body
-        let body = $('<body id="mybody"></body>');
-        body_main.find('.sqs-block-content').map((i,elem) => body.append($(elem).clone().children()));
 
         // remove elements
         const clean_attr = (tag) => REMOVE_ATTR.forEach(attr => $(tag).removeAttr(attr));
@@ -110,7 +118,13 @@ function ingest_article(hatch, uri) {
 
         // download images
         body.find('img').map(function() {
-            const src = this.attribs.src || this.attribs['data-src'] || '';
+            let src = this.attribs.src || this.attribs['data-src'] || '';
+
+            if (this.attribs.id == 'gif') {
+                const uri_gif = this.attribs.srcset.split(',')[1];
+                src = uri_gif.replace('480w','').trim();
+            }
+
             if (src.includes('http') && !src.includes('visualegacy.org')) {
                 this.attribs['src'] = src;
                 clean_attr(this);
@@ -122,14 +136,19 @@ function ingest_article(hatch, uri) {
                 hatch.save_asset(image);
 
                 // delete wrappers
-                let wrapp = $(this);
-                let parent;
-                while (parent = wrapp.parent()) {
-                    if (parent[0].attribs.id == 'mybody') {
-                        wrapp.replaceWith(figure);
+                let parent = $(this).parent()[0];
+                while (parent) {
+                    const name = parent.name;
+                    if (name == 'div' || name == 'h5' || name == 'p') {
+                        const caption = $('.wp-caption-text').first().text();
+                        if (caption) {
+                            const figcaption = $(`<figcaption><p>${caption}</p></figcaption>`);
+                            figure.append(figcaption);
+                        }
+                        $(parent).replaceWith(figure);
                         break;
                     } else {
-                        wrapp = wrapp.parent();
+                        parent = $(parent).parent()[0];
                     }
                 }
                 if (!thumbnail) asset.set_thumbnail(thumbnail = image);
@@ -139,33 +158,39 @@ function ingest_article(hatch, uri) {
         });
 
         // download video
-        body.find('.sqs-video-wrapper').map((i, elem) => {
-            const iframe = $(elem.attribs['data-html'])[0];
-            let src = iframe.attribs.src;
-            if (src.includes('www.youtube.com') && !src.includes('https:')) {
-                src = 'https:' + src;
+        body.find('p iframe').map((i, elem) => {
+            let src;
+            for (const domain of EMBED_VIDEO) {
+                if (elem.attribs.src.includes(domain)) src = elem.attribs.src;
             }
 
-            // delete wrappers
-            let wrapp = $(elem);
-            let parent;
-            while (parent = wrapp.parent()) {
-                if (parent[0].attribs.id == 'mybody') {
-                    const video = libingester.util.get_embedded_video_asset(wrapp, src);
-                    const uri_thumb = get_url_thumb_youtube(src);
-                    const video_thumb = libingester.util.download_image(uri_thumb);
-                    
-                    // download video thumbnail
-                    video_thumb.set_title(title);
-                    video.set_title(title);
-                    video.set_thumbnail(video_thumb);
-                    hatch.save_asset(video);
-                    hatch.save_asset(video_thumb);
-                    if (!thumbnail) asset.set_thumbnail(thumbnail = video_thumb);
-                    break;
-                } else {
-                    wrapp = wrapp.parent();
+            if (src) {
+                let parent = $(elem).parent()[0];
+                // delete wrappers
+                while (parent) {
+                    if (parent.name == 'p') {
+                        let video_thumb;
+                        const video = libingester.util.get_embedded_video_asset($(parent), src);
+                        const uri_thumb = get_url_thumb_youtube(src);
+
+                        // download thumbnail
+                        if (uri_thumb) video_thumb = libingester.util.download_image(uri_thumb);
+                        if (!video_thumb && uri_thumb_alt) video_thumb = libingester.util.download_image(uri_thumb_alt);
+
+                        // settings video
+                        video_thumb.set_title(title);
+                        video.set_title(title);
+                        video.set_thumbnail(video_thumb);
+                        hatch.save_asset(video);
+                        hatch.save_asset(video_thumb);
+                        if (!thumbnail) asset.set_thumbnail(thumbnail = video_thumb);
+                        break;
+                    } else {
+                        parent = $(parent).parent()[0];
+                    }
                 }
+            } else {
+                $(elem).remove();
             }
         });
 
@@ -180,15 +205,35 @@ function ingest_article(hatch, uri) {
 
         // clean tags
         body.find('div').map((i, elem) => clean_attr(elem));
-        body.find('center, div, p').filter((i,elem) => $(elem).text().trim() == '').remove();
-        body.find('h3, p').map((i,elem) => clean_attr(elem));
+        body.find('center, div, p, h5').filter((i,elem) => $(elem).text().trim() == '').remove();
+        body.find('h3, p, h5, a').map((i,elem) => clean_attr(elem));
+        body.find('iframe').remove();
+
+        // conver h5 to h2
+        body.find('h5').map((i,elem) => elem.name = 'h2');
+        // convert 'p strong' to 'h3'
+        body.find('p strong').map((i,elem) => {
+            const text = $(elem).text();
+            let parent = $(elem).parent()[0];
+            while (parent) {
+                if (parent.name == 'p') {
+                    const p_text = $(parent).text();
+                    if (text == p_text) {
+                        $(parent).replaceWith($(`<h3>${text}</h3>`));
+                    }
+                    break;
+                } else {
+                    parent = $(parent).parent()[0];
+                }
+            }
+        });
 
         // article settings
         console.log('processing', title);
         asset.set_author(author);
         asset.set_body(body);
         asset.set_canonical_uri(canonical_uri);
-        asset.set_date_published(Date.now(modified_date));
+        asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
         asset.set_tags(tags);
@@ -198,8 +243,8 @@ function ingest_article(hatch, uri) {
         asset.set_custom_scss(CUSTOM_CSS);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
-        if (err.code === 'ECONNRESET') return ingest_article(hatch, uri);
+    }).catch(err => { console.log(uri,err);
+        if (err.code === 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
 
@@ -207,12 +252,9 @@ function main() {
     const hatch = new libingester.Hatch('wowshack', 'en');
 
     libingester.util.fetch_html(BASE_URI).then($ => {
-        Promise.all($('#page a.project:nth-child(-n + 30)').get()
-            .map(elem => {
-                const uri = url.resolve(BASE_URI, $(elem).attr('href'));
-                return ingest_article(hatch, uri);
-            })
-        ).then(() => hatch.finish());
+        const links = $('a[rel="bookmark"]').get().map(a => a.attribs.href).unique();
+        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
     })
     .catch(err => {
         console.log(err);
