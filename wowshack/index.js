@@ -84,7 +84,7 @@ Array.prototype.unique = function(a) {
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.BlogArticle();
-        const author = 'wowshack';
+        const author = $('#mvp-post-author .author-name').text() || 'WowShack';
         const body = $('.theiaPostSlider_preloadedSlide').first();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('.entry-content .sqs-block-content').first().text();
@@ -94,7 +94,7 @@ function ingest_article(hatch, uri) {
         const read_more = `Original Article at www.wowshack.com`;
         const section = 'Article'; //the blog doesn´t have section
         const title = $('meta[property="og:title"]').attr('content') || $('#mvp-post-head h1').text();
-        const tags = ['Article']; //the blog doesn´t have tags
+        const tags = $('span[itemprop="keywords"] a').map((i,a) => $(a).text()).get();
         const uri_thumb_alt = $('img[alt="Thumbnail"]').attr('src') || $('meta[property="og:image"]').attr('content');
         let thumbnail;
 
@@ -209,7 +209,7 @@ function ingest_article(hatch, uri) {
         body.find('h3, p, h5, a').map((i,elem) => clean_attr(elem));
         body.find('iframe').remove();
 
-        // conver h5 to h2
+        // convert h5 to h2
         body.find('h5').map((i,elem) => elem.name = 'h2');
         // convert 'p strong' to 'h3'
         body.find('p strong').map((i,elem) => {
@@ -243,7 +243,7 @@ function ingest_article(hatch, uri) {
         asset.set_custom_scss(CUSTOM_CSS);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => { console.log(uri,err);
+    }).catch(err => {
         if (err.code === 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
