@@ -46,6 +46,10 @@ const CLEAN_ELEMENTS = [
     'i',
     'p',
     'span',
+    'table',
+    'tbody',
+    'td',
+    'tr',
     'ul',
 ];
 
@@ -55,10 +59,13 @@ const REMOVE_ATTR = [
     'border',
     'class',
     'dir',
+    'id',
     'onclick',
     'onmouseover',
     'style',
     'title',
+    'valign',
+    'width',
 ];
 
 /** remove elements (body) **/
@@ -171,6 +178,12 @@ function ingest_article(hatch, uri) {
             }
         });
 
+        // fixed image outside the paragraphs
+        meta.body.contents().map((i,elem) => {
+            if (elem.name == 'img') {
+                $(elem).replaceWith($('<p></p>').append($(elem).clone()));
+            }
+        });
 
         // fix images, add figure, figcaption and download
         meta.body.find('img').map((i,elem) => {
@@ -240,9 +253,17 @@ function ingest_article(hatch, uri) {
         // convert 'p strong' to 'h2'
         meta.body.find('p strong').map((i,elem) => {
             const text = $(elem).text();
-            const p_text = $(elem).parent().text();
-            if (text == p_text) {
-                $(elem).parent().replaceWith($(`<h2>${text}</h2>`));
+            let parent = $(elem).parent()[0];
+            while (parent) {
+                if (parent.name == 'p') {
+                    const p_text = $(parent).text();
+                    if (text == p_text) {
+                        $(parent).replaceWith($(`<h2>${text}</h2>`));
+                    }
+                    break;
+                } else {
+                    parent = $(parent).parent()[0];
+                }
             }
         });
 
@@ -259,7 +280,7 @@ function ingest_article(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
 
