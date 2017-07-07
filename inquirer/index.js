@@ -1,7 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 const url = require('url');
 
 const RSS_FEED = 'http://www.inquirer.net/fullfeed';
@@ -128,7 +127,7 @@ function ingest_article(hatch, uri) {
 
             let parent = $(elem).parent();
             while (parent[0]) {
-                if (parent[0].name == 'div') {
+                if (parent[0].name == 'div' || parent[0].name == 'p') {
                     // create element figure
                     let figure = $(`<figure><img src="${src}" alt="${alt}"/></figure>`);
                     let next = parent.find('.wp-caption-text').first()[0];
@@ -165,11 +164,36 @@ function ingest_article(hatch, uri) {
         // set lede
         for (const p of meta.body.find('p').get()) {
             if ($(p).parent()[0].attribs.id == 'mybody') {
-                meta.lede = $(p).clone();
+                const strong = $(p).find('strong').first();
+                const next_p = $(p).next();
+                if (strong.text() == $(p).text()) {
+                    const lede = $(`<p><strong>${strong.text()}</strong><br>${next_p.text()}</p>`);
+                    meta.lede = lede;
+                    next_p.remove();
+                } else {
+                    meta.lede = $(p).clone();
+                }
                 $(p).remove();
                 break;
             }
         }
+
+        // convert 'p strong' to 'h2'
+        meta.body.find('p strong').map((i,elem) => {
+            const text = $(elem).text();
+            let parent = $(elem).parent()[0];
+            while (parent) {
+                if (parent.name == 'p') {
+                    const p_text = $(parent).text();
+                    if (text == p_text) {
+                        $(parent).replaceWith($(`<h2>${text}</h2>`));
+                    }
+                    break;
+                } else {
+                    parent = $(parent).parent()[0];
+                }
+            }
+        });
 
         console.log('processing',meta.title);
         _set_ingest_settings(asset, meta);
@@ -183,13 +207,13 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('inquirer', 'en');
 
-    rss2json.load(RSS_FEED, (err, rss) => {
-        Promise.all(rss.items.map(item => ingest_article(hatch, item.link)))
-            .then(() => hatch.finish())
-            .catch(err => {
-                console.log(err);
-                process.exitCode = 1;
-            });
+    libingester.util.fetch_rss_entries(RSS_FEED, 20, 200).then(items => {
+        return Promise.all(items.map(item => ingest_article(hatch, item.link)))
+            .then(() => hatch.finish());
+    })
+    .catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
