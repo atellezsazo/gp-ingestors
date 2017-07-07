@@ -4,24 +4,24 @@ const libingester = require('libingester');
 const rss2json = require('rss-to-json');
 const url = require('url');
 
-const BASE_URI = 'http://vtv.vn/';
+const BASE_URI = 'http://timesofindia.indiatimes.com/';
 const MAX_LINKS = 3; // max links per 'rss'
 const RSS_FEED = [
-    //'http://timesofindia.indiatimes.com/rssfeedstopstories.cms', // Top Stories
-    //'http://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms', // India
+    'http://timesofindia.indiatimes.com/rssfeedstopstories.cms', // Top Stories
+    'http://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms', // India
     'http://timesofindia.indiatimes.com/rssfeeds/296589292.cms', // World
-    // 'http://timesofindia.indiatimes.com/rssfeeds/7098551.cms', // NRI
-    // 'http://timesofindia.indiatimes.com/rssfeeds/1898055.cms', // Business
-    // 'http://timesofindia.indiatimes.com/rssfeeds/4719161.cms', // Cricket
-    // 'http://timesofindia.indiatimes.com/rssfeeds/4719148.cms', //Sports
-    // 'http://timesofindia.indiatimes.com/rssfeeds/3908999.cms', // Healt
-    // 'http://timesofindia.indiatimes.com/rssfeeds/-2128672765.cms', // Science
-    // 'http://timesofindia.indiatimes.com/rssfeeds/2647163.cms', // Enviroment
-    // 'http://timesofindia.indiatimes.com/rssfeeds/5880659.cms', // Tech
-    // 'http://timesofindia.indiatimes.com/rssfeeds/913168846.cms', // Education
-    // 'http://timesofindia.indiatimes.com/rssfeeds/784865811.cms', // Opinion
-    // 'http://timesofindia.indiatimes.com/rssfeeds/1081479906.cms', // Entertaiment
-    // 'http://timesofindia.indiatimes.com/rssfeeds/2886704.cms' // Life & Style
+     'http://timesofindia.indiatimes.com/rssfeeds/7098551.cms', // NRI
+    'http://timesofindia.indiatimes.com/rssfeeds/1898055.cms', // Business
+    'http://timesofindia.indiatimes.com/rssfeeds/4719161.cms', // Cricket
+    'http://timesofindia.indiatimes.com/rssfeeds/4719148.cms', //Sports
+    'http://timesofindia.indiatimes.com/rssfeeds/3908999.cms', // Healt
+    'http://timesofindia.indiatimes.com/rssfeeds/-2128672765.cms', // Science
+    'http://timesofindia.indiatimes.com/rssfeeds/2647163.cms', // Enviroment
+    'http://timesofindia.indiatimes.com/rssfeeds/5880659.cms', // Tech
+    'http://timesofindia.indiatimes.com/rssfeeds/913168846.cms', // Education
+    'http://timesofindia.indiatimes.com/rssfeeds/784865811.cms', // Opinion
+    'http://timesofindia.indiatimes.com/rssfeeds/1081479906.cms', // Entertaiment
+    'http://timesofindia.indiatimes.com/rssfeeds/2886704.cms' // Life & Style
 ];
 
 // cleaning elements
@@ -108,19 +108,19 @@ function ingest_article(hatch, uri) {
         const title = $('meta[property="og:title"]').attr('content');
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
-        console.log('--------------------------------------------------------');
-        console.log(uri);
-        console.log('author: '+ author);
-        //console.log('body: '+ body);
-        console.log('canonical_uri: '+ canonical_uri);
-        console.log('modified_date: '+ modified_date);
-        console.log('page: '+ page);
-        console.log('read_more: '+ read_more);
-        console.log('synopsis: '+ synopsis);
-        console.log('section: '+ section);
-        console.log('title: '+ title);
-        console.log('uri_main_image: '+ uri_main_image);
-        console.log('--------------------------------------------------------');
+        // console.log('--------------------------------------------------------');
+        // console.log(uri);
+        // console.log('author: '+ author);
+        // //console.log('body: '+ body);
+        // console.log('canonical_uri: '+ canonical_uri);
+        // console.log('modified_date: '+ modified_date);
+        // console.log('page: '+ page);
+        // console.log('read_more: '+ read_more);
+        // console.log('synopsis: '+ synopsis);
+        // console.log('section: '+ section);
+        // console.log('title: '+ title);
+        // console.log('uri_main_image: '+ uri_main_image);
+        // console.log('--------------------------------------------------------');
 
         // Pull out the main image
         let main_image, image_credit;
@@ -147,15 +147,20 @@ function ingest_article(hatch, uri) {
                 }
                 // if element is a 'div', check if the children are pictures
                 // and if true, we create the corresponding tags (figure, figcaption)
-                if (elem.name == 'div') {
-                    const first = $(elem).children()[0] || '';
-                    const second = $(elem).children()[1] || '';
-                    if (first.name == 'img') {
-                        elem.name = 'figure';
+                const attribs = elem.attribs || {};
+                if (elem.name == 'div' && attribs.class=='image') {
+                    elem.name='figure';
+                    const figcaption = $(elem).next();
+                    if (figcaption[0].name=='strong') {
+                        $(elem).append(`<figcaption><p>${figcaption.text()}</p></figcaption>`);
+                        figcaption.attr('class', 'remove');
                     }
-                    if (second.name == 'p') {
-                        $(second).replaceWith($(`<figcaption><p>${$(second).text()}</p></figcaption>`));
-                    }
+                    const img = $(elem).find('img').first();
+                    img[0].attribs.src=url.resolve(BASE_URI, img[0].attribs.src);
+                    const image = libingester.util.download_img(img);
+                    image.set_title(title);
+                    hatch.save_asset(image);
+                    // console.log($(elem).html());
                     content.append($(elem).clone());
                     return;
                 }
@@ -168,7 +173,8 @@ function ingest_article(hatch, uri) {
         });
         body = content;
 
-        console.log(body.html());
+        body.find('.remove').remove();
+
 
         // set first paragraph
         const first_p = body.find('p').first();
@@ -178,26 +184,36 @@ function ingest_article(hatch, uri) {
         body.find(first_p).remove();
         //
 
-         //Download image
-         body.find('div.image').map((i, elem) => {
-            const img = $(elem).find('img').first();
-            const caption = $(elem).next().next().text() || '';
-            const image = `<img src="${img.attr('src')}" alt="${img.attr('alt')}">`;
-            const figure = $(`<figure>${image}</figure>`);
-            const figcaption = $(`<figcaption><p>${caption}</p></figcaption>`);
-            caption.remove();
-            const down_img = libingester.util.download_img($(figure.children()[0]));
-            down_img.set_title(title);
-            if (!thumbnail) asset.set_thumbnail(thumbnail=down_img);
-            hatch.save_asset(down_img);
-            $(elem).replaceWith(figure.append(figcaption));
-        });
+        //console.log(body.html());
+        //  //Download image
+        //  body.find('div.image').map((i, elem) => {
+        //     const img = $(elem).find('img').first();
+        //     const caption = $(elem).next().next().text() || '';
+        //     const image = `<img src="${img.attr('src')}" alt="${img.attr('alt')}">`;
+        //     const figure = $(`<figure>${image}</figure>`);
+        //     const figcaption = $(`<figcaption><p>${caption}</p></figcaption>`);
+        //     caption.remove();
+        //     const down_img = libingester.util.download_img($(figure.children()[0]));
+        //     down_img.set_title(title);
+        //     if (!thumbnail) asset.set_thumbnail(thumbnail=down_img);
+        //     hatch.save_asset(down_img);
+        //     $(elem).replaceWith(figure.append(figcaption));
+        // });
 
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         //body.find('.tinlienquan').removeAttr('class');
-        body.find(REMOVE_ELEMENTS.join(',')).remove();
-        body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+       body.find(REMOVE_ELEMENTS.join(',')).remove();
+       body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+
+       // Set h2 on p > strong
+       body.find('p').map((i,elem)=>{
+           const strong = $(elem).find('strong').first();
+            if (strong[0]) {
+                const h2 = $(`<h2>${strong.text()}</h2>`);
+                $(elem).replaceWith(h2);
+            }
+        });
         //
         // // //download image
         // body.find('div[type="Photo"]').map(function() {
@@ -222,7 +238,7 @@ function ingest_article(hatch, uri) {
         // if(last_p.text().includes('TV Online')) last_p.remove();
         //
         // Article Settings
-        //console.log('processing', title);
+        console.log('processing', title);
         asset.set_authors([author]);
         asset.set_canonical_uri(canonical_uri);
         asset.set_custom_scss(CUSTOM_CSS);
@@ -268,17 +284,17 @@ function main() {
     const hatch = new libingester.Hatch('Times_of_india', 'en');
 
 
-    ingest_article(hatch,'http://timesofindia.indiatimes.com/world/europe/spains-running-of-the-bulls-firecracker-kicks-off-fiesta/articleshow/59473763.cms')
-    .then(()=> hatch.finish()
-    );
+    // ingest_article(hatch,'http://timesofindia.indiatimes.com/world/europe/spains-running-of-the-bulls-firecracker-kicks-off-fiesta/articleshow/59473763.cms')
+    // .then(()=> hatch.finish()
+    // );
 
-    // _load_all_rss_links(RSS_FEED).then(links =>
-    //     Promise.all(links.map(link => ingest_article(hatch, link)))
-    //         .then(() => hatch.finish())
-    // ).catch(err => {
-    //     console.log(err);
-    //     process.exitCode = 1;
-    // });
+    _load_all_rss_links(RSS_FEED).then(links =>
+        Promise.all(links.map(link => ingest_article(hatch, link)))
+            .then(() => hatch.finish())
+    ).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
+    });
 }
 
 main();
