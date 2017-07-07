@@ -1,33 +1,9 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 const url = require('url');
 
-const ARTICLE_LINKS = [
-    'http://www.cricbuzz.com/cricket-news/latest-news',
-    'http://www.cricbuzz.com/cricket-news/info/',
-    'http://www.cricbuzz.com/cricket-news/editorial/spotlight',
-    'http://www.cricbuzz.com/cricket-news/editorial/editorial-list',
-    'http://www.cricbuzz.com/cricket-news/editorial/specials',
-    'http://www.cricbuzz.com/cricket-news/editorial/stats-analysis',
-    'http://www.cricbuzz.com/cricket-news/editorial/interviews',
-    'http://www.cricbuzz.com/cricket-news/editorial/live-blogs',
-];
-const TEAM_LINKS = [
-    'http://www.cricbuzz.com/cricket-team',
-    'http://www.cricbuzz.com/cricket-team/domestic',
-    'http://www.cricbuzz.com/cricket-team/league',
-    'http://www.cricbuzz.com/cricket-team/women',
-];
-
 const BASE_URI = 'http://www.cricbuzz.com/';
-const GALLERY_LINKS = 'http://www.cricbuzz.com/cricket-photo-gallery';
-const VIDEO_LINKS = 'http://www.cricbuzz.com/cricket-videos';
-
-const MAX_ARTICLES = 5; // number of pages for each "ARTICLE_LINK"
-const MAX_GELLERIES = 5;
-const MAX_VIDEOS = 5;
 
 const CUSTOM_SCSS = `
 $primary-light-color: #468EE5;
@@ -87,7 +63,7 @@ function _get_ingest_settings($) {
         date_published: date,
         modified_date: date,
         custom_scss: CUSTOM_SCSS,
-        read_more: `Original Article at <a href="${canonical_uri}">www.inquirer.net</a>`,
+        read_more: `Original Article at <a href="${canonical_uri}">www.cricbuzz.net</a>`,
         section: $('.cb-nws-sub-txt span').first().text().trim(),
         synopsis: $('meta[property="og:description"], meta[name="description"]').attr('content'),
         source: 'cricbuzz',
@@ -207,10 +183,19 @@ function ingest_article(hatch, uri) {
             }
         }
 
+        // convert 'p>b' to 'h2'
+        meta.body.find('p b').map((i,elem) => {
+            const p = $(elem).parent();
+            const text = $(elem).text();
+            if (p[0].name == 'p') {
+                const p_text = p.text();
+                if (p_text == text) p.replaceWith($(`<h2>${text}<h2>`));
+            }
+        });
+
         // end ingest
         _set_ingest_settings(hatch, asset, meta);
     }).catch(err => {
-        console.log(uri,err);
         if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
@@ -249,18 +234,16 @@ function ingest_gallery(hatch, uri) {
 
         // end ingest
         _set_ingest_settings(hatch, asset, meta);
-
     }).catch(err => {
-        console.log(err);
         if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_gallery(hatch, uri);
     });
 }
 
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
+        // the "url_download" can not be obtained
         return;
     }).catch(err => {
-        console.log(err);
         if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_video(hatch, uri);
     });
 }
@@ -276,7 +259,8 @@ function main() {
             const feature_videos = $('#latest-vid-mod a').map((i,a) => resolve(a)).get();
             const latest_news = $('#cb-news-blck a').map((i,a) => resolve(a)).get();
             const latest_photos = $('#hm-photos-blk a').map((i,a) => resolve(a)).get();
-            const main = $('.cb-hmpage a').map((i,a) => resolve(a)).get();
+            const main = $('.cb-hmpage a').filter((i,a) => !a.attribs.href.includes('live-cricket-scores/'))
+                .map((i,a) => resolve(a)).get();
             const specials = $('h4').filter((i,h4) => $(h4).text() == 'Specials')
                 .parent().find('a').map((i,a) => resolve(a)).get();
 
@@ -284,7 +268,7 @@ function main() {
                 feature_videos.slice(0,feature_videos.length-1),
                 latest_news.slice(0,latest_news.length-1),
                 latest_photos.slice(0,latest_photos.length-1),
-                main,
+                main.slice(0,10),
                 specials
             );
         }).then(() => all_links.unique());
@@ -301,9 +285,8 @@ function main() {
             default: return ingest_article(hatch, uri);
         }
     }
-    // ingest_article(hatch, 'http://www.cricbuzz.com/cricket-news/95611/county-championsship-division-one-day-2-wrap-eskinazi-leads-middlesex-recovery-with-178')
-    // .then(() => hatch.finish());
-    get_all_links(BASE_URI).then(links => {// console.log(links.length);
+
+    get_all_links(BASE_URI).then(links => {
         return Promise.all(links.map(uri => ingest_by_category(hatch, uri)))
             .then(() => hatch.finish());
     }).catch(err => {
