@@ -77,7 +77,7 @@ function ingest_article(hatch, item) {
         const body = $('.single-content').first();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('meta[property="og:description"]').attr('content');
-        const modified_date = new Date(item.pubdate);
+        const modified_date = new Date(Date.parse(item.pubdate));
         const section ='Article';
         const page = 'Primer';
         const read_more = 'Read more at www.primer.com.ph';
@@ -164,7 +164,7 @@ function ingest_article(hatch, item) {
         asset.set_title(title);
         asset.set_synopsis(description);
         asset.set_date_published(modified_date);
-        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
         asset.set_tags(tags);
         asset.set_custom_scss(CUSTOM_CSS);
@@ -184,7 +184,7 @@ function main() {
     const feed = libingester.util.create_wordpress_paginator(RSS_URI);
     const hatch = new libingester.Hatch('primer', 'en');
     libingester.util.fetch_rss_entries(feed, 20, 100).then(rss => {
-             Promise.all(rss.map(item => ingest_article(hatch, item)))
+             return Promise.all(rss.map(item => ingest_article(hatch, item)))
                      .then(() => hatch.finish());
         }).catch((err) => {
             console.log('Error ',err);
