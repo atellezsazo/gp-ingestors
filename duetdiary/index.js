@@ -102,15 +102,30 @@ function ingest_article(hatch, uri) {
             let img = $('<figure></figure>').append($(this).clone());
             const image = libingester.util.download_img(img.children());
             this.attribs["data-libingester-asset-id"] = image.asset_id;
-            $(this).replaceWith(img);
+            $(this).parent().replaceWith(img);
             image.set_title(title);
             hatch.save_asset(image);
         });
+
+
+        // body.find('p').map((i, elem) => {
+        //     const img = $(elem).find('img').first();
+        //     const caption = img.attr('alt');
+        //     const image = `<img src="${img.attr('src')}" alt="${img.attr('alt')}">`;
+        //     const figure = $(`<figure>${image}</figure>`);
+        //     const figcaption = $(`<figcaption><p>${caption}</p></figcaption>`);
+        //     const down_img = libingester.util.download_img($(figure.children()[0]));
+        //     down_img.set_title(title);
+        //     //if (!thumbnail) asset.set_thumbnail(thumbnail=down_img);
+        //     hatch.save_asset(down_img);
+        //     $(elem).replaceWith(figure.append(figcaption));
+        // });
 
         //clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+        body.find('p').filter((i, elem) => $(elem).text().trim() === '').remove();
 
         // Article Settings
         console.log('processing', title);
@@ -127,6 +142,7 @@ function ingest_article(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
+        console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
             return ingest_article(hatch, uri);
         }
@@ -146,7 +162,7 @@ function main() {
     libingester.util.fetch_rss_entries(feed, 10, MAX_DAYS_OLD).then(rss => {
          console.log(`Ingesting ${rss.length} articles...`);
              const links = rss.map(item => item.link);
-             Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            return Promise.all(links.map(uri => ingest_article(hatch, uri)))
                      .then(() => hatch.finish());
         }).catch((err) => {
             console.log('Error '+err);
