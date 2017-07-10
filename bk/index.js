@@ -9,6 +9,7 @@ const BASE_URI = 'http://bk.asia-city.com/';
 const CLEAN_TAGS = [
     'a',
     'figure',
+    'h1',
     'h2',
     'li',
     'p',
@@ -18,7 +19,9 @@ const CLEAN_TAGS = [
 
 // remove metadata
 const REMOVE_ATTR = [
+    'align',
     'class',
+    'dir',
     'height',
     'id',
     'rscset',
@@ -29,28 +32,11 @@ const REMOVE_ATTR = [
 
 // remove elements
 const REMOVE_ELEMENTS = [
-    'div',
+    'iframe',
     'noscript',
     'script',
     'style',
 ];
-
-const CUSTOM_SCSS = `
-$primary-light-color: #3A95DC;
-$primary-medium-color: #3B7098;
-$primary-dark-color: #24231F;
-$accent-light-color: #FCB900;
-$accent-dark-color: #B5963B;
-$background-light-color: #F8F8F8;
-$background-dark-color: #F3F3F3;
-$title-font: 'Taviraj';
-$body-font: 'Kanit';
-$display-font: 'Taviraj';
-$logo-font: 'Taviraj';
-$context-font: 'Kanit';
-$support-font: 'Kanit';
-@import '_default';
-`;
 
 /* delete duplicated elements in array */
 Array.prototype.unique = function(a) {
@@ -64,8 +50,8 @@ Array.prototype.unique = function(a) {
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.BlogArticle();
-        const author = $('.author').first().text();
-        const body = $('#dvPage').first();
+        const author = $('.author').first(); // poner en array
+        const body_pages = $('.cpages');
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const date = $('.published-date').first().text().trim();
         const slides = $('.slides').first();
@@ -73,19 +59,88 @@ function ingest_article(hatch, uri) {
         const modified_date = date ? new Date(date) : new Date();
         const read_more = 'Read more at www.bk.asia-city.com';
         const section = $('meta[property="article:section"]').attr('content');
-        const tags = ['ddd'];
+        const tags = $('.node_terms li').map((i,elem) => $(elem).text()).get();
         const title = $('meta[property="og:title"]').attr('content') || $('div.title').first().text();
         const subtitle = $('.teaser p').first().text();
         const synopsis = $('meta[name="description"]').attr('content');
         const url_thumb = $('.wp-post-image[itemprop="image"]').first().attr('src');
+        let body;
         let thumbnail;
+
+        if (body_pages.get().length == 1) {
+            body = $(body_pages.get()[0]);
+        } else {
+            body = $('<div id="dvPage"><div>');
+            body_pages.map((i,elem) => {
+                $(elem).contents().filter((i,elem) => elem.type == 'tag').map((i,elem) => {
+                    body.append($(elem).clone());
+                });
+            });
+        }
 
         // clean body
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
-        body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find('iframe').parent().remove();
-        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
 
+        // fixing "divs" into "divs" and into "divs" and ...
+        const find = (tag) => {
+            $(tag).contents().map((i,elem) => {
+                if (elem.name == 'div') {
+                    const child = $(elem).find('div').first()[0];
+                    if (child) {
+                        find(elem);
+                    } else {
+                        body.append($(elem).clone());
+                        $(elem).remove();
+                    }
+                } else {
+                    body.append($(elem).clone());
+                    $(elem).remove();
+                }
+            });
+        }
+        find(body);
+
+        // convert 'div' to 'p'
+        body.contents().filter((i,elem) => elem.name == 'div').map((i,elem) => elem.name = 'p');
+
+        // delete images into h3
+        body.find('h1 img, h2 img, h3 img').remove();
+
+        // fixed table promotion credit card
+        body.find('table').map((i,elem) => {
+            const p = $(elem).find('p').first();
+            if (p.text().includes('Exclusively for Citi credit card members')) {
+                const parent = $(elem).parent();
+                if (parent[0].name == 'p') {
+                    $(parent).replaceWith(`<p><i>${p.text()}</i></p>`);
+                } else {
+                    $(elem).replaceWith(`<p><i>${p.text()}</i></p>`);
+                }
+            }
+        });
+
+        // fix images, delte wrappers and add figure
+        body.find('img').map((i,elem) => {
+            let current = $(elem);
+            let parent = $(elem).parent()[0];
+            if (parent.name != 'figure') {
+                while (parent) {
+                    const attr = parent.attribs || {};
+                    if (attr.id == 'dvPage') {
+                        const figure = $(`<figure></figure>`).append($(elem).clone());
+                        $(elem).remove();
+                        figure.insertAfter(current);
+                        break;
+                    } else {
+                        current = parent;
+                        parent = $(parent).parent()[0];
+                    }
+                }
+            }
+        });
+
+        // slides of images, insert to body
         if (slides[0]) {
             const li = slides.find('li').get();
             if (li.length == 1) {
@@ -99,7 +154,7 @@ function ingest_article(hatch, uri) {
             } else {
                 li.map(elem => {
                     elem.name = 'figure';
-                    const caption = $(li[0]).find('.caption-crp').first();
+                    const caption = $(elem).find('.caption-crp').first();
                     if (caption[0]) {
                         const figcaption = $(`<figcaption><p>${caption.text()}</p></figcaption>`);
                         caption.replaceWith(figcaption);
@@ -109,35 +164,15 @@ function ingest_article(hatch, uri) {
             }
         }
 
+        // add subtitle to body
         if (subtitle.trim() != '') {
             body.prepend($(`<p><i>${subtitle}</i></p>`));
         }
 
-        // // download main image
-        // let main_image, thumbnail;
-        // if (url_thumb) {
-        //     const url_obj = url.parse(url_thumb);
-        //     const src = url.resolve(url_obj.href, url_obj.pathname);
-        //     const image = libingester.util.download_image(src);
-        //     image.set_title(title);
-        //     asset.set_main_image(main_image = image);
-        //     asset.set_thumbnail(thumbnail = image);
-        //     hatch.save_asset(main_image);
-        // }
-        //
-        // taking out the images of the paragraphs
-        // body.find('img').map((i,elem) => {
-        //     const parent = $(elem).parent();
-        //     if (parent[0].name == 'p') {
-        //         const figure = $('<figure></figure>').append($(elem).clone());
-        //         figure.insertAfter(parent);
-        //         $(elem).remove();
-        //     }
-        // });
-
         // download images
         body.find('img').map((i,img) => {
             img.attribs.src = url.resolve(BASE_URI, img.attribs.src);
+            clean_attr(img);
             const image = libingester.util.download_img($(img));
             image.set_title(title);
             if (!thumbnail) asset.set_thumbnail(thumbnail = image);
@@ -145,14 +180,38 @@ function ingest_article(hatch, uri) {
         });
 
         // clean empty tags
-        body.find('h2, p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+        body.find('h2, p, strong, div').filter((i,elem) => $(elem).text().trim() === '').remove();
+        body.contents().filter((i,elem) => elem.type === 'comment').remove();
+
+        // fixing tag hr
+        body.find('hr').map((i,elem) => {
+            const parent = $(elem).parent();
+            const next = $(elem).next().text() || '';
+            if (parent[0].name == 'p') {
+                if (next.trim() != '' ) {
+                    $(elem).insertBefore(parent);
+                } else {
+                    $(elem).insertAfter(parent);
+                }
+            }
+        });
+
+        // fixing author
+        let authors = 'BK Staff';
+        if (author[0]) {
+            const a = author.find('a');
+            if (a.get().length >= 1) {
+                authors = a.map((i,elem) => $(elem).text()).get();
+            }
+        }
 
         // article settings
         console.log('processing', title);
-        asset.set_author(author);
+        asset.set_author(authors);
         asset.set_body(body);
         asset.set_canonical_uri(uri);
-        asset.set_custom_scss(CUSTOM_SCSS);
         asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
@@ -168,7 +227,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('bk-asia-city', 'en');
-
+    
     libingester.util.fetch_html(BASE_URI).then($ => {
         let all_links = [];
         // finding more recent links for each section
