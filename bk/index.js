@@ -104,7 +104,7 @@ function ingest_article(hatch, uri) {
         // convert 'div' to 'p'
         body.contents().filter((i,elem) => elem.name == 'div').map((i,elem) => elem.name = 'p');
 
-        // delete images into h3
+        // delete images into h1, h2, h3
         body.find('h1 img, h2 img, h3 img').remove();
 
         // fixed table promotion credit card
@@ -120,7 +120,7 @@ function ingest_article(hatch, uri) {
             }
         });
 
-        // fix images, delte wrappers and add figure
+        // fix images, delete wrappers and add figure
         body.find('img').map((i,elem) => {
             let current = $(elem);
             let parent = $(elem).parent()[0];
@@ -227,7 +227,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('bk-asia-city', 'en');
-    
+
     libingester.util.fetch_html(BASE_URI).then($ => {
         let all_links = [];
         // finding more recent links for each section
