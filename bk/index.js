@@ -221,7 +221,7 @@ function ingest_article(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        console.log(uri, err);
+        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
 
