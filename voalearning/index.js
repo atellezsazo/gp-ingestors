@@ -34,13 +34,15 @@ function ingest_video(hatch, uri) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
+    const hatch = new libingester.Hatch('learning-english-voa', 'en');
 
     libingester.util.fetch_html(PAGE_LINKS).then($ => {
         const links = $('#content').find('.img-wrap').get().map(a => url.resolve(BASE_URI, a.attribs.href));
-        Promise.all(links.map(uri => ingest_video(hatch, uri))).then(() => {
-            return hatch.finish();
-        });
+        return Promise.all(links.map(uri => ingest_video(hatch, uri)))
+            .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
     });
 }
 
