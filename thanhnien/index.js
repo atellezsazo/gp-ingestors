@@ -160,7 +160,7 @@ function ingest_article(hatch, uri) {
 
         // download main image
         const main_image = libingester.util.download_image(meta.uri_thumbnail);
-        const main_caption = $('figure.caption').first();
+        const main_caption = $('#contentAvatar .caption').first();
         let figcaption = '';
         if (main_caption[0]) { // finding caption
             main_caption.find('i').remove();
