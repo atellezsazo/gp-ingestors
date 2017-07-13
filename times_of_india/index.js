@@ -7,9 +7,11 @@ const url = require('url');
 const BASE_URI = 'http://timesofindia.indiatimes.com/';
 const MAX_LINKS = 3; // max links per 'rss'
 const RSS_FEED = [
+    'http://timesofindia.indiatimes.com/rssfeedstopstories.cms', // Top Stories
+    'http://timesofindia.indiatimes.com/rssfeeds/1221656.cms', // Most recent stories
     'http://timesofindia.indiatimes.com/rssfeeds/-2128936835.cms', // India
     'http://timesofindia.indiatimes.com/rssfeeds/296589292.cms', // World
-     'http://timesofindia.indiatimes.com/rssfeeds/7098551.cms', // NRI
+    'http://timesofindia.indiatimes.com/rssfeeds/7098551.cms', // NRI
     'http://timesofindia.indiatimes.com/rssfeeds/1898055.cms', // Business
     'http://timesofindia.indiatimes.com/rssfeeds/4719161.cms', // Cricket
     'http://timesofindia.indiatimes.com/rssfeeds/4719148.cms', //Sports
@@ -20,7 +22,10 @@ const RSS_FEED = [
     'http://timesofindia.indiatimes.com/rssfeeds/913168846.cms', // Education
     'http://timesofindia.indiatimes.com/rssfeeds/784865811.cms', // Opinion
     'http://timesofindia.indiatimes.com/rssfeeds/1081479906.cms', // Entertaiment
-    'http://timesofindia.indiatimes.com/rssfeeds/2886704.cms' // Life & Style
+    'http://timesofindia.indiatimes.com/rssfeeds/2886704.cms', // Life & Style
+    'http://timesofindia.indiatimes.com/rssfeedmostread.cms', //Most read
+    'http://timesofindia.indiatimes.com/rssfeedmostemailed.cms', // Most shared
+    'http://timesofindia.indiatimes.com/rssfeedmostcommented.cms' // Most commented
 ];
 
 // cleaning elements
@@ -95,6 +100,10 @@ Array.prototype.unique=function(a){
     return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
 });
 
+function clean_title(title) {
+    return title.replace('| The Times of India','').replace('| Gadgets','').replace('- Times of India','').trim();
+}
+
 function ingest_gallery(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
@@ -118,7 +127,7 @@ function ingest_gallery(hatch, uri) {
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
         const section = $('meta[itemprop="articleSection"]').attr('content') || 'Article';
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = clean_title($('meta[property="og:title"]').attr('content'));
         const uri_main_image = $('meta[property="og:image"], meta[name="og:image"]').attr('content');
         let thumbnail;
 
@@ -172,6 +181,9 @@ function ingest_editorials(hatch, uri) {
         const asset = new libingester.NewsArticle();
         const author = $('a.author').text();
         const body = $('.content');
+        if (!body[0]) { // Error 404
+            return;
+        }
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const info_date = $('meta[property="article:published_time"]').attr('content');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
@@ -179,18 +191,26 @@ function ingest_editorials(hatch, uri) {
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
         const section = $('meta[itemprop="articleSection"]').attr('content') || 'Article';
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $('.title_section h1').text() || clean_title($('meta[property="og:title"]').attr('content'));
         const uri_main_image = $('meta[property="og:image"], meta[name="og:image"]').attr('content');
 
-        // Pull out the main image
-        let main_image, image_credit;
-        if (uri_main_image) {
-            main_image = libingester.util.download_image(uri_main_image, uri);
-            main_image.set_title(title);
-            image_credit = '';
-            hatch.save_asset(main_image);
-            asset.set_thumbnail(main_image);
+        // Remove images with name  "TOI Edit"
+        if (!uri_main_image.includes('/toiedit-logo')) {
+            // Pull out the main image
+            let main_image, image_credit;
+            if (uri_main_image) {
+                main_image = libingester.util.download_image(uri_main_image, uri);
+                main_image.set_title(title);
+                image_credit = '';
+                hatch.save_asset(main_image);
+                asset.set_thumbnail(main_image);
+                asset.set_main_image(main_image, image_credit);
+            }
+
+            asset.set_main_image(main_image, image_credit);
         }
+
+
 
         // set first paragraph
         const first_p = body.find('p').first();
@@ -210,7 +230,6 @@ function ingest_editorials(hatch, uri) {
         asset.set_source(page);
         asset.set_synopsis(synopsis);
         asset.set_title(title);
-        asset.set_main_image(main_image, image_credit);
         asset.set_body(body);
 
         asset.render();
@@ -228,24 +247,32 @@ function ingest_article(hatch, uri) {
         const asset = new libingester.NewsArticle();
         const author = $('span[itemprop=author]').text();
         let body = $('div.Normal, div.article p').first().attr('id','mybody');
+        if (!body[0]) { // Error 404
+            return;
+        }
         const canonical_uri = $('link[rel="canonical"]').attr('href');
-        const info_date = $('meta[itemprop="dateModified"]').attr('content');
+        const info_date = $('meta[itemprop="dateModified"], meta[name="Last-Modified-Date"]').attr('content');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
-        const page = 'Times of india';
+        const page = 'Times of India';
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
         const section = $('meta[itemprop="articleSection"]').attr('content') || 'Article';
-        const title = $('meta[property="og:title"]').attr('content');
+        const title = $('.title_section h1').text() || clean_title($('meta[property="og:title"]').attr('content'));
         const uri_main_image = $('meta[property="og:image"], meta[name="og:image"]').attr('content');
 
-        // Pull out the main image
-        let main_image, image_credit;
-        if (uri_main_image) {
-            main_image = libingester.util.download_image(uri_main_image, uri);
-            main_image.set_title(title);
-            image_credit = $('img_cptn').first().text() || $('div.title').text() ||'';
-            hatch.save_asset(main_image);
-            asset.set_thumbnail(main_image);
+        // Remove images with name "TOI"
+        if (!uri_main_image.includes('/47529300')) {
+            // Pull out the main image
+            let main_image, image_credit;
+            if (uri_main_image) {
+                main_image = libingester.util.download_image(uri_main_image, uri);
+                main_image.set_title(title);
+                image_credit = $('img_cptn').first().text() || $('div.title').text() ||'';
+                hatch.save_asset(main_image);
+                asset.set_thumbnail(main_image);
+            }
+
+            asset.set_main_image(main_image, image_credit);
         }
 
         let content = $('<div></div>');
@@ -293,6 +320,11 @@ function ingest_article(hatch, uri) {
         asset.set_lede(lede);
         body.find(first_p).remove();
 
+        // Delete other links
+        body.find('strong a').map((i,elem) =>{
+            $(elem).parent().remove();
+        });
+
         // convert 'p strong' to 'h2'
         body.find('p strong').map((i,elem) => {
             const text = $(elem).text().trim();
@@ -320,14 +352,13 @@ function ingest_article(hatch, uri) {
         asset.set_authors([author]);
         asset.set_canonical_uri(canonical_uri);
         asset.set_custom_scss(CUSTOM_CSS);
-        asset.set_date_published(Date.now(modified_date));
+        asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_link(read_more);
         asset.set_section(section);
         asset.set_source(page);
         asset.set_synopsis(synopsis);
         asset.set_title(title);
-        asset.set_main_image(main_image, image_credit);
         asset.set_body(body);
 
         asset.render();
