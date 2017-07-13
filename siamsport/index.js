@@ -20,7 +20,7 @@ const REMOVE_ATTR = [
 // Remove elements (meta.body)
 const REMOVE_ELEMENTS = [
     'br',
-    'div',
+//    'div',
     'iframe',
     'script',
     'hr',
@@ -67,11 +67,13 @@ function _get_ingest_settings($) {
     const section = canonical_uri.replace('http://www.siamsport.co.th/','');
     return {
         author: 'siamsport.co.th', // no authors
-        body: $('.newsdetail, .txtdetails, .newsde-text , .zone').first(), // all
+        //body: $('.newsdetail, .txtdetails, .newsde-text , .zone').first(), // all
+        body: $('.newsdetail').first(), // all
         canonical_uri: canonical_uri,
         date_published: Date.now(date),
         modified_date: date,
         // custom_scss: CUSTOM_SCSS,
+        page: 'Siamsport',
         read_more: `Bài gốc ở <a href="${canonical_uri}">siamsport</a>`,
         section: section.substring(0,section.indexOf('/')), // no section
         synopsis: desc.replace(/[\t\n]/g, ''),
@@ -103,81 +105,164 @@ function ingest_article(hatch, uri) {
         console.log('processing: '+uri);
 
 
+
+
+
         if ($('.newsdetail, .txtdetails, .newsde-text, .zone').length<1) throw {code: -1, message: 'Empty body'};
 
         let meta = _get_ingest_settings($);
-        if (!meta.title) throw {code: -1, message: 'File not Found!'}; // Some links return "File Not Found !"
 
-        // set first paragraph
-        const divs = meta.body.contents().filter((i,elem) => {
-            if (elem.attribs) return elem.attribs.style;
-        }).get();
+    console.log('--------------------------------------------------------');
+    console.log(uri);
+    console.log('--------------------------------------------------------');
+    console.log('author: '+ meta.author);
+    //console.log('body: '+ body);
+    console.log('canonical_uri: '+ meta.canonical_uri);
+    console.log('modified_date: '+ meta.modified_date);
+    console.log('page: '+ meta.page);
+    console.log('read_more: '+ meta.read_more);
+    console.log('synopsis: '+ meta.synopsis);
+    console.log('section: '+ meta.section);
+    console.log('title: '+ meta.title);
+    console.log('uri_main_image: '+ uri_main_image);
+    console.log('--------------------------------------------------------');
 
-        // if (divs.length == 2) {
-        // //    meta['body'] = $(divs[1]);
-        // }
+    // main image
+    const main_image = libingester.util.download_image(uri_main_image);
+    main_image.set_title(meta.title);
+    asset.set_thumbnail(main_image);
+    asset.set_main_image(main_image, '');
+    hatch.save_asset(main_image);
 
-        const first_p = meta.body.find('p').first();
-        const lede = first_p.clone();
-        lede.find('img').remove();
-        //asset.set_lede(lede);
-        meta['lede'] = lede;
-        meta.body.find(first_p).remove();
+    // remove elements and clean tags
+    const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+    meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+    meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
 
-        // main image
-        const main_image = libingester.util.download_image(uri_main_image);
-        main_image.set_title(meta.title);
-        asset.set_thumbnail(main_image);
-        asset.set_main_image(main_image, '');
-        hatch.save_asset(main_image);
+    let content = $('<div></div>');
+    let last_p; // reference to the paragraph we are constructing
+    meta.body.contents().map((i,elem) => {
+        // We start by validating if the 'elem' is text, or any other label that is not 'br'
+        if ((elem.type == 'text' && elem.data.trim() != '') || elem.name != 'br') {
+            if (!last_p) { // constructing a new paragraph
+                content.append($('<p></p>'));
+                last_p = content.find('p').last();
+            }
+            // if element is a 'div', check if the children are pictures
+            // and if true, we create the corresponding tags (figure, figcaption)
+            const attribs = elem.attribs || {};
+            // if (elem.name == 'div' && attribs.class=='image') {
+            //     elem.name='figure';
+            //     const figcaption = $(elem).next();
+            //     if (figcaption[0].name=='strong') {
+            //         $(elem).append(`<figcaption><p>${figcaption.text()}</p></figcaption>`);
+            //         figcaption.attr('class', 'remove');
+            //     }
+            //     const img = $(elem).find('img').first();
+            //     img[0].attribs.src=url.resolve(BASE_URI, img[0].attribs.src);
+            //     const image = libingester.util.download_img(img);
+            //     image.set_title(title);
+            //     hatch.save_asset(image);
+            //     // console.log($(elem).html());
+            //     content.append($(elem).clone());
+            //     return;
+            // }
+            last_p.append($(elem).clone());
+        } else if (elem.name == 'br') {
+            // when we find a 'br', it's time to start with another paragraph
+            last_p = undefined;
+            $(elem).remove();
+        }
+    });
+    meta.body = content;
+        //console.log(meta.body.html());
 
-        meta.body.find('div').map(function() {
-                let p = $('<p></p>').append($(this).clone());
-                $(this).replaceWith(p);
-            });
 
-        // remove elements and comments
-        const clen_attr = (elem) => REMOVE_ATTR.forEach(attr => $(elem).removeAttr(attr));
-        meta.body.contents().filter((i, elem) => elem.type === 'comment').remove();
-        meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+    // set first paragraph
 
-        // remove copyright warning
-        const warning = meta.body.find('strong').last();
-        for (const w of REMOVE_COPYRIGHT) {
-            if (warning.text() == w) {
-                $(warning).parent().parent().remove();
+    console.log(meta.body.html());
+    const first_p = meta.body.find('p').first();
+    const lede = first_p.clone();
+    lede.find('img').remove();
+    //asset.set_lede(lede);
+    meta['lede'] = lede;
+    //first_p.remove();
+
+    // convert 'p strong' to 'h2'
+    meta.body.find('p strong').map((i,elem) => {
+        const text = $(elem).text().trim();
+        let parent = $(elem).parent()[0];
+        while (parent) {
+            if (parent.name == 'p') {
+                const p_text = $(parent).text().trim();
+                if (text == p_text) {
+                    $(parent).replaceWith($(`<h2>${text}</h2>`));
+                }
                 break;
+            } else {
+                parent = $(parent).parent()[0];
             }
         }
-
-        if (!meta.lede) {
-            const first_p = meta.body.find('strong, p').first();
-            meta['lede'] = $(`<p>${first_p.text()}</p>`);
-            meta.body.find(first_p).remove();
-        }
-
-
-        // clean attribs (meta.body)
-        meta.body.find('span').removeAttr('style');
-
-
-        // download images
-        meta.body.find('img').get().map((img) => {
-            const parent = $(img).parent();
-            const figure = $(`<figure><img src="${img.attribs.src}" /></figure>`);
-            const image = libingester.util.download_img($(figure.children()[0]));
-            image.set_title(meta.title);
-            $(img).remove();
-            if (parent[0].name == 'p') {
-                figure.insertAfter(parent);
-            }
-            hatch.save_asset(image);
-        });
-
-        const tags = meta.body.find('p,span');
-        tags.map((i,elem) => clen_attr(elem));
-        tags.filter((i, elem) => $(elem).text().trim() === '').remove();
-
+    });
+        // if (!meta.title) throw {code: -1, message: 'File not Found!'}; // Some links return "File Not Found !"
+        //
+        // // set first paragraph
+        // const divs = meta.body.contents().filter((i,elem) => {
+        //     if (elem.attribs) return elem.attribs.style;
+        // }).get();
+        //
+        // // if (divs.length == 2) {
+        // // //    meta['body'] = $(divs[1]);
+        // // }
+        //
+        //
+        //
+        // meta.body.find('div').map(function() {
+        //         let p = $('<p></p>').append($(this).clone());
+        //         $(this).replaceWith(p);
+        //     });
+        //
+        // // remove elements and comments
+        // const clen_attr = (elem) => REMOVE_ATTR.forEach(attr => $(elem).removeAttr(attr));
+        // meta.body.contents().filter((i, elem) => elem.type === 'comment').remove();
+        //
+        // // remove copyright warning
+        // const warning = meta.body.find('strong').last();
+        // for (const w of REMOVE_COPYRIGHT) {
+        //     if (warning.text() == w) {
+        //         $(warning).parent().parent().remove();
+        //         break;
+        //     }
+        // }
+        //
+        // if (!meta.lede) {
+        //     const first_p = meta.body.find('strong, p').first();
+        //     meta['lede'] = $(`<p>${first_p.text()}</p>`);
+        //     meta.body.find(first_p).remove();
+        // }
+        //
+        //
+        // // clean attribs (meta.body)
+        // meta.body.find('span').removeAttr('style');
+        //
+        //
+        // // download images
+        // meta.body.find('img').get().map((img) => {
+        //     const parent = $(img).parent();
+        //     const figure = $(`<figure><img src="${img.attribs.src}" /></figure>`);
+        //     const image = libingester.util.download_img($(figure.children()[0]));
+        //     image.set_title(meta.title);
+        //     $(img).remove();
+        //     if (parent[0].name == 'p') {
+        //         figure.insertAfter(parent);
+        //     }
+        //     hatch.save_asset(image);
+        // });
+        //
+        // const tags = meta.body.find('p,span');
+        // tags.map((i,elem) => clen_attr(elem));
+        // tags.filter((i, elem) => $(elem).text().trim() === '').remove();
+        //
         //asset.set_custom_scss(CUSTOM_CSS);
         _set_ingest_settings(asset, meta);
         asset.render();
@@ -187,7 +272,7 @@ function ingest_article(hatch, uri) {
         if (err.code==-1) { return ingest_article(hatch, uri); }
     });
 }
-//
+
 // function ingest_gallery(hatch, uri) {
 //     return libingester.util.fetch_html(uri).then(($) => {
 //         const asset = new libingester.NewsArticle();
@@ -271,7 +356,7 @@ function ingest_video(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('siamsport', 'th');
 
-    ingest_article(hatch, 'http://www.siamsport.co.th/muaysiam/views/170626221133')
+    ingest_article(hatch, 'http://www.siamsport.co.th/Sport_Other/170712_001.html')
         .then(() => hatch.finish());
 
 
@@ -279,10 +364,13 @@ function main() {
     //     Promise.all(
     //         $('tr[valign="top"] td a').get().map((a) => {
     //             return libingester.util.fetch_html(a.attribs.href).then(($) => {
-    //                 const u = $('META').attr('content'),
-    //                     link = u.substring(u.indexOf('http'));
-    //                 const uri = link.includes('siamsport.co.th') ? link : a.attribs.href;
-    //                 return ingest_article(hatch, uri);
+    //                 const u = $('META').attr('content');
+    //                 if (u) {
+    //                     let link = u.substring(u.indexOf('http'));
+    //                     const uri = link.includes('siamsport.co.th') ? link : a.attribs.href;
+    //                     return ingest_article(hatch, uri);
+    //
+    //                 }
     //             })
     //         })
     //     )

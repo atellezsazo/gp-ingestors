@@ -1,12 +1,12 @@
 {
-    "name": "libingester-siamsport",
+    "name": "siamsport",
     "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.0.1",
+        "libingester": "^2.2.2",
         "moment": "^2.18.1"
     }
 }
