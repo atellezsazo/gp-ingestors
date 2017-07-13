@@ -47,13 +47,17 @@ Array.prototype.unique = function(a) {
 function _get_ingest_settings($) {
     const canonical_uri = $('link[rel="canonical"]').attr('href');
 
-    let uri_thumb = $('link[rel="image_src"]').attr('href');
-    if (!uri_thumb.includes('http:')) uri_thumb = 'http:' + uri_thumb;
+    // fixing links without protocol
+    const q_uri = url.parse($('link[rel="image_src"]').attr('href'));
+    q_uri.protocol = 'http:';
+    const uri_thumb = url.format(q_uri);
 
+    // set Date
     let modDate = $('meta[property="DC.date.issued"], meta[itemprop="datePublished"]').attr('content');
     if (!modDate) modDate = $('time[itemprop="datePublished"]').first().attr('datetime');
     const date = new Date(Date.parse(modDate));
 
+    // set author
     let author = $('meta[name="author"]').attr('content');
     if (!author) author = $('span[itemprop="author"]').first().text();
 
@@ -110,8 +114,10 @@ function ingest_article(hatch, uri) {
         my_body.find('section').map((i,elem) => {
             if (elem.attribs.itemprop == 'image') {
                 const img = $(elem).find('img').first();
+                const q_uri = url.parse(img.attr('src'));
+                q_uri.protocol = 'http:'; // fixed uri image (set protocol)
                 const caption = $(elem).find('.cb-img-cptn').first();
-                const image = `<img src="${'http:'+img.attr('src')}" alt="${img.attr('alt')}">`;
+                const image = `<img src="${url.format(q_uri)}" alt="${img.attr('alt')}">`;
                 const figure = $(`<figure>${image}</figure>`);
                 const figcaption = $(`<figcaption><p>${caption}</p></figcaption>`);
                 meta.body.append(figure.append(figcaption));
@@ -241,7 +247,7 @@ function ingest_gallery(hatch, uri) {
 
 function ingest_video(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
-        // the "url_download" can not be obtained
+        // the "url_download" can not be obtained; the video is rendered with javascript
         return;
     }).catch(err => {
         if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_video(hatch, uri);
@@ -276,8 +282,7 @@ function main() {
 
     // ingest articles
     const ingest_by_category = (hatch, uri) => {
-        let category = uri.replace(BASE_URI, '');
-        category = category.substring(0, category.indexOf('/'));
+        const category = url.parse(uri).path.split('/')[1];
 
         switch (category) {
             case 'cricket-gallery': return ingest_gallery(hatch, uri);
