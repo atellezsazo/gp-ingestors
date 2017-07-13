@@ -126,7 +126,7 @@ function ingest_gallery(hatch, uri) {
         const page = 'Times of india';
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
-        const section = $('meta[itemprop="articleSection"]').attr('content') || 'Article';
+        const section = $('meta[content="2"]').parent().text() || 'Article';
         const title = clean_title($('meta[property="og:title"]').attr('content'));
         const uri_main_image = $('meta[property="og:image"], meta[name="og:image"]').attr('content');
         let thumbnail;
@@ -190,7 +190,7 @@ function ingest_editorials(hatch, uri) {
         const page = 'Times of india';
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
-        const section = $('meta[itemprop="articleSection"]').attr('content') || 'Article';
+        const section = $('meta[content="2"]').parent().text() || 'Article';
         const title = $('.title_section h1').text() || clean_title($('meta[property="og:title"]').attr('content'));
         const uri_main_image = $('meta[property="og:image"], meta[name="og:image"]').attr('content');
 
@@ -256,7 +256,7 @@ function ingest_article(hatch, uri) {
         const page = 'Times of India';
         const read_more = `Original article at <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
-        const section = $('meta[itemprop="articleSection"]').attr('content') || 'Article';
+        const section = $('meta[content="2"]').parent().text() || 'Article';
         const title = $('.title_section h1').text() || clean_title($('meta[property="og:title"]').attr('content'));
         const uri_main_image = $('meta[property="og:image"], meta[name="og:image"]').attr('content');
 
