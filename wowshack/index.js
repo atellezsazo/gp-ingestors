@@ -3,7 +3,7 @@
 const libingester = require('libingester');
 const url = require('url');
 
-const BASE_URI = 'https://www.wowshack.com/';
+const RSS_FEED = 'https://www.wowshack.com/feed/';
 
 const CUSTOM_CSS = `
 $primary-light-color: #CB162D;
@@ -244,16 +244,17 @@ function ingest_article(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        if (err.code === 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
+        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch('wowshack', 'en');
+    const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
+    const max_posts = parseInt(process.argv[2]) || 20;
 
-    libingester.util.fetch_html(BASE_URI).then($ => {
-        const links = $('a[rel="bookmark"]').get().map(a => a.attribs.href).unique();
-        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
+    libingester.util.fetch_rss_entries(feed, max_posts, 200).then(items => {
+        return Promise.all(items.map(item => ingest_article(hatch, item.link)))
             .then(() => hatch.finish());
     })
     .catch(err => {
