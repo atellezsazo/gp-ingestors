@@ -134,10 +134,8 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-
-    let MAX_DAYS_OLD =500;
-    if (process.env.MAX_DAYS_OLD)
-        MAX_DAYS_OLD = parseInt(process.env.MAX_DAYS_OLD);
+    //Paramet 
+    const MAX_DAYS_OLD = parseInt(process.argv[2]) || 1;
 
     // wordpress pagination
     const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
