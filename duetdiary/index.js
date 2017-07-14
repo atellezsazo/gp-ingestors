@@ -134,7 +134,7 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    //Paramet 
+    //Parameter for the days of ingestion 
     const MAX_DAYS_OLD = parseInt(process.argv[2]) || 1;
 
     // wordpress pagination
