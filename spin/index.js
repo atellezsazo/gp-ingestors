@@ -146,7 +146,7 @@ function ingest_article(hatch, uri) {
         body.find(CLEAN_TAGS.join(',')).map((i,elem) => clean_attr(elem));
 
         // Article Settings
-        console.log('processing', title);
+        console.log('processing: ', title);
         asset.set_authors([author]);
         asset.set_canonical_uri(canonical_uri);
         asset.set_custom_scss(CUSTOM_CSS);
@@ -173,7 +173,7 @@ function ingest_video (hatch, uri){
     return libingester.util.fetch_html(uri).then($ => {
 
         const asset = new libingester.VideoAsset();
-        
+
         if (!$('script[type="application/ld+json"]').text()) { // Error 404
             return;
         }
@@ -190,7 +190,7 @@ function ingest_video (hatch, uri){
         image.set_title(title);
         hatch.save_asset(image);
 
-        console.log('Video processing', title, ' | ', uri);
+        console.log('processing: ', title);
         asset.set_last_modified_date(date);
         asset.set_title(title);
         asset.set_canonical_uri(uri);
