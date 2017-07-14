@@ -99,8 +99,8 @@ function ingest_article(hatch, uri) {
             if (video_url.includes('youtube')) {
                 const video_asset = new libingester.VideoAsset();
                 const thumb_url = $('meta[property=\'og:image\']').attr('content');
-                const full_uri = url.format(video_url, { search: false })
-                    // thumbnail
+                const full_uri = url.format(video_url, { search: false });
+                // thumbnail
                 const thumbnail = libingester.util.download_image(thumb_url);
                 thumbnail.set_title(title);
                 hatch.save_asset(thumbnail);
