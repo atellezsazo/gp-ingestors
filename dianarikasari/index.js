@@ -167,7 +167,7 @@ function ingest_article(hatch, uri) {
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
         body.find('p,div').filter((i, elem) => $(elem).text().trim() === '').remove();
-        body.find('figure').filter((i,elem) => $(elem).find('img').first()[0]).remove();
+        body.find('figure').filter((i,elem) => !$(elem).find('img').first()[0]).remove();
 
         // save document
         console.log('processing', title);
