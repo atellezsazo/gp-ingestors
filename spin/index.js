@@ -1,6 +1,5 @@
 'use strict';
 
-const Promise = require("bluebird");
 const libingester = require('libingester');
 const url = require('url');
 
@@ -79,6 +78,10 @@ function ingest_article(hatch, uri) {
         const title = $('meta[name="title"]').attr('content');
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
+        if (!body[0]) { // Error 404
+            return;
+        }
+
         // Pull out the main image
         let main_image, image_credit;
         if (uri_main_image) {
@@ -133,7 +136,7 @@ function ingest_article(hatch, uri) {
         body.find('p').map((i,elem)=>{
             const strong = $(elem).find('strong').first();
             if (strong[0]) {
-                const h2 = $(`<h2>${strong.text()}</h2>`);                
+                const h2 = $(`<h2>${strong.text()}</h2>`);
                 $(elem).replaceWith(h2);
             }
         });
@@ -147,7 +150,7 @@ function ingest_article(hatch, uri) {
         asset.set_authors([author]);
         asset.set_canonical_uri(canonical_uri);
         asset.set_custom_scss(CUSTOM_CSS);
-        asset.set_date_published(Date.now(modified_date));
+        asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_link(read_more);
         asset.set_section(section);
@@ -170,18 +173,24 @@ function ingest_video (hatch, uri){
     return libingester.util.fetch_html(uri).then($ => {
 
         const asset = new libingester.VideoAsset();
+        
+        if (!$('script[type="application/ld+json"]').text()) { // Error 404
+            return;
+        }
         // Catch info video
         const video_json = JSON.parse($('script[type="application/ld+json"]').text());
+
         const date = new Date(Date.parse(video_json.uploadDate));
         const title = video_json.name;
         const video_uri = video_json.embedUrl;
         const thumbnail = video_json.thumbnailUrl;
 
+
         const image = libingester.util.download_image(thumbnail);
         image.set_title(title);
         hatch.save_asset(image);
 
-        console.log('processing', title);
+        console.log('Video processing', title, ' | ', uri);
         asset.set_last_modified_date(date);
         asset.set_title(title);
         asset.set_canonical_uri(uri);
@@ -211,6 +220,10 @@ function ingest_gallery(hatch, uri){
         let thumbnail;
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
+        if (!body[0]) { // Error 404
+            return;
+        }
+
         body.find('li').map((i, elem) => {
             const img = $(elem).find('img').first();
             const caption = img.attr('title');
@@ -219,12 +232,12 @@ function ingest_gallery(hatch, uri){
             const figcaption = $(`<figcaption><p>${caption}</p></figcaption>`);
             const down_img = libingester.util.download_img($(figure.children()[0]));
             down_img.set_title(title);
-            if (!thumbnail) asset.set_thumbnail(thumbnail=down_img);
             hatch.save_asset(down_img);
             $(elem).replaceWith(figure.append(figcaption));
         });
 
         // Article Settings
+        console.log('processing', title);
         asset.set_authors([author]);
         asset.set_lede(title);
         asset.set_date_published(date);
@@ -273,8 +286,8 @@ function main() {
     }
 
     get_all_links().then(links => {
-         return Promise.map(links, (uri) => ingest_by_category(hatch, uri))
-             .then(() => hatch.finish());
+        Promise.all(links.map(link => ingest_by_category(hatch, link)))
+            .then(() => hatch.finish())
     }).catch(err => {
         console.log(err);
         process.exitCode = 1;
