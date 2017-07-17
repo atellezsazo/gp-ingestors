@@ -1,9 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const mustache = require('mustache');
-const rss2json = require('rss-to-json');
-const template = require('./template');
 
 const RSS_URI = 'https://blogazine.pub/blog/feed';
 
@@ -164,13 +161,18 @@ function ingest_article(hatch, item) {
  * @return {Promise}
  */
 function main() {
-    const hatch = new libingester.Hatch();
-    rss2json.load(RSS_URI, (err, rss) => {
-        const batch_items = rss.items.map(data => data);
-        Promise.all(batch_items.map(item => ingest_article(hatch, item))).then(() => {
-            return hatch.finish();
-        });
+    // const hatch = new libingester.Hatch();
+
+    libingester.util.fetch_rss_entries(RSS_URI, 100, 1000).then(items => {
+        console.log(items.length);
     });
+
+    // rss2json.load(RSS_URI, (err, rss) => {
+    //     const batch_items = rss.items.map(data => data);
+    //     Promise.all(batch_items.map(item => ingest_article(hatch, item))).then(() => {
+    //         return hatch.finish();
+    //     });
+    // });
 }
 
 main();
