@@ -1,0 +1,12 @@
+{
+  "name": "ndtv-sports",
+  "version": "0.0.2",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "feedparser-promised": "^1.2.2",
+    "libingester": "^2.2.2"
+  }
+}
