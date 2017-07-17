@@ -3,7 +3,7 @@
 const libingester = require('libingester');
 const url = require('url');
 
-const BASE_URI = 'http://www.cricbuzz.com/';
+const RSS_FEED = 'http://live-feeds.cricbuzz.com/CricbuzzFeed';
 
 const CUSTOM_SCSS = `
 $primary-light-color: #468EE5;
@@ -37,11 +37,6 @@ const REMOVE_ATTR = [
     'class',
     'style',
 ];
-
-/* delete duplicated elements in array */
-Array.prototype.unique = function(a) {
-    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
-});
 
 /** get articles metadata **/
 function _get_ingest_settings($) {
@@ -101,9 +96,6 @@ function _set_ingest_settings(hatch, asset, meta) {
  */
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then($ => {
-        // some links lead to more links
-        if (!$('meta[property="og:title"]').attr('content')) return;
-
         const asset = new libingester.NewsArticle();
         const my_body = $('#page-wrapper article').first();
         let thumbnail;
@@ -171,6 +163,7 @@ function ingest_article(hatch, uri) {
                 .map((i,span) => meta.lede.append($(span).html(), $('<br>')));
             lede.find('p, span, strong').map((i,elem) => clean_attr(elem));
         } else {
+            // find lede for cricket-news
             for (const p of meta.body.find('p').get()) {
                 if ($(p).parent()[0].attribs.id == 'mybody') {
                     if ($(p).find('b').first()[0]) {
@@ -245,56 +238,36 @@ function ingest_gallery(hatch, uri) {
     });
 }
 
-function ingest_video(hatch, uri) {
-    return libingester.util.fetch_html(uri).then($ => {
-        // the "url_download" can not be obtained; the video is rendered with javascript
-        return;
-    }).catch(err => {
-        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_video(hatch, uri);
-    });
-}
-
 function main() {
     const hatch = new libingester.Hatch('cricbuzz', 'en');
-    const resolve = (a) => url.resolve(BASE_URI, a.attribs.href);
+    const days_old = parseInt(process.argv[2]) || 5;
 
-    // finding all recent links
-    const get_all_links = (uri) => {
-        let all_links = [];
-        return libingester.util.fetch_html(uri).then($ => {
-            const feature_videos = $('#latest-vid-mod a').map((i,a) => resolve(a)).get();
-            const latest_news = $('#cb-news-blck a').map((i,a) => resolve(a)).get();
-            const latest_photos = $('#hm-photos-blk a').map((i,a) => resolve(a)).get();
-            const main = $('.cb-hmpage a').filter((i,a) => !a.attribs.href.includes('live-cricket-scores/'))
-                .map((i,a) => resolve(a)).get();
-            const specials = $('h4').filter((i,h4) => $(h4).text() == 'Specials')
-                .parent().find('a').map((i,a) => resolve(a)).get();
+    const excluded_links = [
+        '/live-cricket-scores', // live stream
+        '/cricket-videos', // videos rendered by scripts
+    ];
 
-            all_links = all_links.concat(
-                feature_videos.slice(0,feature_videos.length-1),
-                latest_news.slice(0,latest_news.length-1),
-                latest_photos.slice(0,latest_photos.length-1),
-                main.slice(0,10),
-                specials
-            );
-        }).then(() => all_links.unique());
+    const is_excluded = (uri) => {
+        for (const exclude of excluded_links) if (uri.includes(exclude)) return true;
+        return false;
     }
 
-    // ingest articles
-    const ingest_by_category = (hatch, uri) => {
-        const category = url.parse(uri).path.split('/')[1];
+    libingester.util.fetch_rss_entries(RSS_FEED).then(items => {
+        let promises = [];
 
-        switch (category) {
-            case 'cricket-gallery': return ingest_gallery(hatch, uri);
-            case 'cricket-videos': return ingest_video(hatch, uri);
-            default: return ingest_article(hatch, uri);
-        }
-    }
+        items.map(item => {
+            if (is_excluded(item.origlink)) return;
 
-    get_all_links(BASE_URI).then(links => {
-        return Promise.all(links.map(uri => ingest_by_category(hatch, uri)))
-            .then(() => hatch.finish());
-    }).catch(err => {
+            if (item.origlink.includes('/cricket-gallery')) {
+                promises.push(ingest_gallery(hatch, item.origlink));
+            } else {
+                promises.push(ingest_article(hatch, item.origlink));
+            }
+        });
+
+        return Promise.all(promises).then(() => hatch.finish());
+    })
+    .catch(err => {
         console.log(err);
         process.exitCode = 1;
     });
