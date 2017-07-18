@@ -5,7 +5,6 @@ const rss2json = require('rss-to-json');
 const url = require('url');
 
 const BASE_URI = 'http://timesofindia.indiatimes.com/';
-const MAX_LINKS = 3; // max links per 'rss'
 const RSS_FEED = [
     'http://timesofindia.indiatimes.com/rssfeedstopstories.cms', // Top Stories
     'http://timesofindia.indiatimes.com/rssfeeds/1221656.cms', // Most recent stories
@@ -26,18 +25,6 @@ const RSS_FEED = [
     'http://timesofindia.indiatimes.com/rssfeedmostread.cms', //Most read
     'http://timesofindia.indiatimes.com/rssfeedmostemailed.cms', // Most shared
     'http://timesofindia.indiatimes.com/rssfeedmostcommented.cms' // Most commented
-];
-
-// cleaning elements
-const CLEAM_ELEMENTS = [
-    'a',
-    'div',
-    'figure',
-    'h2',
-    'i',
-    'p',
-    'span',
-    'ul'
 ];
 
 // delete attr (tag)
@@ -169,7 +156,6 @@ function ingest_gallery(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
-        console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
             console.log('Ingest gallery error:' + err);
         }
@@ -206,11 +192,8 @@ function ingest_editorials(hatch, uri) {
                 asset.set_thumbnail(main_image);
                 asset.set_main_image(main_image, image_credit);
             }
-
             asset.set_main_image(main_image, image_credit);
         }
-
-
 
         // set first paragraph
         const first_p = body.find('p').first();
@@ -235,7 +218,6 @@ function ingest_editorials(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
-        console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
             console.log('Ingest error:' + err);
         }
@@ -271,7 +253,6 @@ function ingest_article(hatch, uri) {
                 hatch.save_asset(main_image);
                 asset.set_thumbnail(main_image);
             }
-
             asset.set_main_image(main_image, image_credit);
         }
 
@@ -299,7 +280,6 @@ function ingest_article(hatch, uri) {
                     const image = libingester.util.download_img(img);
                     image.set_title(title);
                     hatch.save_asset(image);
-                    // console.log($(elem).html());
                     content.append($(elem).clone());
                     return;
                 }
@@ -364,33 +344,10 @@ function ingest_article(hatch, uri) {
         asset.render();
         hatch.save_asset(asset);
     }).catch((err) => {
-        console.log(err);
         if (err.code == -1 || err.statusCode == 403) {
             console.log('Ingest error:' + err);
         }
     });
-}
-
-// return the items for one link
-function _load_rss(rss_uri) {
-    return new Promise((resolve, reject) => {
-        rss2json.load(rss_uri, (err, rss) => {
-            if (err) reject(err);
-            else resolve(rss.items.slice(0,MAX_LINKS));
-        });
-    });
-}
-
-// return all links found in rss
-function _load_all_rss_links(rss_list) {
-    let all_links = [];
-    return Promise.all(rss_list.map(rss => _load_rss(rss).then(items => {
-        items.map(item => {
-            if (!item.link.includes('/liveblog')) {
-                all_links.push(item.link);
-            }
-            });
-    }))).then(() => all_links.unique());
 }
 
 function ingest_by_category(hatch, link) {
@@ -404,11 +361,23 @@ function ingest_by_category(hatch, link) {
     }
 }
 
+function fetch_all_rss_entries(list_of_rss, max_per_category) {
+    let all_entries = [];
+    const promises = list_of_rss.map(uri => {
+        return libingester.util.fetch_rss_entries(uri, max_per_category).then(rss => {
+            rss.map(item => all_entries.push(item.link));
+        })
+    })
+
+    return Promise.all(promises).then(() => all_entries.unique());
+}
+
 function main() {
     const hatch = new libingester.Hatch('Times_of_india', 'en');
+    const max_per_category = parseInt(process.argv[2]) || 5;
 
-    _load_all_rss_links(RSS_FEED).then(links => {
-        Promise.all(links.map(link => ingest_by_category(hatch, link)))
+    fetch_all_rss_entries(RSS_FEED, max_per_category).then(links => {
+        return Promise.all(links.map(link => ingest_by_category(hatch, link)))
             .then(() => hatch.finish())
     }).catch(err => {
         console.log(err);
