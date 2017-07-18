@@ -37,7 +37,7 @@ function ingest_article(hatch, uri) {
         const categories = $('ul.links li a').map((i,a) => $(a).text()).get();
         const description = 'aaaaa';
         const modified_date = new Date(date);
-        const read_more = 'อ่านเพิ่มเติมที่ www.blogazine.com';
+        const read_more = 'อ่านเพิ่มเติมที่ www.blogazine.pub';
         let thumbnail;
 
         // finding first wrapp; "elem": Object Cheerio; "id_main_tag": String
@@ -80,7 +80,6 @@ function ingest_article(hatch, uri) {
 
         // find the last child Example: "div>div>span" return span
         const find_the_last_child = (parent) => {
-            console.log(parent.name);
             if (parent.name == 'p') return parent;
             const child = $(parent).children().get();
             if (child.length == 1) {
@@ -109,13 +108,24 @@ function ingest_article(hatch, uri) {
         // delete spaces and special characters "&#xA0;"
         const trim = (str) => str.replace(new RegExp('&#xA0;','g'),' ').trim();
 
+        // fixed all 'divs'
+        const fix_divs = (div = body.children().find('div>div').first()) => {
+            if (div[0]) {
+                const parent = $(div).parent();
+                $(parent).children().insertBefore(parent);
+                fix_divs(body.children().find('div>div').first());
+            }
+        }
+        fix_divs();
+
         // convert 'tag' to 'p'
         body.contents().filter((i,elem) => elem.type == 'tag').map((i,elem) => elem.name = 'p');
 
         // convert 'p>strong' to 'h2'
         body.find('p>strong').map((i,elem) => {
             const parent = $(elem).parent();
-            if (parent.text().trim() == $(elem).text().trim()) {
+            const text = $(elem).text().trim();
+            if (parent.text().trim() == text && text.length < 100) {
                 parent.replaceWith(`<h2>${$(elem).text().trim()}</h2>`);
             }
         });
@@ -168,8 +178,6 @@ function ingest_article(hatch, uri) {
                 image.set_title(title);
                 hatch.save_asset(image);
                 if (!thumbnail) asset.set_thumbnail(thumbnail = image);
-            } else {
-                console.log('sin figure');
             }
         });
 
@@ -251,6 +259,7 @@ function ingest_article(hatch, uri) {
         asset.set_synopsis(description);
         asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
+        asset.set_read_more_text(read_more);
         asset.set_custom_scss(`
             $primary-light-color: #212121;
             $primary-medium-color: #000000;
@@ -270,31 +279,13 @@ function ingest_article(hatch, uri) {
 
         asset.render();
         hatch.save_asset(asset);
-    }).catch((err) => {
-        console.log(uri, err);
-    });
-}
-
-function fetch_entries(page_entrie, max_items) {
-    let all_links = [];
-    let uri = page_entrie + '?page=';
-
-    const get_links = (uri, n=0) => {
-        return libingester.util.fetch_html(uri+n).then($ => {
-            const links = $('article h2 a').map((i,a) => url.resolve(page_entrie, a.attribs.href)).get();
-            all_links = all_links.concat(links);
-            if (all_links.length < max_items) return get_links(uri, ++n);
-        })
-    }
-
-    return get_links(uri).then(() => {
-        return all_links.slice(0,max_items);
+    }).catch(err => {
+        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch('blogazine', 'th');
-    // const max_items = parseInt(process.argv[2]) || 20;
     const days_old = parseInt(process.argv[2]) || 30;
 
     libingester.util.fetch_rss_entries(RSS_URI, 100, days_old).then(entries => {
@@ -305,14 +296,6 @@ function main() {
         console.log(err);
         process.exitCode = 1;
     });
-    // fetch_entries('https://blogazine.pub/blog/', max_items).then(links => {
-    //     return Promise.all(links.map(link => ingest_article(hatch, link)))
-    // })
-    // .then(() => hatch.finish())
-    // .catch(err => {
-    //     console.log(err);
-    //     process.exitCode = 1;
-    // });
 }
 
 main();
