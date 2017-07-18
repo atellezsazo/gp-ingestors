@@ -6,6 +6,6 @@
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.2.2"
+        "libingester": "^2.2.4"
     }
 }
