@@ -286,7 +286,7 @@ function main() {
     }
 
     get_all_links().then(links => {
-        Promise.all(links.map(link => ingest_by_category(hatch, link)))
+        return Promise.all(links.map(link => ingest_by_category(hatch, link)))
             .then(() => hatch.finish())
     }).catch(err => {
         console.log(err);
