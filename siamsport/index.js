@@ -229,7 +229,7 @@ function clean_title(title) {
 }
 
 function ingest_gallery(hatch, uri, meta) {
-    return libingester.util.fetch_html(uri, 'windows-874').then(($) => {
+    return libingester.util.fetch_html(uri, `ascii`).then(($) => {
         const asset = new libingester.NewsArticle();
         const title = clean_title($('.font-pink18').first().text());
         if (!meta) {
@@ -266,7 +266,6 @@ function ingest_gallery(hatch, uri, meta) {
             }
         }
 
-        console.log('processing',title);
         meta.body.contents().filter((index, node) => node.type === 'comment').remove();
         meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
         meta.body.find('div, p').filter((i,elem) => $(elem).text().trim() === '').remove();
@@ -275,6 +274,7 @@ function ingest_gallery(hatch, uri, meta) {
         asset.set_thumbnail(meta.main_image);
         asset.render();
         hatch.save_asset(asset);
+        console.log('processing',title);
 
     }).catch((err) => {
         console.log('Ingest gallery error: '+err);
@@ -283,7 +283,7 @@ function ingest_gallery(hatch, uri, meta) {
 }
 
 function ingest_video(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
+    return libingester.util.fetch_html(uri, 'windows-874').then(($) => {
         const description = $('meta[name="description"]').attr('content');
         const thumb_url = $('meta[property="og:image"]').attr('content');
         const title = $('meta[property="og:title"]').attr('content');
@@ -327,37 +327,40 @@ function ingest_by_category(hatch, link) {
 function main() {
     const hatch = new libingester.Hatch('siamsport', 'th');
 
-    const article = libingester.util.fetch_html(uri_article).then(($) =>
-         Promise.all(
-            $('tr[valign="top"] td a').get().map((a) => {
-                return libingester.util.fetch_html(a.attribs.href).then(($) => {
-                    const u = $('META').attr('content');
-                    if (u) {
-                        let link = u.substring(u.indexOf('http'));
-                        const uri = link.includes('siamsport.co.th') ? link : a.attribs.href;
-                        return ingest_article(hatch, uri);
+    ingest_gallery(hatch, 'http://www.siamsport.co.th/SiamsportPhoto/show.php?id=1791')
+        .then(() => hatch.finish());
 
-                    }
-                })
-            })
-        )
-    );
+    // const article = libingester.util.fetch_html(uri_article).then(($) =>
+    //      Promise.all(
+    //         $('tr[valign="top"] td a').get().map((a) => {
+    //             return libingester.util.fetch_html(a.attribs.href).then(($) => {
+    //                 const u = $('META').attr('content');
+    //                 if (u) {
+    //                     let link = u.substring(u.indexOf('http'));
+    //                     const uri = link.includes('siamsport.co.th') ? link : a.attribs.href;
+    //                     return ingest_article(hatch, uri);
+    //
+    //                 }
+    //             })
+    //         })
+    //     )
+    // );
 
-    // const gallery = libingester.util.fetch_html(uri_gallery,  `windows-874`).then(($) => {
+    // const gallery = libingester.util.fetch_html(uri_gallery).then(($) => {
     //     const links = $('.pink18-link').get().map((a) => url.resolve(uri_gallery, a.attribs.href));
     //     return Promise.all(links.map((uri) => ingest_gallery(hatch, uri)));
     // });
 
-    const video = libingester.util.fetch_html(uri_video).then(($) => {
-        const links = $('.top-pic a').get().map((a) => url.resolve(uri_video, a.attribs.href));
-        return Promise.all(links.map((uri) => ingest_video(hatch, uri)));
-    });
+    // const video = libingester.util.fetch_html(uri_video).then(($) => {
+    //     const links = $('.top-pic a').get().map((a) => url.resolve(uri_video, a.attribs.href));
+    //     return Promise.all(links.map((uri) => ingest_video(hatch, uri)));
+    // });
     //
     // // Promise.all([article, gallery, video]).then(() => {
     //
-    //
-    Promise.all([article, video])
-        .then(() => hatch.finish());
+    // //
+    // Promise.all([gallery])
+    //     .then(() => hatch.finish());
 }
 
 main();
