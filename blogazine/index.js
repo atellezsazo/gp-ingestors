@@ -35,7 +35,6 @@ function ingest_article(hatch, uri) {
         const section = "Article";
         const title = $('h1[id="page-title"]').text();
         const categories = $('ul.links li a').map((i,a) => $(a).text()).get();
-        const description = 'aaaaa';
         const modified_date = new Date(date);
         const read_more = 'อ่านเพิ่มเติมที่ www.blogazine.pub';
         let thumbnail;
@@ -249,6 +248,12 @@ function ingest_article(hatch, uri) {
 
         // remove empty tags
         new_body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+
+        // generate description
+        let description = new_body.find('p').first().text().trim() || '';
+        if (description.length > 99) {
+            description = description.substring(0, 99) + '...';
+        }
 
         // article settings
         asset.set_canonical_uri(uri);
