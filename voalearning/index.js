@@ -203,23 +203,26 @@ function ingest_article(hatch, uri) {
             }
         });
 
-        // fixed all 'divs'
+        // extract contents on div's
         const extract_divs = (div = body.find('div').first()) => {
             if (div[0]) {
                 div.contents().map((i,elem) => $(elem).insertBefore(div));
                 div.remove();
+                convert_divs();
                 extract_divs(body.find('div').first());
             }
         }
+
+        // convert main divs to 'p'
         const convert_divs = () => {
             body.contents().filter((i,elem) => elem.name == 'div').map((i,div) => {
                 if (!$(div).find('div, p, h2').first()[0]) div.name = 'p';
             });
         }
+
+        // fixed all 'divs'
         convert_divs();
         extract_divs();
-        console.log(body.html());
-        convert_divs();
 
         // fix paragraphs
         body.find('p').map((i,elem) => {
@@ -250,17 +253,35 @@ function ingest_article(hatch, uri) {
 
         // fixing some tags
         body.find('p>figure').map((i,elem) => $(elem).insertAfter($(elem).parent()));
+        body.find('p>video, p>audio').map((i,elem) => $(elem).insertBefore($(elem).parent()));
         body.find('p>p').map((i,elem) => {
             const parent = $(elem).parent();
             if (parent.text().trim() == $(elem).text().trim()) parent.replaceWith(elem);
         });
         body.find('p').filter((i,p) => $(p).text().trim() == '').remove();
+        body.find('br').remove();
+
+        // return True if tag is a delimiter
+        const delimiters = ['h1','h2','p','figure','h3','hr', 'video', 'audio'];
+        const is_delimiter = (tag) => {
+            for (const delimit of delimiters) if (tag.name == delimit) return true;
+        }
 
         // wrapp lost text with 'p'
+        let lost_p = $('<p></p>');
         body.contents().filter((i,elem) => {
-            const txt = $(elem).text().trim();
-            elem.type == 'text' && $(elem).text().trim() != ''
-        }).map((i,elem) => $(elem).replaceWith(`<p>${$(elem).text()}</p>`));
+            if (is_delimiter(elem)) {
+                const children = lost_p.children();
+                const text = lost_p.text().trim();
+                if (children[0] && text !== '') {
+                    lost_p.clone().insertBefore(elem);
+                    lost_p = $('<p></p>');
+                }
+            } else {
+                lost_p.append($(elem).clone());
+                $(elem).remove();
+            }
+        })
 
         // append 'main video' to the body and set thumbnail
         const video_meta = get_metadata_video(undefined, main_video);
@@ -338,17 +359,17 @@ function ingest_video(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('learning-english-voa', 'en');
 
-    ingest_article(hatch, 'https://learningenglish.voanews.com/a/lets-learn-english-lesson-22/3397314.html')
-        .then(() => hatch.finish())
+    // ingest_article(hatch, 'https://learningenglish.voanews.com/a/lets-learn-english-lesson-22/3397314.html')
+    //     .then(() => hatch.finish())
 
-    // libingester.util.fetch_html(PAGE_LINKS).then($ => {
-    //     const links = $('#content').find('.img-wrap').get().map(a => url.resolve(BASE_URI, a.attribs.href));
-    //     return Promise.all(links.map(uri => ingest_article(hatch, uri)))
-    //         .then(() => hatch.finish());
-    // }).catch(err => {
-    //     console.log(err);
-    //     process.exitCode = 1;
-    // });
+    libingester.util.fetch_html(PAGE_LINKS).then($ => {
+        const links = $('#content').find('.img-wrap').get().map(a => url.resolve(BASE_URI, a.attribs.href));
+        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
+    });
 }
 
 main();
