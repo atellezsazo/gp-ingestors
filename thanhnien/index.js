@@ -41,6 +41,22 @@ const REMOVE_ELEMENTS = [
     'style',
 ];
 
+const CUSTOM_SCSS = `
+$primary-light-color: #B3B3B3;
+$primary-medium-color: #3D3B41;
+$primary-dark-color: #00578D;
+$accent-light-color: #00B4F3;
+$accent-dark-color: #009EDD;
+$background-light-color: #F5F5F5;
+$background-dark-color: #DFDFDF;
+$title-font: 'Roboto Salab';
+$body-font: 'Roboto';
+$display-font: 'Roboto';
+$context-font: 'Roboto';
+$support-font: 'Roboto';
+@import '_default';
+`;
+
 /** get articles metadata **/
 function _get_ingest_settings($) {
     const canonical_uri = $('link[rel="canonical"]').attr('href');
@@ -57,7 +73,7 @@ function _get_ingest_settings($) {
         date_published: modified_date,
         lede: $(`<p>${$('.cms-desc').first().text()}</p>`),
         modified_date: modified_date,
-        // custom_scss: CUSTOM_SCSS,
+        custom_scss: CUSTOM_SCSS,
         read_more: `Bài gốc tại <a href="${canonical_uri}">thanhnien.vn</a>`,
         section: $('meta[property="article:section"]').attr('content'),
         synopsis: $('meta[property="og:description"]').attr('content'),
@@ -118,7 +134,6 @@ function ingest_article(hatch, uri) {
                     parent = $(current).parent()[0];
                 }
             }
-            return undefined;
         }
 
         // fix images into tables, or into divs
@@ -210,11 +225,11 @@ function ingest_article(hatch, uri) {
         meta.body.contents().filter((i,elem) => elem.type == 'comment').remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
 
-        console.log('processing',meta.title);
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
+    })
+    .catch(err => {
         if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, uri);
     });
 }
@@ -249,9 +264,9 @@ function ingest_video(hatch, uri) {
             hatch.save_asset(thumb);
             hatch.save_asset(asset);
         }
-    }).catch(err => {
-        console.log(err);
-        if (err.code == 'ECONNRESET') return ingest_video(hatch, uri);
+    })
+    .catch(err => {
+        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_video(hatch, uri);
     });
 }
 
@@ -277,8 +292,9 @@ function main() {
             .map((i,elem) => $(elem).text()).get();
 
         return Promise.all(links.map(uri => _ingest_by_category(hatch, uri)))
-            .then(() => hatch.finish());
-    }).catch(err => {
+    })
+    .then(() => hatch.finish())
+    .catch(err => {
         console.log(err);
         process.exitCode = 1;
     });
