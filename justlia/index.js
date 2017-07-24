@@ -39,22 +39,22 @@ const REMOVE_ELEMENTS = [
     '.rs-adblock',
 ];
 
-const CUSTOM_SCSS = `
-$primary-light-color: #3A95DC;
-$primary-medium-color: #3B7098;
-$primary-dark-color: #24231F;
-$accent-light-color: #FCB900;
-$accent-dark-color: #B5963B;
-$background-light-color: #F8F8F8;
-$background-dark-color: #F3F3F3;
-$title-font: 'Taviraj';
-$body-font: 'Kanit';
-$display-font: 'Taviraj';
-$logo-font: 'Taviraj';
-$context-font: 'Kanit';
-$support-font: 'Kanit';
-@import '_default';
-`;
+// const CUSTOM_SCSS = `
+// $primary-light-color: #3A95DC;
+// $primary-medium-color: #3B7098;
+// $primary-dark-color: #24231F;
+// $accent-light-color: #FCB900;
+// $accent-dark-color: #B5963B;
+// $background-light-color: #F8F8F8;
+// $background-dark-color: #F3F3F3;
+// $title-font: 'Taviraj';
+// $body-font: 'Kanit';
+// $display-font: 'Taviraj';
+// $logo-font: 'Taviraj';
+// $context-font: 'Kanit';
+// $support-font: 'Kanit';
+// @import '_default';
+// `;
 
 /** ingest_article
  *  @param {Object} hatch The Hatch object of the Ingester library
@@ -65,11 +65,9 @@ function ingest_article(hatch, item) {
         const asset = new libingester.BlogArticle();
         const body = $('.conteudo-post-texto').first().attr('id','mybody');
         const description = $('meta[property="og:description"]').attr('content');
-        const read_more = 'อ่านเพิ่มเติมที่ www.justlia.com.br.com';
-        const title = item.title;
-        const url_thumb = $('.wp-post-image[itemprop="image"]').first().attr('src');
-        console.log('processing ' + item.link, title);
-
+        const read_more = 'Leia mais em www.justlia.com.br';
+        const title = $('.conteudo-post h1').first().text() || item.title;
+        const url_thumb = $('meta[property="og:image"]').attr('src');
         let thumbnail;
 
         // finding first wrapp; "elem": Object Cheerio; "id_main_tag": String
@@ -140,7 +138,6 @@ function ingest_article(hatch, item) {
 
         // remove online shopping
         body.find('.shopthepost-widget').map((i,elem) => {
-            console.log('shopping');
             const prev = $(elem).prev();
             $(elem).remove();
             if (prev[0].name == 'h2') prev.remove();
@@ -148,15 +145,11 @@ function ingest_article(hatch, item) {
 
         // fix gallery images (slide)
         body.find('.galeria').map((i,elem) => {
-            console.log("GALERIA");
-            console.log($(elem).html());
             $(elem).find('.galeria-thumbs').remove();
             $(elem).find('img').map((i,img) => {
                 const src = $(img).attr('src');
                 const alt = $(img).attr('alt');
-                const figure = fix_img_with_figure(elem, src, alt, 'before');
-                const image = libingester.util.download_img($(figure.children()[0]));
-                save_image_asset(image, title);
+                fix_img_with_figure(elem, src, alt, 'before');
             });
             $(elem).remove();
         });
@@ -168,9 +161,7 @@ function ingest_article(hatch, item) {
             $(elem).find('img').map((i,img) => {
                 const src = $(img).attr('src');
                 const alt = $(img).attr('alt');
-                const figure = fix_img_with_figure($(img).parent(), src, alt, 'replace');
-                const image = libingester.util.download_img($(figure.children()[0]));
-                save_image_asset(image, title);
+                fix_img_with_figure($(img).parent(), src, alt, 'replace');
             });
             $(elem).insertBefore($(elem).parent());
         });
@@ -180,11 +171,18 @@ function ingest_article(hatch, item) {
             const src = url.resolve(BASE_URI, $(img).attr('src'));
             const alt = $(img).attr('alt');
             const title = $(img).attr('title');
-            const wrapp = find_first_wrapp(img, body.attr('id'));
-            const figure = fix_img_with_figure(wrapp, src, alt, 'replace', title);
-            const image = libingester.util.download_img($(figure.children()[0]));
-            save_image_asset(image, title);
-            if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            const parent = $(img).parent();
+            if (parent[0].name == 'figure') {
+                const image = libingester.util.download_img(img);
+                save_image_asset(image, title);
+                if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            } else {
+                const wrapp = find_first_wrapp(img, body.attr('id'));
+                const figure = fix_img_with_figure(wrapp, src, alt, 'replace', title);
+                const image = libingester.util.download_img($(figure.children()[0]));
+                save_image_asset(image, title);
+                if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            }
         });
 
         // clean body
@@ -212,27 +210,12 @@ function ingest_article(hatch, item) {
             }
         });
 
-        // download main image
-        // let main_image, thumbnail;
-        // if (url_thumb) {
-        //     const url_obj = url.parse(url_thumb);
-        //     const src = url.resolve(url_obj.href, url_obj.pathname);
-        //     const image = libingester.util.download_image(src);
-        //     image.set_title(title);
-        //     asset.set_main_image(main_image = image);
-        //     asset.set_thumbnail(thumbnail = image);
-        //     hatch.save_asset(main_image);
-        // }
-
-        // taking out the images of the paragraphs
-        // body.find('img').map((i,elem) => {
-        //     const parent = $(elem).parent();
-        //     if (parent[0].name == 'p') {
-        //         const figure = $('<figure></figure>').append($(elem).clone());
-        //         figure.insertAfter(parent);
-        //         $(elem).remove();
-        //     }
-        // });
+        // set asset thumbnail
+        if (!thumbnail && url_thumb) {
+            thumbnail = libingester.util.download_image(url_thumb);
+            save_image_asset(thumbnail, title);
+            asset.set_thumbnail(thumbnail);
+        }
 
         // clean empty tags
         body.find('h2, p').filter((i,elem) => $(elem).text().trim() === '').remove();
@@ -241,7 +224,7 @@ function ingest_article(hatch, item) {
         asset.set_author(item.author);
         asset.set_body(body);
         asset.set_canonical_uri(item.link);
-        asset.set_custom_scss(CUSTOM_SCSS);
+        // asset.set_custom_scss(CUSTOM_SCSS);
         asset.set_date_published(item.date);
         asset.set_last_modified_date(item.date);
         asset.set_read_more_text(read_more);
@@ -251,44 +234,23 @@ function ingest_article(hatch, item) {
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        console.log(err);
+        if (err.code == 'ECONNRESET' && err.code == 'ETIMEDOUT') return ingest_article(hatch, item);
     });
 }
 
-const item = {
-    title: 'Top 5 &#8211; Produtos Eudora',
-    date: new Date('2017-07-18T21:53:37.000Z'),
-    link: 'http://www.justlia.com.br/2017/07/4-jeitos-de-usar-cinto-country-feminino/',
-    author: 'Lia',
-    categories: [
-        'Beleza',
-        'batom',
-        'cabelo',
-        'cosmético',
-        'Eudora',
-        'Just Lia TV',
-        'maquiagem',
-        'pó bronzeador',
-        'rímel',
-        'Top 5',
-        'vídeo',
-        'xampu e condicionador'
-    ]
-}
-
 function main() {
-    const hatch = new libingester.Hatch('justlia', 'br');
+    const hatch = new libingester.Hatch('justlia', 'pt');
     const feed = libingester.util.create_wordpress_paginator(RSS_URI);
     const days_old = parseInt(process.argv[2]) || 20;
 
-    ingest_article(hatch, item).then(() => hatch.finish());
-
-    // libingester.util.fetch_rss_entries(feed, 100, days_old).then(rss => {
-    //     Promise.all(rss.map(item => ingest_article(hatch, item)))
-    //         .then(() => hatch.finish());
-    // }).catch(err => {
-    //     console.log(err);
-    // });
+    libingester.util.fetch_rss_entries(feed, 100, days_old).then(rss => {
+        return Promise.all(rss.map(item => ingest_article(hatch, item)))
+    })
+    .then(() => hatch.finish())
+    .catch(err => {
+        console.log(err);
+        process.exitCode = 1;
+    });
 }
 
 main();
