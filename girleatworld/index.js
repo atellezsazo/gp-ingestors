@@ -55,17 +55,20 @@ const REMOVE_ELEMENTS = [
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
-        const asset = new libingester.NewsArticle();
+        const asset = new libingester.BlogArticle();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const author = $('.entry-author a').text();
         const modified_date = new Date(Date.parse($('.entry-date').first().text()));
         const body = $('.entry-content').first();
-        const category = $('.entry-cats').first();
+        const tags = $('.entry-cats').text().trim().split(',');
+        const page='Girl eat world';
+        const read_more = 'Read more at www.girleatworld.net';
         const description = $('meta[property="og:description"]').attr('content');
         const published = $('.entry-date a').first().text(); // for template
         const modified_time = $('meta[property="article:modified_time"]').attr('content'); // for template
         const section = $('meta[property="og:type"]').attr('content');
         const title = $('meta[property="og:title"]').attr('content');
+        const uri_main_image = $('meta[property="og:image"]').attr('content');
 
         console.log('----------------------------');
         console.log('uri', uri);
@@ -81,14 +84,33 @@ function ingest_article(hatch, uri) {
         console.log('tags: ', tags);
         console.log('----------------------------');
 
-        // const body = $('.single-content').first();
-        // const description = $('meta[property="og:description"]').attr('content');
-        // const section ='Article';
-        // const page = 'Primer';
-        // const read_more = 'Read more at www.primer.com.ph';
-        // const title = $('meta[property="og:title"]').attr('content');
-        // const uri_main_image = $('meta[property="og:image"]').attr('content');
-        // const tags = $('meta[name="keywords"]').attr('content').split(",");
+        // Pull out the main image 
+
+
+        if (uri_main_image) { 
+            const main_img = libingester.util.download_image(uri_main_image); 
+            main_img.set_title(title); 
+            hatch.save_asset(main_img); 
+            asset.set_thumbnail(main_img);   
+        } 
+
+        // download images
+
+       body.find('img').map(function() {
+            let img = $('<figure></figure>').append($(this).clone());
+            let figcaption = $(this).next()[0] || {};
+            if (figcaption) {
+                img.append($(`<figcaption><p>${$(figcaption).text()}</p></figcaption>`));
+                $(figcaption).remove();
+            }
+            const image = libingester.util.download_img($(img.children()[0]));
+            $(this).parent().replaceWith(img);
+            image.set_title(title);
+            hatch.save_asset(image);
+
+       });
+
+   
 
         // // article settings
         // asset.set_canonical_uri(uri);
@@ -98,11 +120,10 @@ function ingest_article(hatch, uri) {
         // asset.set_title(title);
         //
         // // remove elements and clean tags
-        // const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
-        // const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
-        // body.find(REMOVE_ELEMENTS.join(',')).remove();
-        // clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
-        // clean_tags(category.find(CLEAN_ELEMENTS.join(',')));
+        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+        const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
+         body.find(REMOVE_ELEMENTS.join(',')).remove();
+         clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
         // body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
         //
         // // generating categories
@@ -133,6 +154,22 @@ function ingest_article(hatch, uri) {
         //
         // asset.set_document(content);
         // hatch.save_asset(asset);
+                // Article Settings
+        console.log('processing', title);
+        asset.set_author(author);
+        asset.set_body(body);
+        asset.set_canonical_uri(canonical_uri);
+        asset.set_title(title);
+        asset.set_synopsis(description);
+        asset.set_date_published(modified_date);
+        asset.set_last_modified_date(modified_date);
+        asset.set_read_more_text(read_more);
+        asset.set_tags(tags);
+//        asset.set_custom_scss(CUSTOM_CSS);
+
+        asset.render();
+        hatch.save_asset(asset);
+
     }).catch((err) => {
         console.log(uri+' '+err);
     })
@@ -140,6 +177,12 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('girl_eat_world', 'en');
+
+
+   
+
+   // ingest_article(hatch, 'https://girleatworld.net/2017/07/09/overnight-sleeper-train-eastern-europe/')
+     //   .then(() => then.finish());
     libingester.util.fetch_html(BASE_URI).then(($) => {
         const links = $('.entry-thumb a').get().map((a) => $(a).attr('href'));
         Promise.all(links.map((uri) => ingest_article(hatch,uri))).then(() => {
