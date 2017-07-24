@@ -70,23 +70,7 @@ function ingest_article(hatch, uri) {
         const title = $('meta[property="og:title"]').attr('content');
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
-        console.log('----------------------------');
-        console.log('uri', uri);
-        console.log('----------------------------');
-        console.log('canonical: ', canonical_uri);
-        console.log('synopsis: ', description);
-        console.log('modified_date: ', modified_date);
-        console.log('section: ', section);
-        console.log('page: ', page);
-        console.log('read_more: ', read_more);
-        console.log('title: ', title);
-        console.log('uri_main_image: ', uri_main_image);
-        console.log('tags: ', tags);
-        console.log('----------------------------');
-
         // Pull out the main image 
-
-
         if (uri_main_image) { 
             const main_img = libingester.util.download_image(uri_main_image); 
             main_img.set_title(title); 
@@ -95,7 +79,6 @@ function ingest_article(hatch, uri) {
         } 
 
         // download images
-
        body.find('img').map(function() {
             let img = $('<figure></figure>').append($(this).clone());
             let figcaption = $(this).next()[0] || {};
@@ -109,9 +92,6 @@ function ingest_article(hatch, uri) {
             hatch.save_asset(image);
 
        });
-
-   
-
         // // article settings
         // asset.set_canonical_uri(uri);
         // asset.set_last_modified_date(new Date(Date.parse(modified_time)));
