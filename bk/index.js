@@ -11,6 +11,7 @@ const CLEAN_TAGS = [
     'figure',
     'h1',
     'h2',
+    'h3',
     'li',
     'p',
     'span',
@@ -37,6 +38,23 @@ const REMOVE_ELEMENTS = [
     'script',
     'style',
 ];
+
+const CUSTOM_SCSS = `
+$primary-light-color: #C0C0BF;
+$primary-medium-color: #2B79A9;
+$primary-dark-color: #084676;
+$accent-light-color: #84D4F7;
+$accent-dark-color: #2C4854;
+$background-light-color: #FEFEFE;
+$background-dark-color: #EFEFEF;
+$title-font: 'Roboto';
+$body-font: 'Roboto';
+$display-font: 'Roboto';
+$logo-font: 'Roboto';
+$context-font: 'Roboto';
+$support-font: 'Roboto';
+@import "_default";
+`;
 
 /* delete duplicated elements in array */
 Array.prototype.unique = function(a) {
@@ -67,6 +85,7 @@ function ingest_article(hatch, uri) {
         let body;
         let thumbnail;
 
+        // fix body in one 'div' or two or more 'divs'
         if (body_pages.get().length == 1) {
             body = $(body_pages.get()[0]);
         } else {
@@ -182,7 +201,7 @@ function ingest_article(hatch, uri) {
         // clean empty tags
         body.find(REMOVE_ELEMENTS.join(',')).remove();
         body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-        body.find('h2, p, strong, div').filter((i,elem) => $(elem).text().trim() === '').remove();
+        body.find('div, h2, h3, p, strong').filter((i,elem) => $(elem).text().trim() === '').remove();
         body.contents().filter((i,elem) => elem.type === 'comment').remove();
 
         // fixing tag hr
@@ -212,6 +231,7 @@ function ingest_article(hatch, uri) {
         asset.set_author(authors);
         asset.set_body(body);
         asset.set_canonical_uri(uri);
+        asset.set_custom_scss(CUSTOM_SCSS);
         asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
@@ -227,19 +247,20 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('bk-asia-city', 'en');
+    const max_per_category = parseInt(process.argv[2]) || 5;
 
     libingester.util.fetch_html(BASE_URI).then($ => {
         let all_links = [];
         // finding more recent links for each section
         $('.view-content').map((i, section) => {
             const links = $(section).find('.views-field-title a').map((i,a) => url.resolve(BASE_URI, a.attribs.href)).get();
-            all_links = all_links.concat(links.slice(0,5));
+            all_links = all_links.concat(links.slice(0,max_per_category));
         });
         all_links = all_links.unique();
 
-        return Promise.all(all_links.map(uri => ingest_article(hatch, uri)))
-            .then(() => hatch.finish());
+        return Promise.all(all_links.map(uri => ingest_article(hatch, uri)));
     })
+    .then(() => hatch.finish())
     .catch(err => {
         console.log(err);
         process.exitCode = 1;

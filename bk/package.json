@@ -1,11 +1,11 @@
 {
-    "name": "libingester-bk",
+    "name": "bk",
     "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.2.2"
+        "libingester": "^2.2.6"
     }
 }
