@@ -92,7 +92,6 @@ $support-font: 'Lato';
 @import '_default';
 `;
 
-//function ingest_article(hatch, uri) {
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.BlogArticle();
