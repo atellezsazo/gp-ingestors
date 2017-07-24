@@ -1,9 +1,31 @@
 'use strict';
 
 const libingester = require('libingester');
+const url = require('url');
 
-const BASE_URI = 'http://primer.com.ph/blog/2017/';
+const BASE_URI = 'http://primer.com.ph';
 const RSS_URI = 'http://primer.com.ph/blog/feed/';
+
+// max number of links per category
+const MAX_LINKS = 5;
+
+const CATEGORY_LINKS = [
+    'http://primer.com.ph/blog/2017/', //Home
+    'http://primer.com.ph/feature/', //Featured
+    'http://primer.com.ph/food/', //Food
+    'http://primer.com.ph/beauty-fashion/', //beauty & fashion
+    'http://primer.com.ph/travel/', //travel
+    'http://primer.com.ph/study/', //study
+    'http://primer.com.ph/business/',//business
+    'http://primer.com.ph/event/',//event
+    'http://primer.com.ph/tips-guides/'//tips-guides
+
+];
+
+/** delete duplicated elements in array **/
+Array.prototype.unique = function(a) {
+    return function(){return this.filter(a)}}(function(a,b,c){return c.indexOf(a,b+1)<0
+});
 
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
@@ -70,20 +92,20 @@ $support-font: 'Lato';
 @import '_default';
 `;
 
-function ingest_article(hatch, item) {
-    return libingester.util.fetch_html(item.link).then(($) => {
-
+//function ingest_article(hatch, uri) {
+function ingest_article(hatch, uri) {
+    return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.BlogArticle();
         const body = $('.single-content').first();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const description = $('meta[property="og:description"]').attr('content');
-        const modified_date = new Date(Date.parse(item.pubdate));
+        const modified_date = new Date(Date.parse($('.cat-date').first().text()));
         const section ='Article';
         const page = 'Primer';
         const read_more = 'Read more at www.primer.com.ph';
         const title = $('meta[property="og:title"]').attr('content');
         const uri_main_image = $('meta[property="og:image"]').attr('content');
-        const tags = item.categories;
+        const tags = $('meta[name="keywords"]').attr('content').split(",");
 
         // Pull out the main image
         if (uri_main_image) {
@@ -179,16 +201,23 @@ function ingest_article(hatch, item) {
     });
 }
 
+function _fetch_all_links(links, max) {
+    let all_links = []; // all links retrieved from all categories
+    return Promise.all(links.map(link => libingester.util.fetch_html(link).then($ => {
+        const links = $('.carticle-title a').map((i,a) => a.attribs.href).get().slice(0, max);
+        all_links = all_links.concat(links);
+    }))).then(() => all_links.unique()); // before sending, repeated links are removed
+}
+
 function main() {
-    // wordpress pagination
-    const feed = libingester.util.create_wordpress_paginator(RSS_URI);
     const hatch = new libingester.Hatch('primer', 'en');
-    libingester.util.fetch_rss_entries(feed, 20, 100).then(rss => {
-             return Promise.all(rss.map(item => ingest_article(hatch, item)))
-                     .then(() => hatch.finish());
-        }).catch((err) => {
-            console.log('Error ',err);
-         });
+    _fetch_all_links(CATEGORY_LINKS, MAX_LINKS).then(links => {
+        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
+    }).catch(err => {
+        console.log(err);
+        process.exitCode = 1;
+    });
 }
 
 main();
