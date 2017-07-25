@@ -39,13 +39,19 @@ const REMOVE_ELEMENTS = [
     'link',
     'noscript',
     'script',
+    'iframe',
+    'center',
     'style',
     '.share-button',
     'input',
     '.abh_box',
     '.tags-links',
     'meta',
-    'svg'
+    'svg',
+    '.vcard',
+    '.abh_posts_tab',
+    '.abh_box',
+    '.wprm-recipe-image-container'
 ];
 
 const CUSTOM_CSS = `
@@ -87,20 +93,29 @@ function ingest_article(hatch, item) {
         const uri_main_image = $('meta[property="og:image"]').attr('content');
         const tags = item.categories;
 
-        // Pull out the main image
-        if (uri_main_image) {
-            const main_img = libingester.util.download_image(uri_main_image);
-            main_img.set_title(title);
-            hatch.save_asset(main_img);
-            asset.set_thumbnail(main_img);
-        }
-
-               // remove elements
-               const clean_attr = (elem) => REMOVE_ATTR.forEach(attr => $(elem).removeAttr(attr));
-               body.find(REMOVE_ELEMENTS.join(',')).remove();
-               // clean tags
+        // remove elements
+        const clean_attr = (elem) => REMOVE_ATTR.forEach(attr => $(elem).removeAttr(attr));
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        // clean tags
          body.find(CLEAN_TAGS.join(',')).map((i,elem) => clean_attr(elem));
 
+         // fixed all 'divs'
+         const fix_divs = (div = body.children().find('div>div').first()) => {
+             if (div[0]) {
+                 const parent = $(div).parent();
+                 $(parent).children().insertBefore(parent);
+                 fix_divs(body.children().find('div>div').first());
+             }
+         }
+         fix_divs();
+
+         // Pull out the main image
+         if (uri_main_image) {
+             const main_img = libingester.util.download_image(uri_main_image);
+             main_img.set_title(title);
+             hatch.save_asset(main_img);
+             asset.set_thumbnail(main_img);
+         }
 
        // download images
        body.find('img').map(function() {
@@ -110,36 +125,18 @@ function ingest_article(hatch, item) {
             image.set_title(title);
             hatch.save_asset(image);
        });
-    //    //Replace p with figure
-    //    body.find('p figure').map(function(){
-    //        const parent = $(this).parent();
-    //        if (parent[0].name=='p') {
-    //            parent.replaceWith($(this));
-    //        }
-    //    });
-       //
-       //
 
-       body.find('div').filter((i,elem) => $(elem).text().trim() === '').remove();
+          body.find('div').map((i,elem) => {
+              elem.name='p';
+          });
 
-    //    body.find('div.wprm-recipe>div').map((i,elem) => {
-    //           $(elem).parent().replaceWith(elem);
-    //    });
+          body.find('p>ol, p>ul').map((i,elem) => {
+              $(elem).parent().replaceWith(elem);
+          });
 
-       body.find('div.wprm-recipe').map((i,elem) => {
-           elem.find('div>p').map((i,p) => {
-               $(p).parent().replaceWith(p);
-           });
-       });
+        // delete spaces and special characters "&#xA0;"
+       body.find('div, p, span').filter((i,elem) => $(elem).text().trim() === '').remove();
 
-
-
-    //    body.find('div').map((i,elem) => {
-    //        elem.name='p';
-    //    });
-    //    body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
-
-    //    console.log(body.html());
 
         // Article Settings
         console.log('processing', title);
@@ -169,28 +166,12 @@ function main() {
     const feed = libingester.util.create_wordpress_paginator(RSS_URI);
     const hatch = new libingester.Hatch('gordelicias', 'pt');
 
-    const item = {
-        link:'http://gordelicias.biz/index.php/2017/05/19/arroz-de-bacalhau/',
-        pubdate:'2017-06-28T08:47:48.000Z',
-        categories : [ 'News & Current Events',
-       'airlines',
-       'all nippon airways',
-       'awards',
-       'Japan',
-       'skytrax' ]
-    }
-    ingest_article(hatch,item)
-    .then(()=> hatch.finish()
-    );
-
-    //
-    // libingester.util.fetch_rss_entries(feed, 20, 100).then(rss => {
-    //         // console.log(rss.link);
-    //          return Promise.all(rss.map(item => ingest_article(hatch, item)))
-    //                  .then(() => hatch.finish());
-    //     }).catch((err) => {
-    //         console.log('Error ',err);
-    //      });
+    libingester.util.fetch_rss_entries(feed, 20, 100).then(rss => {
+             return Promise.all(rss.map(item => ingest_article(hatch, item)))
+                     .then(() => hatch.finish());
+        }).catch((err) => {
+            console.log('Error ',err);
+         });
 }
 
 main();
