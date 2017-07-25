@@ -48,6 +48,23 @@ const VIDEO_IFRAMES = [
     'sstv.siamsport.co.th'
 ];
 
+const CUSTOM_SCSS = `
+$primary-light-color: #4F82B8;
+$primary-medium-color: #084F9B;
+$primary-dark-color: #093365;
+$accent-light-color: #DD377F;
+$accent-dark-color: #B41158;
+$background-light-color: #FCFCFC;
+$background-dark-color: #EDEDED;
+$title-font: 'Noto Serif';
+$body-font: 'Noto Sans';
+$display-font: 'Noto Sans';
+$context-font: 'Noto Sans';
+$support-font: 'Noto Sans';
+
+@import '_default';
+`;
+
 /** get articles metadata **/
 function _get_ingest_settings($) {
     const canonical_uri = $('meta[property="og:url"]').attr('content');
@@ -68,7 +85,7 @@ function _get_ingest_settings($) {
         canonical_uri: canonical_uri,
         date_published: Date.now(date),
         modified_date: date,
-        // custom_scss: CUSTOM_SCSS,
+        custom_scss: CUSTOM_SCSS,
         page: 'Siamsport',
         read_more: `Bài gốc ở <a href="${canonical_uri}">siamsport</a>`,
         section: section.substring(0,section.indexOf('/')), // no section
@@ -99,7 +116,7 @@ function ingest_article(hatch, uri) {
         const asset = new libingester.NewsArticle();
         let meta = _get_ingest_settings($);
         const uri_main_image = meta.body.prev().find('img').attr('src') || $('meta[property="og:image"]').attr('content');
-        console.log('processing: '+ uri);
+        console.log('processing: ', uri);
 
         if (!meta.body[0]) throw {code: -1, message: 'Empty body'};
 
@@ -151,22 +168,6 @@ function ingest_article(hatch, uri) {
             last_p.remove();
         }
 
-
-        // console.log('--------------------------------------------------------');
-        // console.log(uri);
-        // console.log('--------------------------------------------------------');
-        // console.log('author: '+ meta.author);
-        // //console.log('body: '+ body);
-        // console.log('canonical_uri: '+ meta.canonical_uri);
-        // console.log('modified_date: '+ meta.modified_date);
-        // console.log('page: '+ meta.page);
-        // console.log('read_more: '+ meta.read_more);
-        // console.log('synopsis: '+ meta.synopsis);
-        // console.log('section: '+ meta.section);
-        // console.log('title: '+ meta.title);
-        // console.log('uri_main_image: '+ uri_main_image);
-        // console.log('--------------------------------------------------------');
-
         // main image
         const main_image = libingester.util.download_image(uri_main_image);
         main_image.set_title(meta.title);
@@ -174,10 +175,10 @@ function ingest_article(hatch, uri) {
         asset.set_main_image(main_image, '');
         hatch.save_asset(main_image);
 
-
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        meta.body.find('div').filter((i,elem) => $(elem).text().trim() === '').remove();
         meta.body.contents().filter((i,elem) => elem.type == 'comment').remove();
 
         // set first paragraph
@@ -214,7 +215,12 @@ function ingest_article(hatch, uri) {
             }
         });
 
+        meta.body.find('div').map((i,elem) => {
+            elem.name='p';
+        });
+
         meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
+
         _set_ingest_settings(asset, meta);
         asset.render();
         hatch.save_asset(asset);
@@ -229,13 +235,14 @@ function clean_title(title) {
 }
 
 function ingest_gallery(hatch, uri, meta) {
-    return libingester.util.fetch_html(uri, `ascii`).then(($) => {
+    return libingester.util.fetch_html(uri, `TIS-620`).then(($) => {
         const asset = new libingester.NewsArticle();
         const title = clean_title($('.font-pink18').first().text());
+        const description = $('meta[name="description"]').attr('content');
         if (!meta) {
             meta = _get_ingest_settings($, {});
             meta.body = $('<div><div>');
-            meta.lede = $('.font-pink18').first().text();
+            meta.lede = $(`<p>${description}</p>`);
             meta.author = 'Siamsport'; // the galleries have no author
         }
 
@@ -251,18 +258,15 @@ function ingest_gallery(hatch, uri, meta) {
         image_uri.shift(); //remove repeat link
 
         if (image_uri) {
-
-            let images = [];
+            let thumbnail;
             for (const src of image_uri) {
                 const image = libingester.util.download_image(src);
-
                 image.set_title(title);
                 hatch.save_asset(image);
-                if (!meta.main_image) {
-                    meta.main_image = image;
-                } else {
-                    meta.body.append($(`<figure><img data-libingester-asset-id="${image.asset_id}"/><figure>`));
+                if (!thumbnail) {
+                    asset.set_thumbnail(thumbnail=image);
                 }
+                meta.body.append($(`<figure><img data-libingester-asset-id="${image.asset_id}"/><figure>`));
             }
         }
 
@@ -271,24 +275,23 @@ function ingest_gallery(hatch, uri, meta) {
         meta.body.find('div, p').filter((i,elem) => $(elem).text().trim() === '').remove();
         _set_ingest_settings(asset, meta);
         asset.set_main_image(meta.main_image, '');
-        asset.set_thumbnail(meta.main_image);
+
         asset.render();
         hatch.save_asset(asset);
-        console.log('processing',title);
+        console.log('processing gallery: ',title);
 
     }).catch((err) => {
-        console.log('Ingest gallery error: '+err);
+        console.log('Ingest gallery error: ', err);
         return ingest_gallery(hatch, uri);
     });
 }
 
 function ingest_video(hatch, uri) {
-    return libingester.util.fetch_html(uri, 'windows-874').then(($) => {
+    return libingester.util.fetch_html(uri).then(($) => {
         const description = $('meta[name="description"]').attr('content');
         const thumb_url = $('meta[property="og:image"]').attr('content');
         const title = $('meta[property="og:title"]').attr('content');
         const video_url = $('.embed-container').find('iframe').attr('src') || '';
-        console.log(video_url);
 
         return libingester.util.fetch_html(video_url).then(($video) => {
             const download_uri = $video('source').attr('src');
@@ -298,6 +301,7 @@ function ingest_video(hatch, uri) {
                     thumbnail.set_title(title);
                     hatch.save_asset(thumbnail);
 
+                    console.log('processing: ', title);
                     const video = new libingester.VideoAsset();
                     video.set_canonical_uri(uri);
                     video.set_download_uri(download_uri);
@@ -308,9 +312,8 @@ function ingest_video(hatch, uri) {
                 }
             }
         })
-
     }).catch((err) => {
-        console.log('Ingest video error: '+err);
+        console.log('Ingest video error: ', err);
         return ingest_video(hatch, uri);
     });
 }
@@ -327,40 +330,33 @@ function ingest_by_category(hatch, link) {
 function main() {
     const hatch = new libingester.Hatch('siamsport', 'th');
 
-    ingest_gallery(hatch, 'http://www.siamsport.co.th/SiamsportPhoto/show.php?id=1791')
+    const article = libingester.util.fetch_html(uri_article).then(($) =>
+         Promise.all(
+            $('tr[valign="top"] td a').get().map((a) => {
+                return libingester.util.fetch_html(a.attribs.href).then(($) => {
+                    const u = $('META').attr('content');
+                    if (u) {
+                        let link = u.substring(u.indexOf('http'));
+                        const uri = link.includes('siamsport.co.th') ? link : a.attribs.href;
+                        return ingest_article(hatch, uri);
+                    }
+                })
+            })
+        )
+    );
+
+    const gallery = libingester.util.fetch_html(uri_gallery).then(($) => {
+        const links = $('.pink18-link').get().map((a) => url.resolve(uri_gallery, a.attribs.href));
+        return Promise.all(links.map((uri) => ingest_gallery(hatch, uri)));
+    });
+
+    const video = libingester.util.fetch_html(uri_video).then(($) => {
+        const links = $('.top-pic a').get().map((a) => url.resolve(uri_video, a.attribs.href));
+        return Promise.all(links.map((uri) => ingest_video(hatch, uri)));
+    });
+
+    return Promise.all([article, video, gallery])
         .then(() => hatch.finish());
-
-    // const article = libingester.util.fetch_html(uri_article).then(($) =>
-    //      Promise.all(
-    //         $('tr[valign="top"] td a').get().map((a) => {
-    //             return libingester.util.fetch_html(a.attribs.href).then(($) => {
-    //                 const u = $('META').attr('content');
-    //                 if (u) {
-    //                     let link = u.substring(u.indexOf('http'));
-    //                     const uri = link.includes('siamsport.co.th') ? link : a.attribs.href;
-    //                     return ingest_article(hatch, uri);
-    //
-    //                 }
-    //             })
-    //         })
-    //     )
-    // );
-
-    // const gallery = libingester.util.fetch_html(uri_gallery).then(($) => {
-    //     const links = $('.pink18-link').get().map((a) => url.resolve(uri_gallery, a.attribs.href));
-    //     return Promise.all(links.map((uri) => ingest_gallery(hatch, uri)));
-    // });
-
-    // const video = libingester.util.fetch_html(uri_video).then(($) => {
-    //     const links = $('.top-pic a').get().map((a) => url.resolve(uri_video, a.attribs.href));
-    //     return Promise.all(links.map((uri) => ingest_video(hatch, uri)));
-    // });
-    //
-    // // Promise.all([article, gallery, video]).then(() => {
-    //
-    // //
-    // Promise.all([gallery])
-    //     .then(() => hatch.finish());
 }
 
 main();

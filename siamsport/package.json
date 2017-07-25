@@ -6,7 +6,7 @@
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.2.6",
+        "libingester": "^2.2.9",
         "moment": "^2.18.1"
     }
 }
