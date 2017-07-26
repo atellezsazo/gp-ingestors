@@ -73,7 +73,7 @@ function ingest_article(hatch, uri) {
         const info_date = $('meta[property="og:updated_time"]').attr('content');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
         const page = 'Alodokter';
-        const read_more = `Bài báo gốc tại <a href="${canonical_uri}">${page}</a>`;
+        const read_more = `Baca lebih lanjut di <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
         const title = $('meta[property="og:title"]').attr('content');
         let thumbnail;
@@ -163,7 +163,7 @@ function _fetch_all_links(links, max) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('alo_dokter', 'vi');
+    const hatch = new libingester.Hatch('alo_dokter', 'id');
 
     _fetch_all_links(CATEGORY_LINKS, MAX_LINKS).then(links => {
         return Promise.all(links.map(uri => ingest_article(hatch, uri)))
