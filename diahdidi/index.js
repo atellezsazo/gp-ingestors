@@ -1,9 +1,7 @@
 'use strict';
 
 const libingester = require('libingester');
-const url = require('url');
 
-// const BASE_URI = "http://www.diahdidi.com";
 const RSS_FEED = 'http://feeds.feedburner.com/blogspot/LNjea';
 
 // Remove elements (body)
@@ -85,7 +83,6 @@ function ingest_article(hatch, item) {
                     }
                 }
             }
-            return undefined;
         }
 
         // fix the image, add figure and figcaption
@@ -114,7 +111,6 @@ function ingest_article(hatch, item) {
 
         // fixed blockquote content
         body.find('blockquote.tr_bq').map((i,elem) => {
-            console.log(title+': blockquote');
             const span = $(elem).find('span').first()[0];
             if (span) {
                 $(elem).replaceWith(`<aside><p>${$(elem).html()}</p></aside>`);
@@ -158,6 +154,7 @@ function ingest_article(hatch, item) {
             hatch.save_asset(main_image);
             $(first_figure).remove();
         }
+
         // This 'while' omits empty elements before the 'figure'
         let first_figure = body.children()[0];
         while (first_figure) {
@@ -187,7 +184,6 @@ function ingest_article(hatch, item) {
         body.find(REMOVE_ELEMENTS.join(',')).remove();
 
         // Article Settings
-        console.log(title, canonical_uri);
         asset.set_canonical_uri(canonical_uri);
         asset.set_last_modified_date(modified_date);
         asset.set_title(title);
@@ -197,47 +193,40 @@ function ingest_article(hatch, item) {
         asset.set_license('Proprietary');
         asset.set_body(body);
         asset.set_tags(tags);
-        asset.set_read_more_text('Artikel asli di www.diahdidi.com');
+        asset.set_read_more_text('Baca lebih lanjut di www.diahdidi.com');
         asset.set_custom_scss(`
-            $body-font: Lato;
-            $title-font: Raleway;
-            $primary-light-color: #729fcf;
-            $primary-dark-color: #204a87;
-            $accent-light-color: #8ae234;
-            $accent-dark-color: #4e9a06;
-            $background-light-color: #eeeefc;
-            $background-dark-color: #888a95;
+            $primary-light-color: #807A7A;
+            $primary-medium-color: #483E3E;
+            $primary-dark-color: #221E1E;
+            $accent-light-color: #D85603;
+            $accent-dark-color: #BF4B00;
+            $background-light-color: #F5F3EF;
+            $background-dark-color: #E6E4E2;
+            $title-font: 'Libre Baskerville';
+            $body-font: 'Roboto';
+            $display-font: 'Libre Baskerville';
+            $context-font: 'Lato';
+            $support-font: 'Lato';
             @import '_default';
         `);
 
         asset.render();
         hatch.save_asset(asset);
-    }).catch(err => {
-        console.log(item.link, err);
+    })
+    .catch(err => {
+        if (err.code == 'ETIMEDOUT' || err.code == 'ECONNRESET') return ingest_article(hatch, item);
     });
 }
 
-const item = {
-    title: 'Prueba',
-    date: '2017-06-17T01:36:00.190Z',
-    link: 'http://www.diahdidi.com/2017/07/tepung-leker.html',
-    author: 'author',
-    image: {url: 'https://2.bp.blogspot.com/-AC4-nyvBovM/WUfTSU0MYtI/AAAAAAAAbj4/Mf1kZE10tuMzB61pBBU6n8aQdt_AU4Z7gCLcBGAs/s72-c/A%2BKASTENGEL%2BNEW%2B4-01-01-01.jpeg'},
-    categories: [ 'Kue Kering Lebaran', 'Recipes' ],
-}
-
 function main() {
-    const hatch = new libingester.Hatch('diahdidi', 'in');
+    const hatch = new libingester.Hatch('diahdidi', 'id');
     const max_posts = parseInt(process.argv[2]) || 20;
     const days_old = parseInt(process.argv[3]) || 50;
 
-    // ingest_article(hatch, item).then(() => hatch.finish());
-
     libingester.util.fetch_rss_entries(RSS_FEED, max_posts, days_old).then(items => {
-        // items.map(item => console.log(item.link));
         return Promise.all(items.map(item => ingest_article(hatch, item)))
-            .then(() => hatch.finish());
     })
+    .then(() => hatch.finish())
     .catch(err => {
         console.log(err);
         process.exitCode = 1;
