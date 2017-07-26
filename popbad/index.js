@@ -174,7 +174,7 @@ function _fetch_all_links(links, max) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('alo_dokter', 'vi');
+    const hatch = new libingester.Hatch('pobpad', 'th');
 
     _fetch_all_links(CATEGORY_LINKS, MAX_LINKS).then(all_links => {
         return Promise.all(all_links.map(link => ingest_article(hatch, link)));
