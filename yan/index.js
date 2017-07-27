@@ -28,11 +28,32 @@ const REMOVE_ATTR = [
 
 /** remove elements (body) **/
 const REMOVE_ELEMENTS = [
+    'br',
     'div',
+    'img[src="http://s1.img.yan.vn/yanimages/FBshare-picture.png"]',
     'noscript',
     'script',
     'style',
 ];
+
+const CUSTOM_SCSS = `
+$primary-light-color: #64838C;
+$primary-medium-color: #5D5D5D;
+$primary-dark-color: #474747;
+$accent-light-color: #ED2D2D;
+$accent-dark-color: #CC1010;
+$background-light-color: #FEFEFE;
+$background-dark-color: #DBDBDB;
+$title-font: 'Montserrat';
+$body-font: 'Open Sans';
+$display-font: 'Open Sans';
+$logo-font:  'Open Sans';
+$context-font:  'Open Sans';
+$support-font:  'Open Sans';
+$title-font-composite: 'Roboto';
+$display-font-composite: 'Roboto';
+@import '_default';
+`;
 
 /** delete duplicated elements in array **/
 Array.prototype.unique=function(a){
@@ -50,7 +71,7 @@ function _get_ingest_settings($) {
         canonical_uri: canonical_uri,
         date_published: date,
         modified_date: date,
-        // custom_scss: CUSTOM_SCSS,
+        custom_scss: CUSTOM_SCSS,
         read_more: `Bài gốc tại <a href="${canonical_uri}">www.yan.vn</a>`,
         section: $('meta[property="article:section"]').attr('content'),
         synopsis: $('meta[property="og:description"]').attr('content'),
@@ -81,7 +102,7 @@ function _set_ingest_settings(asset, meta) {
  * @param {String} uri The post uri
  */
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
+    return libingester.util.fetch_html(uri).then($ => {
         const asset = new libingester.NewsArticle();
         let meta = _get_ingest_settings($);
         let thumbnail;
@@ -104,11 +125,10 @@ function ingest_article(hatch, uri) {
         // fix the image, add figure and figcaption (caption: String, search_caption: String, find_caption: function)
         const fix_img_with_figure = (replace, src, alt = '', to_do = 'replace', caption, search_caption, find_caption) => {
             if (src && replace) {
-                let figure = $(`<figure><img src="${src}" alt="${alt}"></img></figure>`);
+                let figure = $(`<figure><img src="${src}" alt='${alt}'></figure>`);
                 let figcaption = $(`<figcaption></figcaption>`);
                 // finding figcaption by search_caption or callback function (find_caption)
                 if (typeof caption == 'string') {
-                    // caption = $(`<figcaption><p>${caption}</p></figcaption>`);
                     figcaption.append(`<p>${caption}</p>`);
                 } else if (find_caption) {
                     const cap = find_caption();
@@ -142,23 +162,29 @@ function ingest_article(hatch, uri) {
         meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
         clean_tags(meta.body.find(CLEAN_ELEMENTS.join(',')));
 
+
         // download images
         meta.body.find('img').map((i,elem) => {
             const alt = $(elem).attr('alt');
             const src = $(elem).attr('src') || '';
-            const caption = $(elem).attr('title');
-
-            if (src.includes('FBshare-picture.png')) { // exclude facebook share
-                $(elem).remove();
-            } else {
-                const wrapp = find_first_wrapp(elem, meta.body.attr('id'));
-                const figure = fix_img_with_figure(wrapp, src, alt, 'after',caption);
-                const image = libingester.util.download_img($(figure.children()[0]));
-                image.set_title(caption);
-                hatch.save_asset(image);
-                if (!thumbnail) asset.set_thumbnail(thumbnail = image);
-                $(elem).remove();
+            const title = $(elem).attr('title') || '';
+            const wrapp = find_first_wrapp(elem, meta.body.attr('id'));
+            const em = $(wrapp).find('em').first();
+            let caption;
+            // find figcaption
+            if (em[0]) {
+                caption = em.text();
+                em.remove();
+            } else if (title.trim() != meta.title.trim()) {
+                caption = title;
             }
+            // save figure
+            const figure = fix_img_with_figure(wrapp, src, alt, 'after', caption);
+            const image = libingester.util.download_img($(figure.children()[0]));
+            image.set_title(caption);
+            hatch.save_asset(image);
+            if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            $(elem).remove();
         });
 
         // set lede
@@ -175,6 +201,13 @@ function ingest_article(hatch, uri) {
             }
         });
 
+        // convert 'p>em' to h3
+        meta.body.find('p>em').map((i,elem) => {
+            if ($(elem).parent().text().trim() == $(elem).text().trim()) {
+                $(elem).parent()[0].name = 'h3';
+            }
+        });
+
         // download main image
         if (!thumbnail) {
             const image = libingester.util.download_image(meta.uri_thumb);
@@ -184,7 +217,10 @@ function ingest_article(hatch, uri) {
         }
 
         // delete empty elements
-        body.find('a, p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        meta.body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+        meta.body.find('a').filter((i,elem) => {
+            return ($(elem).text().trim() === '' && !$(elem).attr('data-soma-widget'))
+        }).remove();
 
         _set_ingest_settings(asset, meta);
         asset.render();
@@ -240,6 +276,7 @@ function main() {
         let search = '';
         let all_links = [];
 
+        // searching and filtering links by category
         for (const select of selector.split(',')) {
             // generate string for search
             for (const ext of extra.split(',')) {
