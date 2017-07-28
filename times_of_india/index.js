@@ -58,7 +58,6 @@ const REMOVE_ELEMENTS = [
     '.last8brdiv',
     '.mCustomScrollBox',
     'div',
-    //'a[data-type="tilCustomLink"]',
     '.cptn_bg',
     '.photo_desc',
     '.comments_container'
