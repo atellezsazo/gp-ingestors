@@ -291,9 +291,8 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('blogazine', 'th');
-    const days_old = parseInt(process.argv[2]) || 30;
 
-    libingester.util.fetch_rss_entries(RSS_URI, 100, days_old).then(entries => {
+    libingester.util.fetch_rss_entries(RSS_URI).then(entries => {
         return Promise.all(entries.map(entry => ingest_article(hatch, entry.link)))
     })
     .then(() => hatch.finish())
