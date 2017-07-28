@@ -1,7 +1,6 @@
 'use strict';
 
 const libingester = require('libingester');
-const rss2json = require('rss-to-json');
 const url = require('url');
 
 const BASE_URI = 'http://timesofindia.indiatimes.com/';
@@ -94,18 +93,9 @@ function clean_title(title) {
 function ingest_gallery(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
         const asset = new libingester.NewsArticle();
-        let span = $('div.photo_title span').first().text() || '';
+
         let author = 'Times of India';
-        let info_date = '';
-        // Sometimes the author and the date come together Example: Endless | July 11, 2017
-            if (span.includes('|')) {
-                let span_author_date=span.split('|');
-                author=span_author_date[0];
-                info_date = span_author_date[1];
-            }
-            else {
-                info_date=span;
-            }
+        let info_date = $('div.photo_title span').first().text() || '';
         const body = $('<div></div>');
         const my_body = $('.main-content, .slides');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
@@ -144,7 +134,7 @@ function ingest_gallery(hatch, uri) {
         asset.set_authors([author]);
         asset.set_canonical_uri(canonical_uri);
         asset.set_custom_scss(CUSTOM_CSS);
-        asset.set_date_published(Date.now(modified_date));
+        asset.set_date_published(modified_date);
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_link(read_more);
         asset.set_section(section);

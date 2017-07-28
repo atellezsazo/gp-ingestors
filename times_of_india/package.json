@@ -1,12 +1,11 @@
 {
-    "name": "times-of-india",
+    "name": "times_of_india",
     "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.2.0",
-        "rss-to-json": "^1.0.2"
+        "libingester": "^2.2.10"
     }
 }
