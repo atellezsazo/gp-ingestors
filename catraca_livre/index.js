@@ -43,16 +43,8 @@ const REMOVE_ELEMENTS = [
     '.textleft',
     '.EmbeddedTweet-tweet',
     '.EmbeddedTweet',
-    '.assinatura-especial',
-    '.box-caixa-de-servico'
-];
-
-// copyright warning
-const REMOVE_COPYRIGHT = [
-    'Getty Images',
-    'mirror.com',
-    'Siamsport',
-    '"บอ.บู๋"'
+    '.box-caixa-de-servico',
+    '.assinatura-especial'
 ];
 
 const CUSTOM_SCSS = `
@@ -77,7 +69,7 @@ function ingest_article(hatch, item) {
         const asset = new libingester.NewsArticle();
 
         const author = $('.autor-e-data__txt-menor').text();
-        const body = $('.post-content').first().attr('id', 'mybody');
+        const body = $('.post-content, .conteudo-post').first().attr('id', 'mybody');
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const info_date = $('meta[property="article:modified_time"]').attr('content');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
@@ -158,7 +150,6 @@ function ingest_article(hatch, item) {
             });
         })
 
-
         // fix Instragram iamges
         body.find('blockquote.instagram-media').map((i,elem) => {
             const url_img = $(elem).find('a').first().attr('href');
@@ -170,7 +161,6 @@ function ingest_article(hatch, item) {
                 })
             )
         });
-        // console.log(body.html());
 
         //fix wp-embed
         body.find('iframe.wp-embedded-content').map((i,elem) => {
@@ -183,17 +173,6 @@ function ingest_article(hatch, item) {
                 })
             );
         });
-
-        // // resolve the thumbnail from youtube
-        // const get_url_thumb_youtube = (embed_src) => {
-        //     const thumb = '/0.jpg';
-        //     const base_uri_img = 'http://img.youtube.com/vi/';
-        //     const uri = url.parse(embed_src);
-        //     if (uri.hostname === 'www.youtube.com' && uri.pathname.includes('/embed/')) {
-        //         const path = uri.pathname.replace('/embed/','') + thumb;
-        //         return url.resolve(base_uri_img, path);
-        //     }
-        // }
 
         //Ingest Video
         body.find('p>iframe').map((i,elem) => {
@@ -211,6 +190,9 @@ function ingest_article(hatch, item) {
         });
 
         const end_function = () => {
+
+            $('.assinatura-especial, .box-caixa-de-servico').remove();
+
             //fixed all 'divs'
             const fix_divs = (div = body.children().find('div>div').first()) => {
                 if (div[0]) {
@@ -235,18 +217,10 @@ function ingest_article(hatch, item) {
                 });
             });
 
-
-
-
             body.children().find('div>p').map((i,p) => $(p).insertBefore($(p).parent()));
-
-            // body.find('.contagem-slide-post').remove();
-            body.contents().filter((i,elem) => elem.name == 'div').remove();
             body.find(REMOVE_ELEMENTS.join(',')).remove();
 
-
-
-
+            body.contents().filter((i,elem) => elem.name == 'div').remove();
 
             body.find('img').map((i, elem) => {
                 const caption = $(elem).parent().find('.wp-caption-text').first().text();
@@ -259,16 +233,13 @@ function ingest_article(hatch, item) {
                 } else {
                     figure=$(elem).parent();
                 }
-
                 down_img = libingester.util.download_img($(figure.children()[0]));
                 down_img.set_title(title);
                 if (!thumbnail) asset.set_thumbnail(thumbnail=down_img);
                 hatch.save_asset(down_img);
-
             });
 
             $('.wp-caption, .slide').remove();
-
 
             body.find('span>strong').map((i,elem) => {
                 const text=$(elem).text();
@@ -292,12 +263,6 @@ function ingest_article(hatch, item) {
                 asset.set_main_image(main_image, image_credit);
             }
 
-            // // set first paragraph
-            // const first_p = body.find('p').first();
-            // const lede = first_p.clone();
-            // lede.find('img').remove();
-            // body.find(first_p).remove();
-
             for (const p of body.contents().get()) {
                 if (p.name=='p') {
                     asset.set_lede($(p).clone());
@@ -305,13 +270,14 @@ function ingest_article(hatch, item) {
                     break;
                 }
             }
-            //Remove ul with Leia mais:
+
+            //Remove ul with Leia mais: Leia também:
             const last_ul = body.find('ul').last();
             if (last_ul.text().trim() == 'Leia mais:') {
                 last_ul.remove();
             }
 
-            // console.log('processing', item.link);
+            console.log('processing', title);
             asset.set_authors([author]);
             asset.set_canonical_uri(canonical_uri);
             //asset.set_custom_scss(CUSTOM_CSS);
@@ -322,7 +288,6 @@ function ingest_article(hatch, item) {
             asset.set_source(page);
             asset.set_synopsis(synopsis);
             asset.set_title(title);
-            //asset.set_main_image(main_image,image_credit);
             asset.set_body(body);
 
             asset.render();
@@ -341,29 +306,10 @@ function ingest_article(hatch, item) {
     });
 }
 
-
-
 function main() {
-
     // wordpress pagination
    const feed = libingester.util.create_wordpress_paginator(RSS_URI);
    const hatch = new libingester.Hatch('catraca_livre', 'pt');
-
-
-   // //
-   // const item = {
-   //      link:'https://catracalivre.com.br/geral/moda-e-beleza/indicacao/jovem-faz-maquiagem-inspirada-em-programas-da-sua-infancia/',
-   //      pubdate:'2017-06-28T08:47:48.000Z',
-   //      categories : [ 'News & Current Events',
-   //     'airlines',
-   //     'all nippon airways',
-   //     'awards',
-   //     'Japan',
-   //     'skytrax' ]
-   //  }
-   //  ingest_article(hatch,item)
-   //  .then(()=> hatch.finish()
-   //  );
 
    libingester.util.fetch_rss_entries(feed, 20, 100).then(rss => {
             return Promise.all(rss.map(item => ingest_article(hatch, item)))
