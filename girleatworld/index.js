@@ -1,11 +1,6 @@
 'use strict';
 
-const cheerio = require('cheerio');
 const libingester = require('libingester');
-// const mustache = require('mustache');
-// const rss2json = require('rss-to-json');
-const url = require('url');
-//const template = require('./template');
 
 const BASE_URI = 'https://girleatworld.net/';
 
@@ -51,7 +46,23 @@ const REMOVE_ELEMENTS = [
     'style',
 ];
 
+const CUSTOM_CSS = `
+$primary-light-color: #8A9596;
+$primary-medium-color: #333333;
+$primary-dark-color: #252A2B;
+$accent-light-color: #3BB9BF;
+$accent-dark-color: #238E93;
+$background-light-color: #ECF1F2;
+$background-dark-color: #BAC1C3;
 
+$title-font: 'Nunito';
+$body-font: 'Raleway';
+$display-font: 'Nunito';
+$context-font: 'Nunito';
+$support-font: 'Raleway';
+
+@import '_default';
+`;
 
 function ingest_article(hatch, uri) {
     return libingester.util.fetch_html(uri).then(($) => {
@@ -70,13 +81,13 @@ function ingest_article(hatch, uri) {
         const title = $('meta[property="og:title"]').attr('content');
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
-        // Pull out the main image 
-        if (uri_main_image) { 
-            const main_img = libingester.util.download_image(uri_main_image); 
-            main_img.set_title(title); 
-            hatch.save_asset(main_img); 
-            asset.set_thumbnail(main_img);   
-        } 
+        // Pull out the main image
+        if (uri_main_image) {
+            const main_img = libingester.util.download_image(uri_main_image);
+            main_img.set_title(title);
+            hatch.save_asset(main_img);
+            asset.set_thumbnail(main_img);
+        }
 
         // download images
        body.find('img').map(function() {
@@ -90,51 +101,15 @@ function ingest_article(hatch, uri) {
             $(this).parent().replaceWith(img);
             image.set_title(title);
             hatch.save_asset(image);
-
        });
-        // // article settings
-        // asset.set_canonical_uri(uri);
-        // asset.set_last_modified_date(new Date(Date.parse(modified_time)));
-        // asset.set_section(section);
-        // asset.set_synopsis(description);
-        // asset.set_title(title);
-        //
-        // // remove elements and clean tags
+
+        // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
          body.find(REMOVE_ELEMENTS.join(',')).remove();
          clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
-        // body.find('a').get().map((a) => a.attribs.href = url.resolve(BASE_URI, a.attribs.href));
-        //
-        // // generating categories
-        // const categories = cheerio('<div></div>');
-        // category.find('a').get().map((a) => {
-        //     categories.append(cheerio(`<a href="${url.resolve(BASE_URI,a.attribs.href)}">${$(a).text()}</a>`));
-        // });
-        //
-        // // download images
-        // let thumb;
-        // body.find('img').get().map((img) => {
-        //     clean_attr(img);
-        //     const image = libingester.util.download_img(img);
-        //     image.set_title(title);
-        //     hatch.save_asset(image);
-        //     if (!thumb) {
-        //         asset.set_thumbnail(thumb=image);
-        //     }
-        // });
-        //
-        // const content = mustache.render(template.structure_template, {
-        //     author: author,
-        //     body: body.html(),
-        //     category: categories.html(),
-        //     published_date: published,
-        //     title: title
-        // });
-        //
-        // asset.set_document(content);
-        // hatch.save_asset(asset);
-                // Article Settings
+
+        // Article Settings
         console.log('processing', title);
         asset.set_author(author);
         asset.set_body(body);
@@ -145,24 +120,18 @@ function ingest_article(hatch, uri) {
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
         asset.set_tags(tags);
-//        asset.set_custom_scss(CUSTOM_CSS);
+        asset.set_custom_scss(CUSTOM_CSS);
 
         asset.render();
         hatch.save_asset(asset);
 
     }).catch((err) => {
-        console.log(uri+' '+err);
+        console.log(err);
     })
 }
 
 function main() {
     const hatch = new libingester.Hatch('girl_eat_world', 'en');
-
-
-   
-
-   // ingest_article(hatch, 'https://girleatworld.net/2017/07/09/overnight-sleeper-train-eastern-europe/')
-     //   .then(() => then.finish());
     libingester.util.fetch_html(BASE_URI).then(($) => {
         const links = $('.entry-thumb a').get().map((a) => $(a).attr('href'));
         Promise.all(links.map((uri) => ingest_article(hatch,uri))).then(() => {
