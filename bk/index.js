@@ -82,8 +82,18 @@ function ingest_article(hatch, uri) {
         const subtitle = $('.teaser p').first().text();
         const synopsis = $('meta[name="description"]').attr('content');
         const url_thumb = $('.wp-post-image[itemprop="image"]').first().attr('src');
-        let body;
-        let thumbnail;
+        let body, thumbnail;
+
+        // resolve the thumbnail from youtube
+        const get_url_thumb_youtube = (embed_src) => {
+            const thumb = '/0.jpg';
+            const base_uri_img = 'http://img.youtube.com/vi/';
+            const uri = url.parse(embed_src);
+            if (uri.hostname === 'www.youtube.com' && uri.pathname.includes('/embed/')) {
+                const path = uri.pathname.replace('/embed/','') + thumb;
+                return url.resolve(base_uri_img, path);
+            }
+        }
 
         // fix body in one 'div' or two or more 'divs'
         if (body_pages.get().length == 1) {
@@ -96,6 +106,23 @@ function ingest_article(hatch, uri) {
                 });
             });
         }
+
+        // fix embed videos youtube
+        body.find('.embed-container').map((i,elem) => {
+            const src = $(elem).find('iframe').first().attr('src');
+            const uri_thumb = get_url_thumb_youtube(src);
+            if (uri_thumb) {
+                const video = libingester.util.get_embedded_video_asset($(elem), src);
+                const thumb = libingester.util.download_image(uri_thumb);
+                thumb.set_title(title);
+                video.set_title(title);
+                video.set_thumbnail(thumb);
+                hatch.save_asset(video);
+                hatch.save_asset(thumb);
+            } else {
+                $(elem).remove();
+            }
+        });
 
         // clean body
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
@@ -246,7 +273,7 @@ function ingest_article(hatch, uri) {
 }
 
 function main() {
-    const hatch = new libingester.Hatch('bk-asia-city', 'en');
+    const hatch = new libingester.Hatch('bk', 'en');
     const max_per_category = parseInt(process.argv[2]) || 5;
 
     libingester.util.fetch_html(BASE_URI).then($ => {
