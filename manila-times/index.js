@@ -43,7 +43,7 @@ const REMOVE_ELEMENTS = [
 
 
 function ingest_article(hatch, item, global_thumbnail) {
-    return libingester.util.fetch_html(item.link).then($ => {// console.log(item);
+    return libingester.util.fetch_html(item.link).then($ => {
         const asset = new libingester.NewsArticle();
         const author = $('span[itemprop="author"] a').first().text() || item.title;
         const body = $('div[itemprop="articleBody"]').first().attr('id', 'mybody');
@@ -140,6 +140,23 @@ function ingest_article(hatch, item, global_thumbnail) {
         // if the article no contain any p
         if (!lede ) lede = $(`<p>${synopsis}</p>`);
 
+        asset.set_custom_scss(`
+            $primary-light-color: #707980;
+            $primary-medium-color: #292525;
+            $primary-dark-color: #17232E;
+            $accent-light-color: #CAA535;
+            $accent-dark-color: #AC8B29;
+            $background-light-color: #E8E8E8;
+            $background-dark-color: #9A9393;
+            $title-font: 'Playfair Display';
+            $body-font: 'Merriweather';
+            $display-font: 'Playfair Display';
+            $context-font: 'FreeSans';
+            $support-font: 'Roboto';
+            h1, h2, h3 {font-weight:400;}
+            @import "_default";
+        `);
+
         // article settings
         asset.set_authors(author);
         asset.set_body(body);
@@ -154,13 +171,15 @@ function ingest_article(hatch, item, global_thumbnail) {
         asset.set_read_more_link(read_more_link);
         asset.render();
         hatch.save_asset(asset);
+    })
+    .catch(err => {
+        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, item, global_thumbnail);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch('manila-times', 'en');
     const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
-    const max_posts = parseInt(process.argv[2]) || 30;
 
     // Many items have no pictures and its main image is the same...
     // Downloaded once and reused
@@ -170,10 +189,11 @@ function main() {
     hatch.save_asset(thumbnail);
 
     // ingest articles
-    libingester.util.fetch_rss_entries(feed, max_posts, 2).then(items => {
+    libingester.util.fetch_rss_entries(feed).then(items => {
         return Promise.all(items.map(item => ingest_article(hatch, item, thumbnail)))
-            .then(() => hatch.finish());
-    }).catch(err => {
+    })
+    .then(() => hatch.finish())
+    .catch(err => {
         console.log(err);
         process.exitCode = 1;
     });
