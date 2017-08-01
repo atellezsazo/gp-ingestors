@@ -17,12 +17,10 @@ $accent-light-color: #FBB724;
 $accent-dark-color: #E59F09;
 $background-light-color: #F6F6F6;
 $background-dark-color: #EDEDED;
-
-$title-font: 'Arial';
+$title-font: 'Roboto';
 $display-font: 'Oswald';
-$context-font: 'Oswald';
-$support-font: 'FreeSans';
-
+$context-font: 'Roboto Condensed';
+$support-font: 'Roboto';
 @import "_default";
 `;
 
@@ -99,7 +97,12 @@ function _set_ingest_settings(asset, meta) {
     if (meta.modified_date) asset.set_last_modified_date(meta.modified_date);
     if (meta.lede) asset.set_lede(meta.lede);
     if (meta.read_more) asset.set_read_more_link(meta.read_more);
-    if (meta.section) asset.set_section(meta.section);
+    // custom logic for tagging Gallery articles;
+    if (meta.section.includes("FOTO")) {
+      asset.set_section("galeri");
+    } else if (meta.section) {
+      asset.set_section(meta.section);
+    }
     if (meta.source) asset.set_source(meta.source);
     if (meta.synopsis) asset.set_synopsis(meta.synopsis);
     if (meta.title) asset.set_title(meta.title);
@@ -115,7 +118,6 @@ function ingest_article(hatch, item) {
     return libingester.util.fetch_html(item.uri).then($ => {
         const asset = new libingester.NewsArticle();
         let meta = _get_ingest_settings($, item);
-        console.log('processing',meta.title);
 
         // main image
         const image = libingester.util.download_image(meta.image_uri);
@@ -226,7 +228,6 @@ function ingest_gallery(hatch, uri, meta) {
             next_uri = url.resolve(uri, next_uri);
             return ingest_gallery(hatch, next_uri, meta);
         } else {
-            console.log('processing',meta.title);
             meta.body.contents().filter((index, node) => node.type === 'comment').remove();
             meta.body.find(REMOVE_ELEMENTS.join(',')).remove();
             meta.body.find('div, p').filter((i,elem) => $(elem).text().trim() === '').remove();
@@ -253,7 +254,6 @@ function ingest_video(hatch, obj) {
         const synopsis = $('meta[name="description"]').attr('content');
         const thumb_url = $('meta[property="og:image"]').attr('content');
         const title = obj.title || $('.op-line h1').text();
-        console.log('processing',obj.title);
 
         const save_video_asset = (video_url) => {
             if (video_url) {
@@ -366,7 +366,11 @@ function main() {
     );
 
     Promise.all([article, gallery])
-        .then(() => hatch.finish());
+        .then(() => hatch.finish())
+        .catch(err => {
+            console.log(err);
+            process.exitCode = 1;
+        });
 }
 
 main();
