@@ -14,14 +14,14 @@ $accent-light-color: #569D13;
 $accent-dark-color: #2E5609;
 $background-light-color: #F9F9F9;
 $background-dark-color: #E5E9EA;
-  
+
 $title-font: 'Lora';
 $body-font: 'Lora';
 $display-font: 'Lato';
 $logo-font: 'Lora';
 $context-font: 'Lora';
 $support-font: 'Lato';
- 
+
 @import '_default';
 `;
 
@@ -169,10 +169,18 @@ function ingest_article(hatch, item) {
             const src = this.attribs.src;
             if (src.includes("youtube")) {
                 const video = libingester.util.get_embedded_video_asset($(this), src);
+                video.set_canonical_uri(link);
+                video.set_download_uri(src);
+                video.set_synopsis(summary);
                 video.set_title(title);
                 hatch.save_asset(video);
             }
         });
+
+        post.body.find('p>a.media-link').map((i,elem) => {
+            $(elem).parent().replaceWith(elem);
+        });
+
         post.body.find('iframe').remove();
 
         //Delete empty tags
@@ -190,7 +198,7 @@ function ingest_article(hatch, item) {
         asset.set_license('Proprietary');
         asset.set_body(post.body);
         asset.set_tags(post.category.concat(post.tags).split(','));
-        asset.set_read_more_text('Read more at www.indiechine.com');
+        asset.set_read_more_text('Xem thêm tại www.indiechine.com');
         asset.set_custom_scss(CUSTOM_SCSS);
 
         asset.render();
@@ -218,11 +226,8 @@ function main() {
         })
         .then(() => hatch.finish())
         .catch(err => {
-            console.log(err);
-            // Exit without cutting off pending operations
             process.exitCode = 1;
         });
-
 }
 
 main();
