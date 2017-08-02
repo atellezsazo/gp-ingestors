@@ -39,22 +39,23 @@ const REMOVE_ELEMENTS = [
     '.rs-adblock',
 ];
 
-// const CUSTOM_SCSS = `
-// $primary-light-color: #3A95DC;
-// $primary-medium-color: #3B7098;
-// $primary-dark-color: #24231F;
-// $accent-light-color: #FCB900;
-// $accent-dark-color: #B5963B;
-// $background-light-color: #F8F8F8;
-// $background-dark-color: #F3F3F3;
-// $title-font: 'Taviraj';
-// $body-font: 'Kanit';
-// $display-font: 'Taviraj';
-// $logo-font: 'Taviraj';
-// $context-font: 'Kanit';
-// $support-font: 'Kanit';
-// @import '_default';
-// `;
+const CUSTOM_SCSS = `
+$primary-light-color:#CDB21A;
+$primary-medium-color: #343434;
+$primary-dark-color: #252A2B;
+$accent-light-color: #F7839D;
+$accent-dark-color: #FFB0B7;
+$background-light-color: #FAFAFA;
+$background-dark-color: #9EA2A3;
+$highlighted-background-color: transparentize($accent-light-color, 1-0.10);
+$title-font: 'Metropolis';
+$body-font: 'Raleway';
+$display-font: 'Metropolis';
+$context-font: 'Metropolis';
+$support-font: 'Raleway';
+h1{text-transform:uppercase;}
+@import '_default';
+`;
 
 /** ingest_article
  *  @param {Object} hatch The Hatch object of the Ingester library
@@ -224,7 +225,7 @@ function ingest_article(hatch, item) {
         asset.set_author(item.author);
         asset.set_body(body);
         asset.set_canonical_uri(item.link);
-        // asset.set_custom_scss(CUSTOM_SCSS);
+        asset.set_custom_scss(CUSTOM_SCSS);
         asset.set_date_published(item.date);
         asset.set_last_modified_date(item.date);
         asset.set_read_more_text(read_more);
@@ -234,14 +235,14 @@ function ingest_article(hatch, item) {
         asset.render();
         hatch.save_asset(asset);
     }).catch(err => {
-        if (err.code == 'ECONNRESET' && err.code == 'ETIMEDOUT') return ingest_article(hatch, item);
+        if (err.code == 'ECONNRESET' || err.code == 'ETIMEDOUT') return ingest_article(hatch, item);
     });
 }
 
 function main() {
     const hatch = new libingester.Hatch('justlia', 'pt');
     const feed = libingester.util.create_wordpress_paginator(RSS_URI);
-    const days_old = parseInt(process.argv[2]) || 20;
+    const days_old = parseInt(process.argv[2]) || 1;
 
     libingester.util.fetch_rss_entries(feed, 100, days_old).then(rss => {
         return Promise.all(rss.map(item => ingest_article(hatch, item)))
