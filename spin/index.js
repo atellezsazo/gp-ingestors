@@ -2,15 +2,6 @@
 
 const libingester = require('libingester');
 const url = require('url');
-const rss2json = require('rss-to-json');
-
-const CATEGORY_LINKS = [
-    'http://www.spin.ph/news',
-    'http://www.spin.ph/special-reports', //Special Reports
-    'http://www.spin.ph/active-lifestyle', //bidi bidi bong
-    'http://www.spin.ph/sports/opinion', //Opinion
-    'http://www.spin.ph/multimedia' //Multimedia
-];
 
 const RSS_FEED = 'http://www.spin.ph/rss';
 
@@ -278,33 +269,10 @@ function main() {
     const hatch = new libingester.Hatch('spin', 'en');
 
         libingester.util.fetch_rss_entries(RSS_FEED).then(rss => {
-        // if (err) throw { code: -1, message: 'Error to load rss' }
         const links = rss.map(item => item.link);
-        // console.log(links);
         return Promise.all(links.map(uri => ingest_by_category(hatch, uri)))
             .then(() => hatch.finish());
     });
-
-    // const get_all_links = () => {
-    //     let all_links = [];
-    //     return Promise.all(
-    //         CATEGORY_LINKS.map(link => libingester.util.fetch_html(link).then($ => {
-    //             let links = $('.thumbnail a').map((i, elem) => elem.attribs.href).get();
-    //             if (links.length==0) {
-    //                 links = $('.article-list-title').map((i, elem) => $(elem).parent().attr('href')).get();
-    //             }
-    //             all_links = all_links.concat(links.slice(0, MAX_LINKS));
-    //     }))).then(() => all_links.unique());
-    // }
-    //
-    //
-    // get_all_links().then(links => {
-    //     return Promise.all(links.map(link => ingest_by_category(hatch, link)))
-    //         .then(() => hatch.finish())
-    // }).catch(err => {
-    //     console.log(err);
-    //     process.exitCode = 1;
-    // });
 }
 
 main();
