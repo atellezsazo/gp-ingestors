@@ -1,9 +1,11 @@
 {
-    "name": "libingester-marischkaprudence",
-    "version": "0.0.1",
+    "name": "marischkaprudence",
+    "version": "0.0.2",
     "license": "UNLICENSED",
+    "scripts": {
+    "start": "node index.js"
+    },
     "dependencies": {
-        "libingester": "^1.0.0",
-        "mustache": "^2.3.0"
+       "libingester": "^2.2.10"
     }
 }
