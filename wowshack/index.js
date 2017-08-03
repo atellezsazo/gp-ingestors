@@ -13,7 +13,6 @@ $accent-light-color: #CB162D;
 $accent-dark-color: #670000;
 $background-light-color: #F6F6F6;
 $background-dark-color: #F6F6F6;
-
 $title-font: 'Roboto';
 $body-font: 'Roboto Slab';
 $display-font: 'Roboto';
@@ -22,7 +21,6 @@ $context-font: 'Roboto Slab';
 $support-font: 'Roboto';
 $title-font-composite: 'Roboto';
 $display-font-composite: 'Roboto';
-
 @import "_default";
 `;
 
@@ -94,7 +92,10 @@ function ingest_article(hatch, uri) {
         const read_more = `Original Article at www.wowshack.com`;
         const section = 'Article'; //the blog doesn´t have section
         const title = $('meta[property="og:title"]').attr('content') || $('#mvp-post-head h1').text();
+        // featured_category_tag is the parent category each article belongs to
+        const featured_category_tag = $('span.mvp-post-cat.left').first().text();
         const tags = $('span[itemprop="keywords"] a').map((i,a) => $(a).text()).get();
+        tags.push(featured_category_tag);
         const uri_thumb_alt = $('img[alt="Thumbnail"]').attr('src') || $('meta[property="og:image"]').attr('content');
         let thumbnail;
 
@@ -105,30 +106,44 @@ function ingest_article(hatch, uri) {
         body.find(REMOVE_ELEMENTS.join(',')).remove();
 
         // resolve the thumbnail from youtube
-        function get_url_thumb_youtube(embed_src) {
-            const thumb = '/maxresdefault.webp';
-            const base_uri_img = 'https://i.ytimg.com/vi_webp/';
+        const get_url_thumb_youtube = (embed_src) => {
+            const thumb = '/0.jpg';
+            const base_uri_img = 'http://img.youtube.com/vi/';
             const uri = url.parse(embed_src);
             if (uri.hostname === 'www.youtube.com' && uri.pathname.includes('/embed/')) {
                 const path = uri.pathname.replace('/embed/','') + thumb;
                 return url.resolve(base_uri_img, path);
             }
-            return undefined;
         }
 
         // download images
         body.find('img').map(function() {
             let src = this.attribs.src || this.attribs['data-src'] || '';
 
+            // set src of srcset attr
+            if (this.attribs.srcset) {
+                let srcset = this.attribs.srcset.split(',');
+                if (srcset.length > 0) {
+                    src = srcset[0].trim();
+                    src = src.substring(0, src.indexOf(' '));
+                }
+            }
+
+            // verify the src
+            const is_ip = src.includes('/~wowshac2/'); // http://66.147.244.76/~wowshac2/wp-content...jpeg
+            const is_visualegacy = src.includes('visualegacy.org');
+            const is_http = src.includes('http');
+
+            // fix for gif's
             if (this.attribs.id == 'gif') {
                 const uri_gif = this.attribs.srcset.split(',')[1];
                 src = uri_gif.replace('480w','').trim();
             }
 
-            if (src.includes('http') && !src.includes('visualegacy.org')) {
+            // if (src.includes('http') && !src.includes('visualegacy.org')) {
+            if (!is_ip && !is_visualegacy && is_http) {
                 this.attribs['src'] = src;
                 clean_attr(this);
-
                 // add figure
                 const figure = $('<figure></figure>').append($(this).clone());
                 const image = libingester.util.download_img(figure.children());
@@ -205,7 +220,8 @@ function ingest_article(hatch, uri) {
 
         // clean tags
         body.find('div').map((i, elem) => clean_attr(elem));
-        body.find('center, div, p, h5').filter((i,elem) => $(elem).text().trim() == '').remove();
+        body.find('strong>br').remove();
+        body.find('center, div, p, h5, strong').filter((i,elem) => $(elem).text().trim() == '').remove();
         body.find('h3, p, h5, a').map((i,elem) => clean_attr(elem));
         body.find('iframe').remove();
 
@@ -251,9 +267,8 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('wowshack', 'en');
     const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
-    const max_posts = parseInt(process.argv[2]) || 20;
 
-    libingester.util.fetch_rss_entries(feed, max_posts, 200).then(items => {
+    libingester.util.fetch_rss_entries(feed).then(items => {
         return Promise.all(items.map(item => ingest_article(hatch, item.link)))
             .then(() => hatch.finish());
     })
