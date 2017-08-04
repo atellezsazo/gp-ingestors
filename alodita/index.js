@@ -1,11 +1,7 @@
 'use strict';
 
-const libingester = require('libingester');
-const mustache = require('mustache');
-const rp = require('request-promise');
-const rss2json = require('rss-to-json');
-const template = require('./template');
-const url = require('url');
+const Libingester = require('libingester');
+const FeedParser = require('feedparser-promised');
 const URLParse = require('url-parse');
 
 const rss_uri = "http://www.alodita.com/rss.xml";
@@ -27,6 +23,7 @@ const remove_attrs_img = [
 const remove_elements = [
     'br + br + br',
     'a[name="more"]',
+    'a[href="http://photobucket.com/"]',
     'center',
     'iframe',
     'noscript', //any script injection
@@ -34,28 +31,39 @@ const remove_elements = [
     '.instagram-media'
 ];
 
-function ingest_article_profile(hatch, uri, pubDate, category) {
-    return libingester.util.fetch_html(uri).then(($profile) => {
-        const base_uri = libingester.util.get_doc_base_uri($profile, uri);
-        const asset = new libingester.NewsArticle();
-        asset.set_canonical_uri(uri);
+function ingest_article_blog(hatch,item){
+     return Libingester.util.fetch_html(item.link).then(($profile) => {
+       let base_uri = Libingester.util.get_doc_base_uri($profile, item.link);
+       let asset = new Libingester.BlogArticle();
+       let modified_date = $profile('.date-header span').text();
+       let article_entry = $profile('.post .post-heading .meta').first();
+       let synopsis = $profile('meta[property="og:description"]').attr('content');
+       let body = $profile('.post-body').first();
+       let date_published = $profile('.date-header').first().text();
+       let thumb_uri = $profile('meta[property="og:image"]').attr('content');
 
-        // Pull out the updated date
-        const modified_date = $profile('.date-header span').text();
-        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
-        const date_post = $profile('.date-header').first().text();
+       let thumb_asset;
+       if(thumb_uri){
+          thumb_asset = Libingester.util.download_image(thumb_uri);
+          thumb_asset.set_title(item.title);
+          hatch.save_asset(thumb_asset);
+       }
 
-        //Set title section
-        const title = $profile('meta[property="og:title"]').attr('content');
-        asset.set_title(title);
-        const article_synopsis = $profile('meta[property="og:description"]').attr('content');
-        asset.set_synopsis(article_synopsis);
-        asset.set_section('Post');
+        //remove main image from body
+        $profile('.post-body img').first().remove();
 
-        const body = $profile('.post-body').first();
+         // Download images
+        body.find('img').map(function() { // Put images in <figure>
+            if($profile(this).parent().parent()[0].attribs.class == 'separator')
+            {
+              let parent= $profile(this).parent().parent();
+              let figure = $profile('<figure></figure>');
+              parent.replaceWith(figure);
+              $profile(figure).append($profile(this));
+            }
+        });
 
         //Download images
-        let index = 0;
         body.find('img').map(function() {
             const img_src = this.attribs.src;
             const parent = $profile(this).parent().first();
@@ -64,28 +72,15 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
             const article_thumbnail = $profile(this);
 
             if (img_src != undefined && matches.length == 0) {
-                const image = libingester.util.download_img(this, base_uri);
-                image.set_title(title);
+                const image = Libingester.util.download_img(this, base_uri);
+                image.set_title(item.title);
                 hatch.save_asset(image);
                 this.attribs["data-libingester-asset-id"] = image.asset_id;
                 for (const attr in remove_attrs_img) {
                     delete this.attribs[attr];
                 }
-
-                if (parent.name = "a") {
-                    parent.before($profile(this)); //Moves image outside the wrap
-                }
-
-                if (index == 0) {
-                    asset.set_thumbnail(image);
-                }
-                index++;
             } else {
                 $profile(this).remove();
-            }
-
-            if (parent.name = "a") {
-                parent.remove(); //Delete image wrap
             }
         });
 
@@ -94,25 +89,49 @@ function ingest_article_profile(hatch, uri, pubDate, category) {
             body.find(remove_element).remove();
         }
 
-        const content = mustache.render(template.structure_template, {
-            title: title,
-            date_post: date_post,
-            body: body.html()
-        });
-
-        asset.set_document(content);
+        asset.set_canonical_uri(item.link);
+        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        asset.set_title(item.title);
+        asset.set_synopsis(synopsis);
+        asset.set_thumbnail(thumb_asset);
+        asset.set_main_image(thumb_asset);
+        asset.set_author(item.author);
+        asset.set_date_published(date_published);
+        asset.set_license('Proprietary');
+        asset.set_body(body);
+        asset.set_tags(item.categories);
+        asset.set_read_more_text("Artikel asli di http://www.alodita.com/");
+        asset.set_custom_scss(`
+            $primary-light-color: #E0216E;
+            $primary-medium-color: #4C4C4C;
+            $primary-dark-color: #1A1A1A;
+            $accent-light-color: #FF5298;
+            $accent-dark-color: #B51656;
+            $background-light-color: #EEEEEE;
+            $background-dark-color: #E3E3E3;
+            $title-font: 'Josefin Sans';
+            $body-font: 'Lora';
+            $display-font: 'Josefin Sans';
+            $logo-font: 'Josefin Sans';
+            $context-font: 'Josefin Sans';
+            $support-font: 'Josefin Sans';
+            @import '_default';
+        `);
+        asset.render();
         hatch.save_asset(asset);
-    });
+    })
 }
 
 function main() {
-    const hatch = new libingester.Hatch();
-    rss2json.load(rss_uri, function(err, rss) {
-        const post_uris = rss.items.map((datum) => datum.url);
-        Promise.all(post_uris.map((uri) => ingest_article_profile(hatch, uri))).then(() => {
-            return hatch.finish();
-        });
-    });
+    const hatch = new Libingester.Hatch('alodita', 'id');
+    FeedParser.parse(rss_uri)
+    .then((items) => {
+       return Promise.all(items.map((item) => ingest_article_blog(hatch, item)));
+    })
+    .then(() => hatch.finish())
+    .catch( (error) => {
+       console.log('error: ', error);
+  });
 }
 
 main();
