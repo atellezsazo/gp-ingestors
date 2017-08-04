@@ -63,26 +63,47 @@ function ingest_article_blog(hatch,item){
             }
         });
 
-        //Download images
-        body.find('img').map(function() {
-            const img_src = this.attribs.src;
-            const parent = $profile(this).parent().first();
-            const img_url = URLParse(img_src);
-            const matches = hosts_drop_images.filter(host => host.includes(img_url.host));
-            const article_thumbnail = $profile(this);
+        // //Download images
+        // body.find('img').map(function() {
+        //     const img_src = this.attribs.src;
+        //     const parent = $profile(this).parent().first();
+        //     const img_url = URLParse(img_src);
+        //     const matches = hosts_drop_images.filter(host => host.includes(img_url.host));
+        //     const article_thumbnail = $profile(this);
+        //
+        //     if (img_src != undefined && matches.length == 0) {
+        //         //console.log(this);
+        //         const image = Libingester.util.download_img(this, base_uri);
+        //         image.set_title(item.title);
+        //         hatch.save_asset(image);
+        //         this.attribs["data-libingester-asset-id"] = image.asset_id;
+        //         for (const attr in remove_attrs_img) {
+        //             delete this.attribs[attr];
+        //         }
+        //     } else {
+        //         $profile(this).remove();
+        //     }
+        //     //$profile(this).replaceWith(image)
+        // });
 
-            if (img_src != undefined && matches.length == 0) {
-                const image = Libingester.util.download_img(this, base_uri);
-                image.set_title(item.title);
-                hatch.save_asset(image);
-                this.attribs["data-libingester-asset-id"] = image.asset_id;
-                for (const attr in remove_attrs_img) {
-                    delete this.attribs[attr];
-                }
-            } else {
-                $profile(this).remove();
-            }
-        });
+        // download images
+               body.find('img').map(function() {
+                  let img = $profile('<figure></figure>').append($profile(this).clone());
+                   const image = Libingester.util.download_img($profile(img.children()[0]));
+                   $profile(this).replaceWith(img);
+                   image.set_title(item.title);
+                   hatch.save_asset(image);
+               });
+
+               // download video
+                body.find('iframe').map(function() {
+                    const src = this.attribs.src;
+                    if (src.includes("youtube")) {
+                        const video = Libingester.util.get_embedded_video_asset($profile(this), src);
+                        video.set_title(item.title);
+                        hatch.save_asset(video);
+                    }
+                });
 
         //remove elements
         for (const remove_element of remove_elements) {
@@ -119,11 +140,29 @@ function ingest_article_blog(hatch,item){
         `);
         asset.render();
         hatch.save_asset(asset);
+    }).catch((err) => {
+        console.log(err,item.link);
     })
 }
 
 function main() {
     const hatch = new Libingester.Hatch('alodita', 'id');
+
+    // const item = {
+    //         link:'http://www.alodita.com/2017/06/auras-2nd-birthday.html',
+    //         pubdate:'2017-06-28T08:47:48.000Z',
+    //         title: 'AURAS 2ND BIRTHDAY',
+    //         categories : [ 'News & Current Events',
+    //        'airlines',
+    //        'all nippon airways',
+    //        'awards',
+    //        'Japan',
+    //        'skytrax' ]
+    //     }
+    //     ingest_article_blog(hatch,item)
+    //     .then(()=> hatch.finish()
+    //     );
+
     FeedParser.parse(rss_uri)
     .then((items) => {
        return Promise.all(items.map((item) => ingest_article_blog(hatch, item)));
