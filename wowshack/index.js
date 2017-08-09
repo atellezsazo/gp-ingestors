@@ -85,13 +85,12 @@ function ingest_article(hatch, uri) {
         const author = $('#mvp-post-author .author-name').text() || 'WowShack';
         const body = $('.theiaPostSlider_preloadedSlide').first();
         const canonical_uri = $('link[rel="canonical"]').attr('href');
-        const description = $('.entry-content .sqs-block-content').first().text();
         const date = $('time.published, time.updated').attr('datetime');
         const modified_date = new Date(Date.parse(date));
         const page = 'wowshack';
         const read_more = `Original Article at www.wowshack.com`;
         const section = 'Article'; //the blog doesn´t have section
-        const title = $('meta[property="og:title"]').attr('content') || $('#mvp-post-head h1').text();
+        const title = $('#mvp-post-head h1').text() || $('meta[property="og:title"]').attr('content');
         // featured_category_tag is the parent category each article belongs to
         const featured_category_tag = $('span.mvp-post-cat.left').first().text();
         const tags = $('span[itemprop="keywords"] a').map((i,a) => $(a).text()).get();
@@ -115,6 +114,10 @@ function ingest_article(hatch, uri) {
                 return url.resolve(base_uri_img, path);
             }
         }
+
+        // convert tags 'center' to 'p'
+        body.find('p>center').map((i,elem) => $(elem).insertBefore($(elem).parent()));
+        body.contents().filter((i,elem) => elem.name == 'center').map((i,elem) => elem.name = 'p');
 
         // download images
         body.find('img').map(function() {
@@ -225,6 +228,10 @@ function ingest_article(hatch, uri) {
         body.find('h3, p, h5, a').map((i,elem) => clean_attr(elem));
         body.find('iframe').remove();
 
+        // set synopsis
+        const first_p = body.find('p').first();
+        asset.set_synopsis(first_p.text());
+
         // convert h5 to h2
         body.find('h5').map((i,elem) => elem.name = 'h2');
         // convert 'p strong' to 'h3'
@@ -253,7 +260,6 @@ function ingest_article(hatch, uri) {
         asset.set_last_modified_date(modified_date);
         asset.set_read_more_text(read_more);
         asset.set_tags(tags);
-        asset.set_synopsis(description);
         asset.set_title(title);
         asset.set_canonical_uri(uri);
         asset.set_custom_scss(CUSTOM_CSS);
@@ -267,8 +273,9 @@ function ingest_article(hatch, uri) {
 function main() {
     const hatch = new libingester.Hatch('wowshack', 'en');
     const feed = libingester.util.create_wordpress_paginator(RSS_FEED);
-
-    libingester.util.fetch_rss_entries(feed).then(items => {
+    // ingest_article(hatch, 'https://www.wowshack.com/numerical-garuda-pancasila/')
+    // .then(() => hatch.finish());
+    libingester.util.fetch_rss_entries(feed, 10, 30).then(items => {
         return Promise.all(items.map(item => ingest_article(hatch, item.link)))
             .then(() => hatch.finish());
     })
