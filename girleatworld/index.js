@@ -107,8 +107,8 @@ function ingest_article(hatch, uri) {
         // remove elements and clean tags
         const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
         const clean_tags = (tags) => tags.get().map((t) => clean_attr(t));
-         body.find(REMOVE_ELEMENTS.join(',')).remove();
-         clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
+        body.find(REMOVE_ELEMENTS.join(',')).remove();
+        clean_tags(body.find(CLEAN_ELEMENTS.join(',')));
 
         // Article Settings
         console.log('processing', title);
@@ -125,7 +125,6 @@ function ingest_article(hatch, uri) {
 
         asset.render();
         hatch.save_asset(asset);
-
     }).catch((err) => {
         console.log(err);
     })
