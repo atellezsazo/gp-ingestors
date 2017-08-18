@@ -133,7 +133,7 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('girl_eat_world', 'en');
-    libingester.util.fetch_rss_entries(RSS_FEED,10,1000).then(rss => {
+    libingester.util.fetch_rss_entries(RSS_FEED).then(rss => {
         const links = rss.map(item => item.link);
         return Promise.all(links.map(uri => ingest_article(hatch, uri)))
             .then(() => hatch.finish());
