@@ -3,7 +3,7 @@
 const libingester = require('libingester');
 
 const BASE_URI = 'https://girleatworld.net/';
-
+const RSS_FEED = 'https://girleatworld.net/feed/';
 // cleaning elements
 const CLEAN_ELEMENTS = [
     'a',
@@ -41,6 +41,7 @@ const REMOVE_ATTR = [
 const REMOVE_ELEMENTS = [
     '.sharedaddy',
     'iframe',
+    'ins',
     'noscript',
     'script',
     'style',
@@ -132,12 +133,20 @@ function ingest_article(hatch, uri) {
 
 function main() {
     const hatch = new libingester.Hatch('girl_eat_world', 'en');
-    libingester.util.fetch_html(BASE_URI).then(($) => {
-        const links = $('.entry-thumb a').get().map((a) => $(a).attr('href'));
-        Promise.all(links.map((uri) => ingest_article(hatch,uri))).then(() => {
-            return hatch.finish();
-        })
-    })
+
+    // libingester.util.fetch_html(BASE_URI).then(($) => {
+    //     const links = $('.entry-thumb a').get().map((a) => $(a).attr('href'));
+    //     console.log(links.length);
+    //     Promise.all(links.map((uri) => ingest_article(hatch,uri))).then(() => {
+    //         return hatch.finish();
+    //     })
+    // })
+
+    libingester.util.fetch_rss_entries(RSS_FEED,10,1000).then(rss => {
+        const links = rss.map(item => item.link);
+        return Promise.all(links.map(uri => ingest_article(hatch, uri)))
+            .then(() => hatch.finish());
+    });
 }
 
 main();
