@@ -35,11 +35,11 @@ function ingest_article_blog(hatch,item){
      return Libingester.util.fetch_html(item.link).then(($profile) => {
        let base_uri = Libingester.util.get_doc_base_uri($profile, item.link);
        let asset = new Libingester.BlogArticle();
-       let modified_date = $profile('.date-header span').text();
+       let modified_date = new Date(Date.parse(item.pubdate));
        let article_entry = $profile('.post .post-heading .meta').first();
        let synopsis = $profile('meta[property="og:description"]').attr('content');
        let body = $profile('.post-body').first();
-       let date_published = $profile('.date-header').first().text();
+       let date_published = item.date;
        let thumb_uri = $profile('meta[property="og:image"]').attr('content');
 
        let thumb_asset;
@@ -63,47 +63,24 @@ function ingest_article_blog(hatch,item){
             }
         });
 
-        // //Download images
-        // body.find('img').map(function() {
-        //     const img_src = this.attribs.src;
-        //     const parent = $profile(this).parent().first();
-        //     const img_url = URLParse(img_src);
-        //     const matches = hosts_drop_images.filter(host => host.includes(img_url.host));
-        //     const article_thumbnail = $profile(this);
-        //
-        //     if (img_src != undefined && matches.length == 0) {
-        //         //console.log(this);
-        //         const image = Libingester.util.download_img(this, base_uri);
-        //         image.set_title(item.title);
-        //         hatch.save_asset(image);
-        //         this.attribs["data-libingester-asset-id"] = image.asset_id;
-        //         for (const attr in remove_attrs_img) {
-        //             delete this.attribs[attr];
-        //         }
-        //     } else {
-        //         $profile(this).remove();
-        //     }
-        //     //$profile(this).replaceWith(image)
-        // });
-
         // download images
-               body.find('img').map(function() {
-                  let img = $profile('<figure></figure>').append($profile(this).clone());
-                   const image = Libingester.util.download_img($profile(img.children()[0]));
-                   $profile(this).replaceWith(img);
-                   image.set_title(item.title);
-                   hatch.save_asset(image);
-               });
+        body.find('img').map(function() {
+            let img = $profile('<figure></figure>').append($profile(this).clone());
+            const image = Libingester.util.download_img($profile(img.children()[0]));
+            $profile(this).replaceWith(img);
+            image.set_title(item.title);
+            hatch.save_asset(image);
+        });
 
-               // download video
-                body.find('iframe').map(function() {
-                    const src = this.attribs.src;
-                    if (src.includes("youtube")) {
-                        const video = Libingester.util.get_embedded_video_asset($profile(this), src);
-                        video.set_title(item.title);
-                        hatch.save_asset(video);
-                    }
-                });
+        // download video
+        body.find('iframe').map(function() {
+            const src = this.attribs.src;
+            if (src.includes("youtube")) {
+                const video = Libingester.util.get_embedded_video_asset($profile(this), src);
+                video.set_title(item.title);
+                hatch.save_asset(video);
+            }
+        });
 
         //remove elements
         for (const remove_element of remove_elements) {
@@ -111,7 +88,7 @@ function ingest_article_blog(hatch,item){
         }
 
         asset.set_canonical_uri(item.link);
-        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+        asset.set_last_modified_date(modified_date);
         asset.set_title(item.title);
         asset.set_synopsis(synopsis);
         asset.set_thumbnail(thumb_asset);
@@ -147,22 +124,6 @@ function ingest_article_blog(hatch,item){
 
 function main() {
     const hatch = new Libingester.Hatch('alodita', 'id');
-
-    // const item = {
-    //         link:'http://www.alodita.com/2017/06/auras-2nd-birthday.html',
-    //         pubdate:'2017-06-28T08:47:48.000Z',
-    //         title: 'AURAS 2ND BIRTHDAY',
-    //         categories : [ 'News & Current Events',
-    //        'airlines',
-    //        'all nippon airways',
-    //        'awards',
-    //        'Japan',
-    //        'skytrax' ]
-    //     }
-    //     ingest_article_blog(hatch,item)
-    //     .then(()=> hatch.finish()
-    //     );
-
     FeedParser.parse(rss_uri)
     .then((items) => {
        return Promise.all(items.map((item) => ingest_article_blog(hatch, item)));
