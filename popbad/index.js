@@ -77,7 +77,7 @@ function ingest_article(hatch, uri) {
         const canonical_uri = $('link[rel="canonical"]').attr('href');
         const info_date = $('meta[property="og:updated_time"]').attr('content');
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
-        const page = 'Alodokter';
+        const page = 'Pobpad';
         const read_more = `บทความต้นฉบับที่ <a href="${canonical_uri}">${page}</a>`;
         const synopsis = $('meta[name="description"]').attr('content');
         let thumbnail;
