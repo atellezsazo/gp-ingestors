@@ -3,6 +3,7 @@
 const Promise = require("bluebird");
 const libingester = require('libingester');
 const url = require('url');
+// const somaDOM = require('./node_modules/libingester/lib/soma_dom');
 
 const CATEGORY_LINKS = [
     'http://dianarikasari.blogspot.com/search/label/%2388lovelife?max-results=', //love life
@@ -80,111 +81,159 @@ Array.prototype.unique = function(a) {
     return function(){return this.filter(a)}}(function(a,b,c) {return c.indexOf(a,b+1)<0
 });
 
+const download_img = (hatch, $, elem, title, asset, thumbnail, body) => {
+    let dom_img = undefined;
+    const src = $(elem).attr('src');
+    const dd_image = (resolved, rejected) => {
+        let image;
+        if (!dom_img) {
+            image = libingester.util.download_img($(elem));
+            dom_img = body.find(`img[data-libingester-asset-id=${image.asset_id}]`).first();
+        } else {
+            image = libingester.util.download_img($(`<img src="${src}"></img>`));
+            dom_img.attr('data-libingester-asset-id', image.asset_id);
+        }
+        image._image_data.then(() => {
+            console.log('---------',title);
+            image.set_title(title);
+            hatch.save_asset(image);
+            if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            resolved();
+        }).catch(err => {
+            console.log('fail in '+title);
+            dd_image(resolved, rejected);
+        })
+    }
+    return new Promise((resolved, rejected) => {
+        dd_image(resolved, rejected);
+    });
+}
+
+let number_i = 0;
+
 /**
  * ingest_article
  * @param {Object} hatch The Hatch object of the Ingester library
  * @param {String} uri The string url
  */
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then($ => {
-        const _body = $('.post-body div'); // messy body
-        const body = $('<div id="mybody"></div>');
-        const date_published = new Date(Date.parse($('.date-header span').text()));
-        const title = $('.post-title').text().replace(/\n/g, '');
+    return new Promise((resolve, reject) => {
+        libingester.util.fetch_html(uri).then($ => {
+            const _body = $('.post-body div'); // messy body
+            const body = $('<div id="mybody"></div>');
+            const date_published = new Date(Date.parse($('.date-header span').text()));
+            const title = $('.post-title').text().replace(/\n/g, '');
+            console.log('processing '+uri, title);
 
-        // Ingest video post
-        const iframe = $('.post-body iframe, .post-body script').first()[0];
-        if (iframe) {
-            const video_url = $(iframe).attr('src') || '';
-            if (video_url.includes('youtube')) {
-                const video_asset = new libingester.VideoAsset();
-                const thumb_url = $('meta[property=\'og:image\']').attr('content');
-                const full_uri = url.format(video_url, { search: false });
-                // thumbnail
-                const thumbnail = libingester.util.download_image(thumb_url);
-                thumbnail.set_title(title);
-                hatch.save_asset(thumbnail);
-                // save video
-                video_asset.set_canonical_uri(full_uri);
-                video_asset.set_last_modified_date(date_published);
-                video_asset.set_title(title);
-                video_asset.set_download_uri(full_uri);
-                hatch.save_asset(video_asset);
-            }
-            return;
-        }
-
-        // Ingest Blog Post
-        const asset = new libingester.BlogArticle();
-        const author = $('.post-author a span').first().text();
-        const tags = $('.post-labels a').map((i, elem) => $(elem).text()).get();
-        const synopsis = $('meta[property=\'og:description\']').attr('content');
-        const read_more = 'Read more at www.dianarikasari.blogspot.com';
-
-        // creating new body
-        let last_p;
-        _body.contents().map((i, elem) => {
-            if (elem.name == 'br') {
-                last_p = undefined;
-                $(elem).remove();
-            } else if (elem.name == 'div') {
-                body.append($(elem));
-                last_p = undefined;
-            } else if (elem.name == 'img') {
-                body.append($('<figure></figure>').append(elem));
-                last_p = undefined;
-            } else {
-                if (!last_p) {
-                    body.append($('<p></p>'));
-                    last_p = body.find('p').last();
-                    last_p.append($(elem));
-                } else {
-                    last_p.append($(elem));
+            // Ingest video post
+            const iframe = $('.post-body iframe, .post-body script').first()[0];
+            if (iframe) {
+                const video_url = $(iframe).attr('src') || '';
+                if (video_url.includes('youtube')) {
+                    const video_asset = new libingester.VideoAsset();
+                    const thumb_url = $('meta[property=\'og:image\']').attr('content');
+                    const full_uri = url.format(video_url, { search: false });
+                    // thumbnail
+                    const thumbnail = libingester.util.download_image(thumb_url);
+                    thumbnail.set_title(title);
+                    hatch.save_asset(thumbnail);
+                    // save video
+                    video_asset.set_canonical_uri(full_uri);
+                    video_asset.set_last_modified_date(date_published);
+                    video_asset.set_title(title);
+                    video_asset.set_download_uri(full_uri);
+                    hatch.save_asset(video_asset);
                 }
+                return;
             }
-        });
 
-        // download images
-        let thumbnail;
-        body.find('img').map((i, elem) => {
-            const src = elem.attribs.src || '';
-            // delete images of photobucket
-            if (src && !src.includes('photobucket.com')) {
-                const image = libingester.util.download_img($(elem));
-                image.set_title(title);
-                hatch.save_asset(image);
-                if (!thumbnail) asset.set_thumbnail(thumbnail = image);
+            // Ingest Blog Post
+            const asset = new libingester.BlogArticle();
+            const author = $('.post-author a span').first().text();
+            const tags = $('.post-labels a').map((i, elem) => $(elem).text()).get();
+            const synopsis = $('meta[property=\'og:description\']').attr('content');
+            const read_more = 'Read more at www.dianarikasari.blogspot.com';
+
+            // creating new body
+            let last_p;
+            _body.contents().map((i, elem) => {
+                if (elem.name == 'br') {
+                    last_p = undefined;
+                    $(elem).remove();
+                } else if (elem.name == 'div') {
+                    body.append($(elem));
+                    last_p = undefined;
+                } else if (elem.name == 'img') {
+                    body.append($('<figure></figure>').append(elem));
+                    last_p = undefined;
+                } else {
+                    if (!last_p) {
+                        body.append($('<p></p>'));
+                        last_p = body.find('p').last();
+                        last_p.append($(elem));
+                    } else {
+                        last_p.append($(elem));
+                    }
+                }
+            });
+
+            // body.find('img').filter((i,elem) => i > 0).remove();
+
+            let promises = [];
+
+            // download images
+            let thumbnail;
+            body.find('img').map((i, elem) => {
+                const src = elem.attribs.src || '';
+                // delete images of photobucket
+                if (src) {
+                    promises.push(download_img(hatch, $, elem, title, asset, thumbnail, body));
+                } else {
+                    $(elem).remove();
+                }
+            });
+
+            // remove elements and comments
+            body.contents().filter((index, node) => node.type === 'comment').remove();
+            body.find(REMOVE_ELEMENTS.join(',')).remove();
+
+            // clean tags
+            const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
+            body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
+            body.find('p,div').filter((i, elem) => $(elem).text().trim() === '').remove();
+            body.find('figure').filter((i,elem) => !$(elem).find('img').first()[0]).remove();
+
+            // save document
+            const finish_process = () => {
+                console.log('processing '+uri, title);
+                asset.set_author(author);
+                asset.set_body(body);
+                asset.set_custom_scss(CUSTOM_SCSS);
+                asset.set_canonical_uri(uri);
+                asset.set_date_published(date_published);
+                asset.set_last_modified_date(date_published);
+                asset.set_read_more_text(read_more);
+                asset.set_synopsis(synopsis);
+                asset.set_tags(tags);
+                asset.set_title(title);
+                asset.render();
+                hatch.save_asset(asset);
+                number_i = number_i + 1;
+                console.log('RESOLVED ', number_i);
+                resolve();
+            }
+
+            if (promises.length > 0) {
+                Promise.all(promises).then(finish_process).catch(err => {
+                    console.log('fail promises all', err);
+                });
             } else {
-                $(elem).remove();
+                finish_process();
             }
+        }).catch(err => {
+            console.log('GENERAL',err);
+            if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
         });
-
-        // remove elements and comments
-        body.contents().filter((index, node) => node.type === 'comment').remove();
-        body.find(REMOVE_ELEMENTS.join(',')).remove();
-
-        // clean tags
-        const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
-        body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-        body.find('p,div').filter((i, elem) => $(elem).text().trim() === '').remove();
-        body.find('figure').filter((i,elem) => !$(elem).find('img').first()[0]).remove();
-
-        // save document
-        console.log('processing', title);
-        asset.set_author(author);
-        asset.set_body(body);
-        asset.set_custom_scss(CUSTOM_SCSS);
-        asset.set_canonical_uri(uri);
-        asset.set_date_published(date_published);
-        asset.set_last_modified_date(date_published);
-        asset.set_read_more_text(read_more);
-        asset.set_synopsis(synopsis);
-        asset.set_tags(tags);
-        asset.set_title(title);
-        asset.render();
-        hatch.save_asset(asset);
-    }).catch(err => {
-        if (err.code == 'ECONNRESET') return ingest_article(hatch, uri);
     });
 }
 
@@ -197,16 +246,20 @@ function main() {
             CATEGORY_LINKS.map(link => libingester.util.fetch_html(link + MAX_LINKS).then($ => {
                 const links = $('.post-title a').map((i, elem) => elem.attribs.href).get();
                 all_links = all_links.concat(links);
-            }))).then(() => all_links.unique());
+            }))).then(() => all_links.unique().slice(10,20));
     }
 
     get_all_links().then(links => {
-        return Promise.map(links, (uri) => ingest_article(hatch, uri), { concurrency: 1 })
-            .then(() => hatch.finish());
-    }).catch(err => {
+        console.log(links.length);
+        return Promise.all(links.map(uri =>ingest_article(hatch, uri)));
+    })
+    .then(() => hatch.finish())
+    .catch(err => {
         console.log(err);
         process.exitCode = 1;
     });
+    // ingest_article(hatch, 'http://dianarikasari.blogspot.com/2016/09/photo-diary-tokyo-art-book-fair-2016_19.html')
+    // .then(() => hatch.finish());
 }
 
 main();
