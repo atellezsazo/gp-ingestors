@@ -55,21 +55,24 @@ const REMOVE_ELEMENTS = [
 ];
 
 const CUSTOM_CSS = `
-$primary-light-color: #06B0EF;
-$primary-medium-color: #056F96;
-$primary-dark-color: #3A3A3A;
-$accent-light-color: #FAD213;
-$accent-dark-color: #E14163;
-$background-light-color: #FAFAFA;
-$background-dark-color: #EBEBEB;
-
+$primary-light-color: #DDA181;
+$primary-medium-color: #333333;
+$primary-dark-color: #252A2B;
+$accent-light-color: #DDA181;
+$accent-dark-color: #238E93;
+$background-light-color: #F5F5F5;
+$background-dark-color: #ECECEC;
 $title-font: 'Lato';
 $body-font: 'Lato';
 $display-font: 'Lato';
-$logo-font: 'Lato';
 $context-font: 'Lato';
 $support-font: 'Lato';
-
+h1,h2{
+font-weight:300;
+}
+h3,h4{
+font-weight:400;
+}
 @import '_default';
 `;
 
@@ -162,16 +165,17 @@ function ingest_article(hatch, item) {
 }
 
 function main() {
-    // wordpress pagination
     const feed = libingester.util.create_wordpress_paginator(RSS_URI);
     const hatch = new libingester.Hatch('gordelicias', 'pt');
 
-    libingester.util.fetch_rss_entries(feed, 20, 100).then(rss => {
-             return Promise.all(rss.map(item => ingest_article(hatch, item)))
-                     .then(() => hatch.finish());
-        }).catch((err) => {
-            console.log('Error ',err);
-         });
+    libingester.util.fetch_rss_entries(feed).then(rss => {
+        return Promise.all(rss.map(item => ingest_article(hatch, item)))
+    })
+    .then(() => hatch.finish());
+    .catch(err => {
+        console.log('Error ',err);
+        process.exitCode = 1;
+    });
 }
 
 main();

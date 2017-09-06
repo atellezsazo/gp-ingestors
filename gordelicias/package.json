@@ -6,7 +6,6 @@
         "start": "node index.js"
     },
     "dependencies": {
-        "libingester": "^2.2.7",
-        "rss-to-json": "^1.0.2"
+        "libingester": "^2.2.17"
     }
 }
