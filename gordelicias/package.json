@@ -3,7 +3,8 @@
     "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
-        "start": "node index.js"
+        "start": "node index.js",
+        "test": "node index.js 20 60"
     },
     "dependencies": {
         "libingester": "^2.2.17"
