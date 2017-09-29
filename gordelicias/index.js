@@ -1,6 +1,8 @@
 'use strict';
 
 const libingester = require('libingester');
+const request = require('request');
+const somaDOM = require('./node_modules/libingester/lib/soma_dom');
 
 const BASE_URI = 'http://gordelicias.biz/';
 const RSS_URI = 'http://gordelicias.biz/index.php/feed/';
@@ -79,15 +81,89 @@ function clean_title(title) {
     return title.replace('- gordelícias','').trim();
 }
 
+// verify if 'content-type' is a image.
+function download_image(hatch, $, download, end_process, image_list) {
+    const save_image = ($, $img, uri, res) => {
+        const asset = new libingester.ImageAsset();
+        asset.set_canonical_uri(uri);
+        asset.set_last_modified_date(new Date());
+
+        const promise = { then: function(resolve) {
+            asset.set_image_data(res.headers['content-type'], res.body);
+            resolve();
+        }};
+
+        asset.set_image_data(undefined, promise);
+
+        $img.attr('data-libingester-asset-id', asset.asset_id);
+        $img.attr(somaDOM.Hint.Tag, somaDOM.Hint.ImportantImage);
+
+        const linkWrapper = $(`<a ${somaDOM.Widget.Tag}="${somaDOM.Widget.ImageLink}"></a>`);
+        linkWrapper.append($img.clone());
+        $img.replaceWith(linkWrapper);
+
+        return asset;
+    }
+
+    const rp = (uri) => {
+        return new Promise((resolve, reject) => {
+            request({
+                uri: uri,
+                encoding: null,
+                timeout: 15000
+            }, (err, res, body) => {
+                if (err) { return reject(err); }
+                return resolve(res);
+            });
+        });
+    }
+
+    const _download_img = (uri) => {
+        return rp(uri).catch(err => {
+            if (err.code == 'ESOCKETTIMEDOUT') {
+                return _download_img(uri);
+            }
+            throw err;
+        });
+    }
+
+    if (typeof download == 'function' && typeof end_process == 'function') {
+        let promises = [];
+        const data_list = download();
+
+        for (const data of data_list) {
+            promises.push(_download_img(data.src).then(res => {
+                if (res.headers['content-type'].startsWith('image/')) {
+                    const image = save_image($, data.$elem, data.src, res);
+                    image_list.push(image);
+                    hatch.save_asset(image);
+                } else {
+                    data.$elem.remove();
+                }
+            }))
+        }
+
+        if (promises.length > 0) {
+            console.log('promises');
+            return Promise.all(promises).then(end_process);
+        } else {
+            end_process();
+            return Promise.resolve();
+        }
+    }
+    throw 'No functions';
+}
+
 function ingest_article(hatch, item) {
+    console.log('#', item.title, '-', item.link);
     return libingester.util.fetch_html(item.link).then($ => {
         const page_title = $('title').first().text() || '#';
         // console.log(item.link);
         // console.log(page_title);
-        // if (page_title.includes('Page not found')) {
-        //     console.log('page not found: '+item.link);
-        //     return;
-        // }
+        if (page_title.includes('Page not found')) {
+            console.log('page not found: '+item.link);
+            throw {code: -1, message: 'page not found'};
+        }
 
         const asset = new libingester.BlogArticle();
         const body = $('.entry-content').first().attr('id', 'mybody');
@@ -103,12 +179,12 @@ function ingest_article(hatch, item) {
         const tags = item.categories;
         let thumbnail;
 
-        body.find('img').map((i,elem) => {
-          if ($(elem).attr('src') == 'http://gordelicias.biz/wp-content/uploads/2017/08/bolinho-carne3.jpg') {
-            console.log(item.link);
-            console.log(title);
-          }
-        })
+        // body.find('img').map((i,elem) => {
+        //   if ($(elem).attr('src') == 'http://gordelicias.biz/wp-content/uploads/2017/08/bolinho-carne3.jpg') {
+        //     console.log(item.link);
+        //     console.log(title);
+        //   }
+        // })
 
         // finding first wrapp; "elem": Object Cheerio; "id_main_tag": String
         const find_first_wrapp = (elem, id_main_tag) => {
@@ -130,7 +206,7 @@ function ingest_article(hatch, item) {
         // clean tags
         body.find(CLEAN_TAGS.join(',')).map((i,elem) => clean_attr(elem));
 
-         // fixed all 'divs'
+        // fixed all 'divs'
         const fix_divs = (div = body.children().find('div>div').first()) => {
              if (div[0]) {
                  const parent = $(div).parent();
@@ -146,73 +222,88 @@ function ingest_article(hatch, item) {
              main_img.set_title(title);
              hatch.save_asset(main_img);
              asset.set_thumbnail(thumbnail = main_img);
+             asset.set_main_image(main_img);
         }
 
         // download images
-        body.find('img').map(function() {
-            let img = $('<figure></figure>').append($(this).clone());
-            const image = libingester.util.download_img($(img.children()[0]));
-            image._image_data.then(() => {
-              if (!image._content_type.includes('image')) {
-                image._image_data = undefined;
-              }
-              console.log('AAA');
-              console.log(image._canonical_uri);
-              console.log(image._content_type);
+        const download = () => {
+            let data_list = [];
+            body.find('img').map((i,elem) => {
+                const src = $(elem).attr('src');
+                if (src) {
+                    data_list.push({
+                        src: src,
+                        $elem: $(elem)
+                    });
+                } else {
+                    $(elem).remove();
+                }
             });
-            $(this).parent().replaceWith(img);
-            image.set_title(title);
-            hatch.save_asset(image);
-        });
-
-        body.find('div').map((i,elem) => {
-            elem.name='p';
-        });
-
-        body.find('p>ol, p>ul').map((i,elem) => {
-            $(elem).parent().replaceWith(elem);
-        });
-
-        // download videos
-        body.find('video').map((i,elem) => {
-            const src = $(elem).attr('src');
-            const tag = find_first_wrapp(elem, body.attr('id'));
-            const video = libingester.util.get_embedded_video_asset($(tag), src);
-            video.set_title(title);
-            video.set_thumbnail(thumbnail);
-            hatch.save_asset(video);
-        });
-
-        // wrapp videos
-        body.find('a.media-link').map((i,elem) => {
-            const figure = $('<figure></figure>').append($(elem).clone());
-            $(elem).replaceWith(figure);
-        });
-
-        // delete spaces and special characters "&#xA0;"
-        body.find('div, p, span').filter((i,elem) => $(elem).text().trim() === '').remove();
-        body.find('center').remove();
-        // console.log(body.html());
-        // Article Settings
-        // console.log('processing', title);
-        asset.set_author(author);
-        asset.set_body(body);
-        asset.set_canonical_uri(canonical_uri);
-        asset.set_title(title);
-        asset.set_synopsis(description);
-        asset.set_date_published(modified_date);
-        asset.set_last_modified_date(new Date(Date.parse(modified_date)));
-        asset.set_read_more_text(read_more);
-        asset.set_tags(tags);
-        asset.set_custom_scss(CUSTOM_CSS);
-
-        asset.render();
-        hatch.save_asset(asset);
-    }).catch((err) => {
-        console.log(err);
-        if (err.code == -1 || err.statusCode == 403) {
-            return ingest_article(hatch, uri);
+            return data_list;
         }
+
+        const end_process = () => {
+            console.log('processing', item.title);
+            body.find('div').map((i,elem) => elem.name = 'p');
+
+            body.find('p>ol, p>ul').map((i,elem) => {
+                $(elem).parent().replaceWith(elem);
+            });
+
+            // download videos
+            body.find('video').map((i,elem) => {
+                const src = $(elem).attr('src');
+                const tag = find_first_wrapp(elem, body.attr('id'));
+                const video = libingester.util.get_embedded_video_asset($(tag), src);
+                video.set_title(title);
+                video.set_thumbnail(thumbnail);
+                hatch.save_asset(video);
+            });
+
+            // wrapp videos
+            body.find('a.media-link').map((i,elem) => {
+                const figure = $('<figure></figure>').append($(elem).clone());
+                $(elem).replaceWith(figure);
+            });
+
+            // wrapp images
+            body.find('img').map((i,elem) => {
+                const parent = $(elem).parent();
+                if (parent[0].name != 'figure') {
+                    const figure = $('<figure></figure>').append($(elem).clone());
+                    parent.replaceWith(figure);
+                }
+            });
+
+            // delete spaces and special characters "&#xA0;"
+            body.find('p>figure').map((i,f) => $(f).insertBefore($(f).parent()));
+            body.find('div, p, span').filter((i,elem) => $(elem).text().trim() === '').remove();
+            body.find('center').remove();
+
+            // Article Settings
+            asset.set_author(author);
+            asset.set_body(body);
+            asset.set_canonical_uri(canonical_uri);
+            asset.set_title(title);
+            asset.set_synopsis(description);
+            asset.set_date_published(modified_date);
+            asset.set_last_modified_date(new Date(Date.parse(modified_date)));
+            asset.set_read_more_text(read_more);
+            asset.set_tags(tags);
+            asset.set_custom_scss(CUSTOM_CSS);
+
+            asset.render();
+            hatch.save_asset(asset);
+        }
+
+        return download_image(hatch, $, download, end_process, []);
+    }).catch(err => {
+        console.log('ERRR', err);
+        if (err.code == -1 || err.statusCode == 403) {
+            console.log('AAAAA',item.link);
+            return ingest_article(hatch, item);
+        }
+        throw err;
     });
 }
 
@@ -223,13 +314,14 @@ function main() {
     const oldDays = parseInt(process.argv[3]) || 1; // in test is 60
 
     libingester.util.fetch_rss_entries(feed, numPost, oldDays).then(rss => {
-        let other = [];
-        for (const item of rss) {
-          if (item.link == 'http://gordelicias.biz/index.php/2017/08/02/bolinho-de-carne-moida-assado/') {
-            other.push(item);
-          }
-        }
-        rss = other;
+        // let other = [];
+        // for (const item of rss) {
+        //   if (item.link == 'http://gordelicias.biz/index.php/2017/08/02/bolinho-de-carne-moida-assado/') {
+        //     other.push(item);
+        //   }
+        // }
+        // rss = other;
+        console.log(rss.length);
         return Promise.all(rss.map(item => ingest_article(hatch, item)))
     })
     .then(() => hatch.finish())
