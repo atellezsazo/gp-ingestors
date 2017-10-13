@@ -11,9 +11,11 @@ const MAX_ATTEMPTS  = 3;
 const MAX_LINKS = 60;
 const RSS_URI = 'https://www.kapanlagi.com/feed/';
 
+// Kapanlagi doesn't seem to report its content type properly, so override it
+const HTML_CHARSET = 'latin1';
+
 // Remove elements (body)
 const REMOVE_ELEMENTS = [
-    'b',
     'iframe',
     'h2',
     'h6',
@@ -65,12 +67,19 @@ $body-font: 'Merriweather';
 $display-font: 'Oswald';
 $context-font: 'Oswald';
 $support-font: 'Lato';
-
 @import '_default';
 `;
 
+// embed video
+const VIDEO_IFRAMES = [
+    'a.kapanlagi',
+    'skrin.id',
+    'streamable',
+    'youtube'
+];
+
 function ingest_article(hatch, uri) {
-    return libingester.util.fetch_html(uri).then(($) => {
+    return libingester.util.fetch_html(uri, HTML_CHARSET).then(($) => {
         if ($('meta[http-equiv="REFRESH"]').length == 1) throw { name: 'Article have a redirect' };
         if ($('title').text().includes('404')) throw { name: 'Not Found 404' };
 
@@ -82,7 +91,7 @@ function ingest_article(hatch, uri) {
         const modified_date = info_date ? new Date(Date.parse(info_date)) : new Date();
         const post_tags = $('.box-content a');
         const page = 'kapanlagi';
-        const read_more = `Read more at <a href="${canonical_uri}">${page}</a>`;
+        const read_more = `Baca lebih lanjut di <a href="${canonical_uri}">${page}</a>`;
         const reporter = $('.vcard .newsdetail-schedule-new a').text();
         const subtitle = $("h2.entertainment-newsdetail-title-new").first().text();
         const synopsis = $('meta[name="description"]').attr('content');
@@ -101,7 +110,7 @@ function ingest_article(hatch, uri) {
         }
 
         const body_page = $('<div></div>');
-        const ingest_body = ($, finish_process) => {
+        const ingest_body = ($, reject, finish_process) => {
             const body = $('.entertainment-detail-news');
             const next = $('.link-pagging-warper a').attr('href');
             const last_pagination = $('ul.pg-pagging li:last-child a').first();
@@ -112,41 +121,100 @@ function ingest_article(hatch, uri) {
                     $(elem).attr('href',url.resolve(BASE_URI,$(elem).attr('href')));
             });
 
-            // set first paragraph
-            const first_p = body.find('p').first();
-            const lede = first_p.clone();
-            lede.find('img').remove();
-            asset.set_lede(lede);
-            body.find(first_p).remove();
+            const save_video_asset = (video_tag,video_url) => {
+                if (video_url) {
+                    // video_tag = $('<div></div>');
+                    // body.append(video_tag);
+                    const video = libingester.util.get_embedded_video_asset(video_tag, video_url);
+                    video.set_title(title);
+                    video.set_thumbnail(main_image);
+                    hatch.save_asset(video);
+
+                }
+            };
+
+            // save video asset
+            let video_promise;
+            let video_tag = $('.videoWrapper').first();
+            const video_url = video_tag.attr('data-url');
+            video_tag.attr('id', 'video_tag');
+            body.append(video_tag.clone());
+            video_tag = body.find('#video_tag').first();
+            if (video_url) {
+                for (const domain of VIDEO_IFRAMES) {
+                   if (video_url.includes(domain)) {
+                       switch (domain) {
+                           case 'a.kapanlagi':
+                               {
+                                   video_promise = libingester.util.fetch_html(video_url, HTML_CHARSET).then($vid => {
+                                       const video_url = $vid('title').text();
+                                       save_video_asset(video_tag, video_url);
+                                   });
+                                   break; // exit 'a.kapanlagi'
+                               }
+                           case 'skrin.id':
+                               {
+                                   const base_video_uri = 'https://play.skrin.id/media/videoarchive/';
+                                   const video_width = '480p.mp4';
+                                   let video_uri;
+                                   video_promise = libingester.util.fetch_html(video_url, HTML_CHARSET).then($vid => {
+                                       // In the page only there are embedded videos, that is why I search with the filter "script"
+                                       //  In the 3rd label script that find links of the videos,
+                                       const source = $vid('script')[2].children[0].data;
+                                       // Of the links, it looks for the chain that contains the JSON to clean and to construct a new JSON
+                                       let s = source.substring(source.indexOf('JSON.parse(\'') + 12);
+                                       s = s.substring(0,s.indexOf("')"));
+
+                                       //JSON containing url videos
+                                       let json = JSON.parse(s);
+                                       const video_uris = json.map(data => url.resolve(base_video_uri, data.url));
+
+                                       //We are looking for url that contain '480.mp4'
+                                       for (const uri of video_uris) {
+                                           if (uri.includes(video_width)) {
+                                               video_uri = uri;
+                                               break;
+                                           }
+                                       }
+                                       // If the video is not found, the last link is taken
+                                       if (!video_uri) video_uri = video_uris[video_uris.length - 1];
+                                       save_video_asset(video_tag, video_url);
+                                   });
+                                   break; // exit 'skrin.id'
+                               }
+                           default:
+                               {
+                                   save_video_asset(video_tag, video_url);
+                               }
+                       }
+                   }
+                }
+            }
 
             // remove elements and comments
             const clean_attr = (tag, a = REMOVE_ATTR) => a.forEach((attr) => $(tag).removeAttr(attr));
             body.contents().filter((index, node) => node.type === 'comment').remove();
             body.find(REMOVE_ELEMENTS.join(',')).remove();
             body.find(CLEAN_TAGS.join(',')).get().map((tag) => clean_attr(tag));
-            body.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
             let editor = body.find('span').last();
-
             if(editor.text().includes('Editor:')){
-                editor.parent().remove()
+                editor.parent().remove();
             }
 
             // Download images
             body.find("p img").map((i, elem)=> {
                 const parent=$(elem).parent();
+                let figcaption = '';
                 if (elem.attribs.src) {
                     if(elem.attribs.alt){
-                        var figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
-                        let img = $('<figure></figure>').append($(elem).clone(),figcaption);
+                        figcaption = $("<figcaption><p>"+elem.attribs.alt.replace('�',' - ')+"</p></figcaption>");
                     }
-                    else {
-                        let img = $('<figure></figure>').append($(elem).clone());
-                    }
+
+                    let img = $('<figure></figure>').append($(elem).clone(),figcaption);
                     const image = libingester.util.download_img($(img.children()[0]));
                     if(parent[0].name == 'div'){
                         parent.replaceWith(img);
-                    }
-                    else{
+                    } else {
                         $(elem).replaceWith(img);
                     }
                     image.set_title(title);
@@ -157,20 +225,60 @@ function ingest_article(hatch, uri) {
                 }
             });
 
-            body_page.append(body.children());
-            if (next && last_pagination.length != 0) {
-                libingester.util.fetch_html(url.resolve(uri, next)).then(($next_profile) => {
-                    ingest_body($next_profile, finish_process);
-                });
+            const end_function = () => {
+                body_page.append(body.children());
+                if (next && last_pagination.length !== 0) {
+                    libingester.util.fetch_html(url.resolve(uri, next), HTML_CHARSET).then(($next_profile) => {
+                        ingest_body($next_profile, reject, finish_process);
+                    }).catch(() => reject());
+                } else {
+                    finish_process();
+                }
+            };
+
+            if (video_promise) {
+                video_promise.then(end_function).catch(() => reject());
             } else {
-                finish_process();
+                end_function();
             }
         };
 
         return new Promise((resolve, reject) => {
-            ingest_body($, () => {
+            ingest_body($, reject, () => {
+                // fix paragraphs (convert a paragraph with labels "br" in several paragraphs)
+                let p = $('<p></p>');
+                body_page.contents().filter((i,elem) => elem.name == 'p').map((i,elem) => {
+                    const insert_last_p = () => {
+                        if (p.text().trim() != '') {
+                            p.insertBefore(elem);
+                            p = $('<p></p>');
+                        }
+                    }
+                    $(elem).contents().map((i,content) => {
+                        if (content.name == 'br') {
+                            insert_last_p();
+                        } else {
+                            p.append($(content).clone());
+                        }
+                    });
+                    insert_last_p();
+                    $(elem).remove();
+                });
 
-                console.log('processing', title);
+                // fix figure into p
+                body_page.find('p>figure').map((i,elem) => $(elem).insertBefore($(elem).parent()));
+
+                // remove empty paragraphs
+                body_page.find('p').filter((i,elem) => $(elem).text().trim() === '').remove();
+
+                // set first paragraph
+                const first_p = body_page.find('p').first();
+                const lede = first_p.clone();
+                lede.find('img').remove();
+                asset.set_lede(lede);
+                body_page.find(first_p).remove();
+
+                // article settings
                 asset.set_authors([reporter]);
                 asset.set_canonical_uri(canonical_uri);
                 asset.set_canonical_uri(uri);
@@ -184,15 +292,13 @@ function ingest_article(hatch, uri) {
                 asset.set_title(title);
                 asset.set_main_image(main_image,image_credit);
                 asset.set_body(body_page);
-
                 asset.render();
                 hatch.save_asset(asset);
                 resolve();
+                console.log('finish', body_page.html());
             });
-        })
-    }).catch((err) => {
-        console.log("Ingest error: ", err);
-    });
+        });
+    }).catch(err => console.log(err));
 }
 
 function main() {
@@ -202,17 +308,17 @@ function main() {
 
     const __request = (f) => {
         rp({ uri: RSS_URI, gzip: true }).then(res => {
-            var parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
+            const parser = new xml2js.Parser({ trim: false, normalize: true, mergeAttrs: true });
             parser.parseString(res, (err, result) => {
+                if (err) throw err;
                 const rss = rss2json.parser(result);
-                let links = [],
-                    n = 0;
-                const items=rss.items.slice(MAX_LINKS);
-                for(const item of items){
-                    if (!item.link.includes("musik.kapanlagi.com")) { //drop musik subdomain
+                let links = [];
+                rss.items.slice(0,MAX_LINKS).map(item => {
+                    if (url.parse(item.link).hostname !== 'musik.kapanlagi.com') { //drop musik subdomain
                         links.push(item.link);
                     }
-                }
+                });
+                console.log(`Processing ${links.length} items...`);
                 f(links); //callback
             });
         }).catch(err => {
@@ -221,15 +327,13 @@ function main() {
                 __request(f);
             }
         });
-    }
-
+    };
     __request((links) => {
-        console.log(links);
-
+        links = links.slice(0,1);
         Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
             return hatch.finish();
         });
-    })
+    });
 }
 
 main();

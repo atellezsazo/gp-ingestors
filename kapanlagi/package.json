@@ -1,12 +1,13 @@
 {
-    "name": "libingester-kapanlagi",
+    "name": "kapanlagi",
     "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
-        "start": "node index.js"
+        "start": "node index.js",
+        "preview": "node_modules/.bin/hatch-preview"
     },
     "dependencies": {
-        "libingester": "^2.0.1",
+        "libingester": "^2.2.25",
         "rss-to-json": "^1.0.2"
     }
 }
