@@ -22,10 +22,11 @@ const REMOVE_ELEMENTS = [
     'noscript',
     'script',
     'style',
+    '.box-detail',
     '.lifestyle-in-content',
     '.link-pagging-warper',
     '.paging-related',
-    '.video-wrapper'
+    '.video-wrapper',
 ];
 
 // clean attr (tag)
@@ -96,7 +97,7 @@ function ingest_article(hatch, uri) {
         const subtitle = $("h2.entertainment-newsdetail-title-new").first().text();
         const synopsis = $('meta[name="description"]').attr('content');
         const section = $('meta[name="adx:sections"]').attr('content');
-        const title = $("#newsdetail-right-new h1").first().text();
+        const title = $(".content-detail h1").first().text();
         const uri_main_image = $('meta[property="og:image"]').attr('content');
 
         // Pull out the main image
@@ -111,7 +112,7 @@ function ingest_article(hatch, uri) {
 
         const body_page = $('<div></div>');
         const ingest_body = ($, reject, finish_process) => {
-            const body = $('.entertainment-detail-news');
+            const body = $('.body-paragraph');
             const next = $('.link-pagging-warper a').attr('href');
             const last_pagination = $('ul.pg-pagging li:last-child a').first();
 
@@ -129,7 +130,6 @@ function ingest_article(hatch, uri) {
                     video.set_title(title);
                     video.set_thumbnail(main_image);
                     hatch.save_asset(video);
-
                 }
             };
 
@@ -278,6 +278,13 @@ function ingest_article(hatch, uri) {
                 asset.set_lede(lede);
                 body_page.find(first_p).remove();
 
+                // body_page.find('p').map((i,p) => $(p).text($(p).html().replace('&#xEF;&#xBF;&#xBD;', '').trim()));
+                const children = body_page.children();
+                const regex = new RegExp('&#xEF;&#xBF;&#xBD;', 'g');
+                const text = children.html().replace(regex, '').trim();
+                body_page.append($(text));
+                children.remove();
+                console.log(body_page.html());
                 // article settings
                 asset.set_authors([reporter]);
                 asset.set_canonical_uri(canonical_uri);
@@ -295,7 +302,7 @@ function ingest_article(hatch, uri) {
                 asset.render();
                 hatch.save_asset(asset);
                 resolve();
-                console.log('finish', body_page.html());
+                console.log('Processing', canonical_uri);
             });
         });
     }).catch(err => console.log(err));
@@ -328,12 +335,13 @@ function main() {
             }
         });
     };
-    __request((links) => {
-        links = links.slice(0,1);
-        Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
-            return hatch.finish();
-        });
-    });
+    // __request((links) => {
+    //     Promise.all(links.map((link) => ingest_article(hatch, link))).then(() => {
+    //         return hatch.finish();
+    //     });
+    // });
+    ingest_article(hatch, 'https://www.kapanlagi.com/showbiz/hollywood/foto-penampilan-perdana-kate-middleton-yang-sedang-hamil-anak-ke-3-e56dfe.html')
+    .then(() => hatch.finish());
 }
 
 main();
