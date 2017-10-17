@@ -1,11 +1,12 @@
 {
-    "name": "libingester-diahdidi",
-    "version": "0.0.1",
+    "name": "diahdidi",
+    "version": "0.0.2",
     "license": "UNLICENSED",
+    "scripts": {
+        "start": "node index.js",
+        "preview": "node_modules/.bin/hatch-preview"
+    },
     "dependencies": {
-        "bootstrap": "^3.3.7",
-        "libingester": "^1.0.0",
-        "mustache": "^2.3.0",
-        "rss-to-json": "^1.0.2"
+        "libingester": "^2.2.25"
     }
 }
