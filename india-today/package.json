@@ -1,0 +1,13 @@
+{
+    "name": "indiatoday",
+    "version": "0.0.2",
+    "license": "UNLICENSED",
+    "scripts": {
+        "start": "node index.js",
+        "preview": "node_modules/.bin/hatch-preview",
+        "test": "node index.js 10"
+    },
+    "dependencies": {
+        "libingester": "^2.2.26"
+    }
+}
