@@ -81,7 +81,7 @@ function main() {
 
     ingest(hatch, uri, search).then(() => {
         hatch.finish();
-        fs.writeFileSync(hatch._path.replace('hatch','') + '.json', JSON.stringify(json_img_data));
+        fs.writeFileSync(hatch._path.replace('hatch','hatch_gp') + '.json', JSON.stringify(json_img_data));
     });
 }
 

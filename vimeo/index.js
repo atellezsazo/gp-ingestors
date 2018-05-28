@@ -154,9 +154,10 @@ function main() {
     libingester.util.set_user_agent(USER_AGENT);
     hatch = new libingester.Hatch('vimeo_' + strSearch, 'en');
 
+    console.log("search:", uri);
     ingest(uri, search).then(videos => {
         hatch.finish();
-        fs.writeFileSync(hatch._path.replace('hatch','') + '.json', JSON.stringify(json_img_data));
+        fs.writeFileSync(hatch._path.replace('hatch','hatch_gp') + '.json', JSON.stringify(json_img_data));
     });
 }
 

@@ -46,11 +46,12 @@ function generate_filename(author='', title='', options) {
     // clean
     author = clean_str(author);
     title = clean_str(title);
-    if (title.length > 18) title = title.substr(0, 15) + '...';
+    let filename = '';
     // build filename
-    if (!author && !title) return random() + ext;
-    if (options.random) return author + '_•_' + title + '_' + random() + ext;
-    return author + '_•_' + title + ext;
+    if (!author && !title) filename = random() + ext;
+    if (options.random) filename = author + '_•_' + title + '_' + random() + ext;
+    else filename = author + '_•_' + title + ext;
+    return ((filename.length > 250) ? filename.substr(0, 249) : filename) + ext;
 }
 
 function generate_excel(data, destination_folder) {
@@ -158,6 +159,10 @@ function generate_excel(data, destination_folder) {
     return workbook.xlsx.writeFile(destination_folder + 'excel.xlsx');
 }
 
+function hatch_rename(name) {
+    return name.replace('hatch','hatch_gp');
+}
+
 function main() {
     const argv1 = process.argv[1];
     const this_path = argv1.substr(0, argv1.lastIndexOf('/')) + '/';
@@ -169,7 +174,7 @@ function main() {
 
     const origin_folder = decodeURI(url.resolve(this_path, folder) + '/');
     const path_manifest = origin_folder + 'hatch_manifest.json';
-    const path_data = this_path + '/' + folder.replace('hatch','') + '.json';
+    const path_data = this_path + '/' + hatch_rename(folder) + '.json';
 
     let data;
     let exists_manifest = fs.existsSync(path_manifest);
@@ -178,7 +183,7 @@ function main() {
 
     read_file_promise(path_data).then(d => {
         const data = JSON.parse(d);
-        const destination_folder = decodeURI(url.resolve(this_path, folder.replace('hatch', '')) + '/');
+        const destination_folder = decodeURI(url.resolve(this_path, hatch_rename(folder)) + '/');
         const f = destination_folder.split('/');
         const finished_folder = f[f.length - 2];
 
