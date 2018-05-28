@@ -61,7 +61,6 @@ function add_download_link(video) {
             data = JSON.parse(data);
             config_url = data.player.config_url;
         } catch(e) {
-            console.log("Video not found", video.link, e);
             return Promise.reject("Video not found: " + video.link);
         }
         return rp(config_url).then(json_str => {
@@ -92,7 +91,6 @@ function get_video_links(uri) {
         try {
             data = JSON.parse(data).filtered.data;
         } catch(e) {
-            console.log("Videos not found");
             return Promise.reject("Videos not found");
         }
 
