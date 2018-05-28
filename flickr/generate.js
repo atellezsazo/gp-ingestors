@@ -25,6 +25,10 @@ function read_file_promise(path) {
     })
 }
 
+function hatch_rename(name) {
+    return name.replace('hatch','hatch_gp');
+}
+
 function main() {
     const argv1 = process.argv[1];
     const this_path = argv1.substr(0, argv1.lastIndexOf('/')) + '/';
@@ -40,12 +44,12 @@ function main() {
     const readManifest = read_file_promise(origin_folder + 'hatch_manifest.json').then(d => {
         manifest = JSON.parse(d);
     });
-    const readData = read_file_promise(this_path + '/' + folder.replace('hatch','') + '.json').then(d => {
+    const readData = read_file_promise(this_path + '/' + hatch_rename(folder) + '.json').then(d => {
         data = JSON.parse(d);
-    })
+    });
 
     Promise.all([readManifest, readData]).then(() => {
-        const destination_folder = decodeURI(url.resolve(this_path, folder.replace('hatch', '')) + '/');
+        const destination_folder = decodeURI(url.resolve(this_path, hatch_rename(folder)) + '/');
         const f = destination_folder.split('/');
         const finished_folder = f[f.length - 2];
 
