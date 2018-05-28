@@ -150,6 +150,10 @@ function main() {
     const search = process.argv[2] || '';
     const strSearch = search.replace(/ /, '_');
     const uri = build_search_uri(search);
+
+    if (!search) {
+        throw "no search";
+    }
     
     libingester.util.set_user_agent(USER_AGENT);
     hatch = new libingester.Hatch('vimeo_' + strSearch, 'en');

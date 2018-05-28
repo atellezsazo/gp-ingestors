@@ -9,7 +9,7 @@ const BASE_URL = 'https://unsplash.com';
 const PATH_SEARCH = '/search/photos/';
 const SEARCH_URL = url.resolve(BASE_URL, PATH_SEARCH);
 const SIZE_PARAMETER = '&w=800';
-const DEFAULT_TITLE = 'Trending';
+const DEFAULT_TITLE = 'Photos';
 
 let json_img_data = {};
 

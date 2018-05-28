@@ -1,15 +1,13 @@
 {
-    "name": "libingester-khaosodenglish",
-    "version": "0.0.1",
+    "name": "libingester-unslash",
+    "version": "0.0.2",
     "license": "UNLICENSED",
     "scripts": {
-        "start": "node index.js",
-        "preview": "node_modules/.bin/hatch-previewer"
+        "start": "node index.js"
     },
     "dependencies": {
         "libingester": "^2.6.5",
-        "exceljs": "^1.4.6",
-        "unsplash-js": "^4.8.0"
+        "exceljs": "^1.4.6"
     },
     "engines": {
         "node": ">= 8.0.0"
